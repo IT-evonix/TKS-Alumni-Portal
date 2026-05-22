@@ -27,7 +27,7 @@ const PageLoader = () => (
       <div className="absolute inset-0 bg-[#008060] rounded-full blur-xl opacity-20 animate-pulse"></div>
       <div className="relative w-16 h-16 sm:w-20 sm:h-20 flex items-center justify-center">
         <div className="absolute inset-0 border-4 border-gray-100 rounded-full"></div>
-        <div 
+        <div
           className="absolute inset-0 border-4 border-[#008060] rounded-full animate-spin"
           style={{ borderTopColor: 'transparent', borderLeftColor: 'transparent', animationDuration: '0.8s' }}
         ></div>
@@ -53,6 +53,7 @@ import { ResetPasswordPage } from "@/pages/ResetPasswordPage";
 import { SetupPasswordPage } from "@/pages/SetupPasswordPage";
 import { ContactUsPage } from "@/pages/ContactUsPage";
 import { StudentSignupPage } from "@/pages/StudentSignupPage";
+import AlumniMapPage from "./pages/AlumniMapPage";
 const LinkedInWelcomePage = lazy(() => import("@/pages/LinkedInWelcomePage").then(m => ({ default: m.LinkedInWelcomePage })));
 
 // User pages - lazy loaded
@@ -91,6 +92,7 @@ const AdminFeedPage = lazy(() => import("./pages/AdminFeedPage").then(m => ({ de
 const AdminJobsPage = lazy(() => import("@/pages/AdminJobsPage").then(m => ({ default: m.AdminJobsPage })));
 const AdminBulkEmailPage = lazy(() => import("./pages/AdminBulkEmailPage").then(m => ({ default: m.default })));
 const AdminInboxPage = lazy(() => import("@/pages/AdminInboxPage").then(m => ({ default: m.AdminInboxPage })));
+const AdminGamificationPage = lazy(() => import("@/pages/AdminGamificationPage").then(m => ({ default: m.AdminGamificationPage })));
 
 // Other pages - lazy loaded
 const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ default: m.SharedPostPage })));
@@ -115,6 +117,7 @@ function Router() {
           <Route path="/admin/login" component={AdminLoginPage} />
           <ProtectedRoute path="/admin/signup-requests" component={AdminDashboard} adminOnly />
           <Route path="/post/:postId" component={SharedPostPage} />
+          <Route path="/alumni-map" component={AlumniMapPage} />
 
 
           {/* Protected User Routes */}
@@ -145,6 +148,7 @@ function Router() {
           <ProtectedRoute path="/admin/users/:userId/edit" component={AdminUserEditPage} adminOnly />
           <ProtectedRoute path="/admin/import" component={AdminImportPage} adminOnly />
           <ProtectedRoute path="/admin/inbox" component={AdminInboxPage} adminOnly />
+          <ProtectedRoute path="/admin/gamification" component={AdminGamificationPage} adminOnly />
 
           {/* Fallback to 404 */}
           <Route component={NotFound} />

@@ -7,6 +7,7 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { PostCreator } from "@/components/feed/PostCreator";
 import { PostCard } from "@/components/feed/PostCard";
 import { SidebarEvents, SidebarJobs, SidebarConnections } from "@/components/feed/SidebarComponents";
+import { GamificationLeaderboard } from "@/components/GamificationLeaderboard";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -1304,6 +1305,7 @@ export const FeedPage = (): JSX.Element => {
 
               {/* Mobile Carousel Sections */}
               <div className="xl:hidden space-y-2">
+                <GamificationLeaderboard />
                 <SidebarEvents
                   events={upcomingEvents}
                   onRSVP={handleEventRSVP}
@@ -1337,6 +1339,7 @@ export const FeedPage = (): JSX.Element => {
           className="hidden xl:block w-80 2xl:w-96 bg-white/95 backdrop-blur-md border-l border-gray-200 shadow-xl fixed right-0 top-[72px] md:top-[96px] bottom-0 overflow-y-auto z-10"
         >
           <div className="p-4 sm:p-5 xl:p-6 2xl:p-7 space-y-6 xl:space-y-8 2xl:space-y-9">
+            <GamificationLeaderboard />
             <SidebarEvents
               events={upcomingEvents}
               onRSVP={handleEventRSVP}

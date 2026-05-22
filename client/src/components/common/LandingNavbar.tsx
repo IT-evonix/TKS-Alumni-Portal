@@ -3,14 +3,19 @@ import { useLocation } from "wouter";
 import { Menu, X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useAuth } from "@/contexts/AuthContext";
+import { useNotifications } from "@/contexts/NotificationContext";
+import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
+import { Bell } from "lucide-react";
 import { HEADER_NAV_LINKS, type NavLinkConfig } from "@/constants/landingLinks";
 import { motion, AnimatePresence } from "framer-motion";
 
 export const LandingNavbar = (): JSX.Element => {
     const [location, setLocation] = useLocation();
     const { user, logout } = useAuth();
+    const { unreadCount } = useNotifications();
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
     const [scrolled, setScrolled] = React.useState(false);
+    const [showNotifications, setShowNotifications] = React.useState(false);
 
     React.useEffect(() => {
         const handleEscape = (e: KeyboardEvent) => {
@@ -54,11 +59,10 @@ export const LandingNavbar = (): JSX.Element => {
                 initial={{ y: -10, opacity: 0 }}
                 animate={{ y: 0, opacity: 1 }}
                 transition={{ duration: 0.5, ease: "easeOut" }}
-                className={`fixed top-0 z-50 w-full transition-all duration-300 ${
-                    scrolled
-                        ? 'bg-white/90 backdrop-blur-2xl border-b border-gray-200/70 shadow-sm'
-                        : 'bg-white/60 backdrop-blur-lg border-b border-transparent'
-                }`}
+                className={`fixed top-0 z-50 w-full transition-all duration-300 ${scrolled
+                    ? 'bg-white/90 backdrop-blur-2xl border-b border-gray-200/70 shadow-sm'
+                    : 'bg-white/60 backdrop-blur-lg border-b border-transparent'
+                    }`}
                 role="banner"
             >
                 <div className="max-w-7xl mx-auto px-6 sm:px-10 lg:px-12">
@@ -114,13 +118,41 @@ export const LandingNavbar = (): JSX.Element => {
                             </button>
 
                             {user ? (
-                                <Button
-                                    className="bg-gray-900 hover:bg-gray-800 text-white text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-300"
-                                    onClick={handleAuthAction}
-                                    aria-label="Log out"
-                                >
-                                    Log Out
-                                </Button>
+                                <div className="flex items-center gap-2 sm:gap-3">
+                                    <div className="relative">
+                                        <Button
+                                            variant="ghost"
+                                            size="icon"
+                                            className={`relative min-w-[40px] min-h-[40px] w-[40px] h-[40px] rounded-full transition-colors ${unreadCount > 0
+                                                ? 'text-[#008060] bg-[#008060]/10 hover:bg-[#008060]/20'
+                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
+                                                }`}
+                                            onClick={() => setShowNotifications(!showNotifications)}
+                                            aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
+                                        >
+                                            <Bell className="w-5 h-5" />
+                                            {unreadCount > 0 && (
+                                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white">
+                                                    {unreadCount > 99 ? "99+" : unreadCount > 9 ? "9+" : unreadCount}
+                                                </span>
+                                            )}
+                                        </Button>
+
+                                        {/* Dropdown Container */}
+                                        {showNotifications && (
+                                            <div className="absolute right-0 top-full mt-2">
+                                                <NotificationDropdown onClose={() => setShowNotifications(false)} />
+                                            </div>
+                                        )}
+                                    </div>
+                                    <Button
+                                        className="bg-gray-900 hover:bg-gray-800 text-white text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-300"
+                                        onClick={handleAuthAction}
+                                        aria-label="Log out"
+                                    >
+                                        Log Out
+                                    </Button>
+                                </div>
                             ) : (
                                 <Button
                                     className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold px-4 sm:px-6 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-300"

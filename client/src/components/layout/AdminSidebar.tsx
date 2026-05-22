@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -32,6 +32,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       key: "analytics",
       color: "text-purple-600",
       bgColor: "bg-purple-50"
+    },
+    {
+      icon: Trophy,
+      label: "Gamification",
+      path: "/admin/gamification",
+      key: "gamification",
+      color: "text-amber-600",
+      bgColor: "bg-amber-50"
     },
     {
       icon: Users,
