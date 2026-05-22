@@ -1,0 +1,17 @@
+node_modules
+dist
+.DS_Store
+server/public
+vite.config.ts.*
+*.tar.gz
+.local
+
+# Environment variables (contains secrets — NEVER commit)
+.env
+.env.local
+.env.production
+
+# Debug & temp files
+git_push_error*.txt
+tsc_errors.txt
+temp_git_push/
