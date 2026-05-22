@@ -305,6 +305,8 @@ export const NotificationType = {
     /** Notify admins when a user submits a post for approval */
     POST_PENDING_APPROVAL: "post_pending_approval",
     WEEKLY_DIGEST: "weekly_digest",
+    /** Sent to alumni when they earn a new gamification badge */
+    BADGE_EARNED: "badge_earned",
 } as const;
 
 /**

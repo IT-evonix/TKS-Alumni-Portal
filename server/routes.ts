@@ -4,10 +4,10 @@ import { supabase, checkSupabaseConnection } from "./supabase";
 import jwt from "jsonwebtoken";
 import bcrypt from "bcryptjs";
 import { promisify } from "util";
-import { 
-  previewExcelData, 
+import {
+  previewExcelData,
   saveImportedData,
-  importExcelData 
+  importExcelData
 } from "./import";
 
 import profileRoutes from "./routes/profile-routes";
@@ -19,10 +19,13 @@ import globalSearchRoutes from "./routes/global-search-routes";
 import securityRoutes from "./routes/security-routes";
 import auditLogRoutes from "./routes/audit-log-routes";
 import searchAnalyticsRoutes from "./routes/search-analytics-routes";
-import resumeRoutes from "./routes/resume-routes";
+import resumeRoutes from "./routes/resume-routes"
+import alumniMapRoutes from "./routes/alumni-map";
 import adminDigestRoutes from "./routes/admin-digest-routes";
 import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
 import { aggregateAdminDashboardMetrics } from "./services/admin-metrics-service";
+import gamificationRoutes from "./routes/gamification-routes";
+import { ensureDefaultBadgesExist, updateStreak, awardCommonBadge } from "./services/gamification-service";
 import {
   createAndEmitNotification,
   NotificationType,
@@ -171,8 +174,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/analytics", requireAuth, searchAnalyticsRoutes);
   app.use("/api/admin/digest", requireAdmin, adminDigestRoutes);
   app.use("/api/resume", requireAuth, resumeRoutes);
-
-
+  app.use("/api/gamification", gamificationRoutes);
+  // Auto-seed default badges on startup (skips if badges already exist)
+  ensureDefaultBadgesExist().catch(err =>
+    console.error("[Gamification] Badge auto-seed failed:", err)
+  );
   // Excel import endpoints (admin only)
   app.post("/api/admin/import-preview", requireAdmin, uploadExcel.single("file"), handleMulterError, previewExcelData);
   app.post("/api/admin/import-save", requireAdmin, saveImportedData);
@@ -720,7 +726,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "OTP challenge is no longer active. Please login again." });
       }
 
-      const challengeCreatedAt = new Date(existingChallenge.created_at).getTime();
+      // Fix: force UTC parsing on TIMESTAMP WITHOUT TIME ZONE columns
+      const createdAtStr = String(existingChallenge.created_at);
+      const challengeCreatedAt = new Date(createdAtStr.endsWith('Z') || createdAtStr.includes('+') ? createdAtStr : createdAtStr + 'Z').getTime();
       const now = Date.now();
       const cooldownMs = ADMIN_LOGIN_OTP_RESEND_COOLDOWN_SECONDS * 1000;
       const remainingCooldownMs = challengeCreatedAt + cooldownMs - now;
@@ -854,7 +862,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "This OTP has already been used" });
       }
 
-      if (new Date(tokenData.expires_at) < new Date()) {
+      // Fix: Supabase TIMESTAMP (no timezone) returns string without 'Z'.
+      // new Date("2026-05-22T12:44:38") is treated as LOCAL time (IST +5:30),
+      // making a future UTC expiry appear already past. Force UTC by adding 'Z'.
+      const expiresAtStr = String(tokenData.expires_at);
+      const expiryUTC = new Date(expiresAtStr.endsWith('Z') || expiresAtStr.includes('+') ? expiresAtStr : expiresAtStr + 'Z');
+      if (expiryUTC < new Date()) {
         return res.status(400).json({ error: "OTP has expired" });
       }
 
@@ -902,6 +915,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from("users")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", user.id);
+
+      // Trigger gamification login events (Streak + First Login Badge)
+      try {
+        await updateStreak(user.id);
+        await awardCommonBadge(user.id, "login");
+      } catch (err) {
+        console.error("[Gamification] Admin login gamification error:", err);
+      }
 
       const { data: alumniProfile } = await supabase
         .from("alumni")
@@ -982,6 +1003,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from("users")
         .update({ updated_at: new Date().toISOString() })
         .eq("id", user.id);
+
+      // Trigger gamification login events (Streak + First Login Badge)
+      try {
+        await updateStreak(user.id);
+        await awardCommonBadge(user.id, "login");
+      } catch (err) {
+        console.error("[Gamification] User login gamification error:", err);
+      }
 
       // Fetch alumni profile from Supabase
       const { data: alumniProfile } = await supabase
@@ -1960,7 +1989,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!sFirstName || sFirstName.length < 2) {
         return res.status(400).json({ error: "Invalid First Name" });
       }
-      
+
       if (!sLastName || sLastName.length < 2) {
         return res.status(400).json({ error: "Invalid Last Name" });
       }
@@ -1993,13 +2022,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // If user exists but is blocked/inactive, clean up the old record to allow re-signup
       if (existingUser && existingUser.account_blocked) {
         // console.log(`[StudentSignup] Cleaning up blocked account for re-registration: ${sEmail}`);
-        
+
         // Delete associated alumni record first (foreign key constraint)
         await supabase.from("alumni").delete().eq("user_id", existingUser.id);
-        
+
         // Delete the blocked user
         await supabase.from("users").delete().eq("id", existingUser.id);
-        
+
         // Also clean up any pending signup requests (if any)
         await supabase
           .from("signup_requests")
@@ -2046,11 +2075,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (existingAlumni) {
         // If an alumni record exists but no user (orphaned), clean it up
         if (!existingUser) {
-           await supabase.from("alumni").delete().eq("id", existingAlumni.id);
+          await supabase.from("alumni").delete().eq("id", existingAlumni.id);
         } else if (existingUser.account_blocked) {
-           // If user is blocked, our cleanup logic above already handled user deletion,
-           // but let's double check the alumni record is gone
-           await supabase.from("alumni").delete().eq("id", existingAlumni.id);
+          // If user is blocked, our cleanup logic above already handled user deletion,
+          // but let's double check the alumni record is gone
+          await supabase.from("alumni").delete().eq("id", existingAlumni.id);
         }
       }
 
@@ -2064,18 +2093,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const timestamp = Date.now().toString(36).substring(2); // More entropy
       const baseUsername = sEmail.split("@")[0].toLowerCase().replace(/[^a-z0-9]/g, "");
       let uniqueUsername = `${baseUsername}_${timestamp}`;
-      
+
       // Check for username collisions (Edge case)
       let isUsernameUnique = false;
       let collisionCount = 0;
-      
+
       while (!isUsernameUnique && collisionCount < 5) {
         const { data: existingUsername } = await supabase
           .from("users")
           .select("id")
           .eq("username", uniqueUsername)
           .maybeSingle();
-          
+
         if (!existingUsername) {
           isUsernameUnique = true;
         } else {
@@ -2261,6 +2290,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.status(500).json({ error: "Internal server error" });
     }
   });
+
+
+
+
+  // Alumni Map routes (public)
+  app.use("/api/alumni-map", alumniMapRoutes);
 
   app.put("/api/alumni/profile", async (req, res) => {
     try {
@@ -2454,7 +2489,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .json({ error: "Failed to fetch signup requests" });
       }
 
-      res.json({ 
+      res.json({
         requests: requests || [],
         totalCount: count || (requests?.length || 0)
       });
@@ -2885,7 +2920,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Handle batch filter requires a nested check or a more complex query if many users
       // For now, let's focus on the primary user filters and handle pagination
-      
+
       const from = (page - 1) * limit;
       const to = from + limit - 1;
 
@@ -2903,7 +2938,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         const alumniData = (user as any).alumni;
         // Robust handling for both array (1-M) and object (1-1) join responses
         const alumni = Array.isArray(alumniData) ? (alumniData[0] || {}) : (alumniData || {});
-        
+
         return {
           ...user,
           graduation_year: alumni.graduation_year || null,
@@ -7724,7 +7759,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // 3. Process the action (Accept/Reject)
       const newStatus = action === "accept" ? "accepted" : "rejected";
-      
+
       const { error: updateError } = await supabase
         .from("connection_requests")
         .update({
@@ -7744,7 +7779,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select("first_name, last_name")
         .eq("user_id", userId)
         .single();
-      
+
       const responderName = alumni ? `${alumni.first_name} ${alumni.last_name}` : "An alumni";
 
       // 5. Notify the requester using the centralized helper
@@ -7752,8 +7787,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         userId: requesterId,
         type: NotificationType.CONNECTION_RESPONSE,
         title: action === "accept" ? "Connection Accepted" : "Connection Declined",
-        content: action === "accept" 
-          ? `${responderName} accepted your connection request!` 
+        content: action === "accept"
+          ? `${responderName} accepted your connection request!`
           : `${responderName} declined your connection request`,
         relatedId: userId, // Pass the responder's ID so clicking notification goes to their profile/connections
         redirectUrl: NotificationRedirectUrl.CONNECTIONS,

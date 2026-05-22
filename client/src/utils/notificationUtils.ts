@@ -278,6 +278,7 @@ export function getNotificationTypeLabel(type: string): string {
     'post_pending_approval': 'Admin Alerts',
     'post_approved': 'Posts',
     'post_rejected': 'Posts',
+    'badge_earned': 'Gamification',
   };
 
   return labels[type] || 'Other';
@@ -303,6 +304,7 @@ export function getNotificationTypeColor(type: string): string {
     'post_pending_approval': 'bg-amber-100 text-amber-800 border-amber-200',
     'post_approved': 'bg-green-100 text-green-700 border-green-200',
     'post_rejected': 'bg-red-100 text-red-700 border-red-200',
+    'badge_earned': 'bg-amber-100 text-amber-700 border-amber-200',
   };
 
   return colors[type] || 'bg-gray-100 text-gray-700 border-gray-200';
@@ -329,6 +331,7 @@ export function getNotificationIconName(type: string): string {
     'post_pending_approval': 'FileText',
     'post_approved': 'CheckCircle',
     'post_rejected': 'X',
+    'badge_earned': 'Trophy',
   };
   return iconMap[type] || 'Bell';
 }

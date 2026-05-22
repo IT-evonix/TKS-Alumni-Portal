@@ -18,12 +18,14 @@ import { EducationManager } from "@/components/profile/EducationManager";
 import { ProjectManager } from "@/components/profile/ProjectManager";
 import { CertificationManager } from "@/components/profile/CertificationManager";
 import { AchievementManager } from "@/components/profile/AchievementManager";
+import { AchievementBadges } from "@/components/AchievementBadges";
 import { LanguageManager } from "@/components/profile/LanguageManager";
 import { ResumeUpload } from "@/components/profile/ResumeUpload";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { BackButton } from "@/components/common/BackButton";
 import { validateName, validateEmail, validateLinkedInURL, validateTextLength, sanitizeString, validateGitHubURL, validateTwitterURL, validateWebsiteURL } from "@/utils/validation";
 import { getGraduationYearOptions } from "@/constants/graduationYear";
+
 import {
   Save,
   Eye,
@@ -151,7 +153,7 @@ export const UserProfilePage = (): JSX.Element => {
   const certificationsRef = React.useRef<HTMLDivElement>(null);
   const languagesRef = React.useRef<HTMLDivElement>(null);
   const achievementsRef = React.useRef<HTMLDivElement>(null);
-  const handleSaveRef = useRef<() => Promise<void>>(async () => {});
+  const handleSaveRef = useRef<() => Promise<void>>(async () => { });
   const saveButtonRef = React.useRef<HTMLButtonElement>(null);
 
   // State to track data from all managers
@@ -1781,6 +1783,8 @@ export const UserProfilePage = (): JSX.Element => {
             </CardContent>
           </Card>
 
+
+
           {/* Experience Manager */}
           <div ref={experienceRef}>
             {user?.id && <ExperienceManager userId={user.id} />}
@@ -1811,9 +1815,11 @@ export const UserProfilePage = (): JSX.Element => {
             {user?.id && <LanguageManager userId={user.id} />}
           </div>
 
-          {/* Achievements Section */}
+          {/* Achievements & Gamification Section */}
           <div ref={achievementsRef}>
             {user?.id && <AchievementManager userId={user.id} />}
+            {/* Gamification badges and scores ONLY visible to alumni */}
+            {user?.id && user.user_role === 'alumni' && <AchievementBadges userId={user.id} />}
           </div>
 
 

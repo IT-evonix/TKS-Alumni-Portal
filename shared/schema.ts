@@ -832,3 +832,73 @@ export type AdminDigestPreference = typeof adminDigestPreferences.$inferSelect;
 export type InsertAdminDigestPreference = z.infer<typeof insertAdminDigestPreferenceSchema>;
 export type AdminDigestLog = typeof adminDigestLogs.$inferSelect;
 export type InsertAdminDigestLog = z.infer<typeof insertAdminDigestLogSchema>;
+
+// ==================== GAMIFICATION MODULE ====================
+
+// Master badges table (Admin-managed)
+export const gamificationBadges = pgTable("gamification_badges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  description: text("description"),
+  category: text("category").notNull(), // 'common', 'series'
+  seriesType: text("series_type"), // 'login', 'profile', 'thread', 'event', 'connection'
+  requiredScore: integer("required_score").default(0), // Score threshold to unlock
+  tier: text("tier"), // 'bronze', 'silver', 'gold', 'platinum'
+  iconUrl: text("icon_url"),
+  isEnabled: boolean("is_enabled").default(true),
+  displayOrder: integer("display_order").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User engagement scores table
+export const userScores = pgTable("user_scores", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull().unique(),
+  threadScore: integer("thread_score").default(0),
+  eventScore: integer("event_score").default(0),
+  connectionScore: integer("connection_score").default(0),
+  currentStreakDays: integer("current_streak_days").default(0),
+  highestStreak: integer("highest_streak").default(0),
+  lastActiveDate: timestamp("last_active_date"),
+  totalPoints: integer("total_points").default(0), // Aggregate for leaderboard
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+// User earned badges mapping
+export const userBadges = pgTable("user_badges", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  badgeId: varchar("badge_id").references(() => gamificationBadges.id, { onDelete: 'cascade' }).notNull(),
+  earnedAt: timestamp("earned_at").defaultNow(),
+  isFeatured: boolean("is_featured").default(false),
+  notified: boolean("notified").default(false),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// Gamification schemas
+export const insertGamificationBadgeSchema = createInsertSchema(gamificationBadges).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserScoreSchema = createInsertSchema(userScores).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertUserBadgeSchema = createInsertSchema(userBadges).omit({
+  id: true,
+  createdAt: true,
+});
+
+// Gamification types
+export type GamificationBadge = typeof gamificationBadges.$inferSelect;
+export type InsertGamificationBadge = z.infer<typeof insertGamificationBadgeSchema>;
+export type UserScore = typeof userScores.$inferSelect;
+export type InsertUserScore = z.infer<typeof insertUserScoreSchema>;
+export type UserBadge = typeof userBadges.$inferSelect;
+export type InsertUserBadge = z.infer<typeof insertUserBadgeSchema>;

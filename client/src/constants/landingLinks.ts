@@ -21,6 +21,7 @@ export const HEADER_NAV_LINKS: NavLinkConfig[] = [
   { label: "Features", type: "scroll", target: "features" },
   { label: "Events", type: "scroll", target: "events" },
   { label: "Jobs", type: "scroll", target: "jobs" },
+  { label: "Alumni Map", type: "route", target: "/alumni-map" },
   { label: "Contact", type: "scroll", target: "contact" },
 ];
 
@@ -30,6 +31,7 @@ export const FOOTER_QUICK_LINKS: NavLinkConfig[] = [
   { label: "About", type: "scroll", target: "about" },
   { label: "Events", type: "scroll", target: "events" },
   { label: "Jobs", type: "scroll", target: "jobs" },
+  { label: "Alumni Map", type: "route", target: "/alumni-map" },
   { label: "Contact", type: "scroll", target: "contact" },
 ];
 
