@@ -307,6 +307,8 @@ export const NotificationType = {
     WEEKLY_DIGEST: "weekly_digest",
     /** Sent to alumni when they earn a new gamification badge */
     BADGE_EARNED: "badge_earned",
+    /** Sent when a user loses a competitive badge */
+    BADGE_LOST: "badge_lost",
 } as const;
 
 /**

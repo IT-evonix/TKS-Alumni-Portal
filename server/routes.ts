@@ -25,7 +25,7 @@ import adminDigestRoutes from "./routes/admin-digest-routes";
 import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
 import { aggregateAdminDashboardMetrics } from "./services/admin-metrics-service";
 import gamificationRoutes from "./routes/gamification-routes";
-import { ensureDefaultBadgesExist, updateStreak, awardCommonBadge } from "./services/gamification-service";
+import { ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
 import {
   createAndEmitNotification,
   NotificationType,
@@ -7892,9 +7892,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
             return res.status(500).json({ error: "Failed to remove RSVP" });
           }
 
+          // Deduct gamification points if they were attending
+          if (existingRsvp.status === "attending") {
+            incrementScore(userId, "event_score", -1).catch(err => console.error("Gamification event RSVP revert error:", err));
+          }
+
           return res.json({
             message: "RSVP removed successfully",
-            status: null, // Indieates no RSVP
+            status: null, // Indicates no RSVP
           });
         }
 
@@ -7912,6 +7917,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (error) {
           console.error("Update RSVP error:", error);
           return res.status(500).json({ error: "Failed to update RSVP" });
+        }
+
+        // Gamification points
+        if (existingRsvp.status !== "attending" && status === "attending") {
+          incrementScore(userId, "event_score", 1).catch(err => console.error("Gamification event RSVP error:", err));
+        } else if (existingRsvp.status === "attending" && status !== "attending") {
+          incrementScore(userId, "event_score", -1).catch(err => console.error("Gamification event RSVP revert error:", err));
         }
 
         res.json({
@@ -7970,6 +7982,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
             redirectUrl: NotificationRedirectUrl.EVENTS,
             actorId: userId,
           });
+        }
+
+        // Award points if attending
+        if (status === "attending") {
+          // Fire and forget gamification updates
+          incrementScore(userId, "event_score", 1).catch(err => console.error("Gamification event RSVP error:", err));
         }
 
         res.status(201).json({
@@ -8148,6 +8166,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         currentCompany,
         currentRole,
         location,
+        city,
+        state,
+        country,
         linkedinUrl,
         bio,
         gender,
@@ -8278,12 +8299,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
           // Privacy settings
           show_email: showEmail !== undefined ? showEmail : true,
           show_phone: showPhone !== undefined ? showPhone : true,
-          // Ensure location fields are also updated if location is provided as a string "City, Country"
-          current_city: location ? location.split(",")[0]?.trim() : null,
-          current_country:
-            location && location.includes(",")
-              ? location.split(",")[1]?.trim()
-              : null,
+          
+          // Updated explicit location fields
+          current_city: city || null,
+          current_state: state || null,
+          current_country: country || null,
+          location: city && country ? `${city}, ${country}` : null,
         };
 
         // Only include graduation_year if we have a valid value
@@ -11687,6 +11708,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           p_points: 5,
           p_threads_increment: 1,
         });
+        
+        // Update gamification points for thread creation
+        incrementScore(userId, "thread_score", 2).catch(err => console.error("Gamification thread create error:", err));
       } catch (err) {
         console.error("Reputation update error:", err);
       }
@@ -11785,6 +11809,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Failed to delete thread" });
       }
 
+      // Deduct gamification points for thread deletion
+      incrementScore(thread.author_id, "thread_score", -2).catch(err => console.error("Gamification thread delete error:", err));
+
       res.json({ message: "Thread deleted successfully" });
     } catch (error) {
       console.error("Delete thread error:", error);
@@ -11851,6 +11878,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           p_points: 2,
           p_posts_increment: 1,
         });
+        
+        // Update gamification points for post reply
+        incrementScore(userId, "thread_score", 1).catch(err => console.error("Gamification post reply error:", err));
       } catch (err) {
         console.error("Reputation update error:", err);
       }
@@ -11998,6 +12028,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
           console.error("Failed to recount posts:", countError);
         }
       }
+
+      // Deduct gamification points for post deletion
+      incrementScore(post.author_id, "thread_score", -1).catch(err => console.error("Gamification post delete error:", err));
 
       res.json({ message: "Post deleted successfully" });
     } catch (error) {

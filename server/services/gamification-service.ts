@@ -12,7 +12,7 @@ import { createAndEmitNotification, NotificationType } from "./notification-help
  * If not, insert a default row; then return the current scores.
  */
 export async function ensureUserScores(userId: string) {
-  // Gamification only applies to 'alumni'
+  // Gamification only applies to 'alumni' role as requested
   const { data: userRoleData } = await supabase
     .from("users")
     .select("user_role")
@@ -53,6 +53,17 @@ export async function incrementScore(
   amount: number = 1
 ) {
   try {
+    // Gamification only applies to alumni users
+    const { data: userRoleData } = await supabase
+      .from("users")
+      .select("user_role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!userRoleData || userRoleData.user_role !== 'alumni') {
+      return; // Silently skip non-alumni users
+    }
+
     // Ensure row exists
     const scores = await ensureUserScores(userId);
     if (!scores) return;
@@ -88,8 +99,119 @@ export async function incrementScore(
 
     // Check if user unlocked any new series badges
     await checkAndAwardSeriesBadges(userId, seriesType, newValue);
+
+    // Check if user claimed a competitive leaderboard badge
+    await checkCompetitiveBadges(userId, seriesType, newValue);
   } catch (err) {
     console.error("[Gamification] incrementScore error:", err);
+  }
+}
+
+// ==================== COMPETITIVE BADGE LOGIC ====================
+
+/**
+ * Checks if the user's new score makes them the top ranker for a competitive badge.
+ * If yes, revokes the badge from the previous owner and awards it to this user.
+ */
+async function checkCompetitiveBadges(userId: string, seriesType: string, newValue: number) {
+  try {
+    // Check role first: gamification only applies to 'alumni'
+    const { data: userRoleData } = await supabase
+      .from("users")
+      .select("user_role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!userRoleData || userRoleData.user_role !== 'alumni') {
+      return; 
+    }
+
+    // Find the competitive badge for this series
+    const { data: competitiveBadge } = await supabase
+      .from("gamification_badges")
+      .select("*")
+      .eq("category", "competitive")
+      .eq("series_type", seriesType)
+      .eq("is_enabled", true)
+      .maybeSingle();
+
+    if (!competitiveBadge) return;
+
+    // Get current top scorers for this field
+    const scoreField = seriesType === "thread" ? "thread_score" : 
+                       seriesType === "event" ? "event_score" : 
+                       seriesType === "connection" ? "connection_score" : null;
+    
+    if (!scoreField) return;
+
+    // We get the top scorer (limit 1) order by the score field desc
+    const { data: topScorer } = await supabase
+      .from("user_scores")
+      .select(`user_id, ${scoreField}`)
+      .order(scoreField, { ascending: false })
+      .limit(1)
+      .maybeSingle();
+
+    if (!topScorer) return;
+
+    // Determine who should have the badge now
+    if (topScorer && ((topScorer as any)[scoreField] as number) > 0) {
+      const actualTopScorerId = topScorer.user_id;
+
+      // Check if the actual top scorer already has the badge
+      const { data: existing } = await supabase
+        .from("user_badges")
+        .select("id")
+        .eq("user_id", actualTopScorerId)
+        .eq("badge_id", competitiveBadge.id)
+        .maybeSingle();
+
+      if (!existing) {
+        // They are the new top scorer but don't have the badge yet!
+        // Revoke it from whoever currently has it
+        const { data: previousOwners } = await supabase
+          .from("user_badges")
+          .select("user_id")
+          .eq("badge_id", competitiveBadge.id)
+          .neq("user_id", actualTopScorerId);
+
+        if (previousOwners && previousOwners.length > 0) {
+          for (const prev of previousOwners) {
+            await revokeBadge(prev.user_id, competitiveBadge.id);
+            
+            // Notify them they lost it
+            await createAndEmitNotification({
+              userId: prev.user_id,
+              type: NotificationType.BADGE_LOST,
+              title: "Badge Lost",
+              content: `Someone just overtook your '${competitiveBadge.name}' badge! Reclaim your spot!`,
+              redirectUrl: "/profile",
+            });
+          }
+        }
+
+        // Award it to the actual top scorer
+        await manuallyAwardBadge(
+          actualTopScorerId, 
+          competitiveBadge.id, 
+          `Congratulations! You reached the top rank and earned the '${competitiveBadge.name}' badge!`
+        );
+      }
+    } else {
+      // Top scorer score is 0. No one should have it.
+      const { data: previousOwners } = await supabase
+        .from("user_badges")
+        .select("user_id")
+        .eq("badge_id", competitiveBadge.id);
+
+      if (previousOwners && previousOwners.length > 0) {
+        for (const prev of previousOwners) {
+          await revokeBadge(prev.user_id, competitiveBadge.id);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Gamification] checkCompetitiveBadges error:", err);
   }
 }
 
@@ -101,8 +223,16 @@ export async function incrementScore(
  */
 export async function awardCommonBadge(userId: string, seriesType: string) {
   try {
-    const scores = await ensureUserScores(userId);
-    if (!scores) return; // Only alumni can get badges
+    // Check role first: gamification only applies to 'alumni'
+    const { data: userRoleData } = await supabase
+      .from("users")
+      .select("user_role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!userRoleData || userRoleData.user_role !== 'alumni') {
+      return; // Do not award badges to non-alumni
+    }
 
     // Find the matching common badge
     const { data: badge } = await supabase
@@ -303,7 +433,7 @@ export async function checkProfileCompletion(userId: string) {
  * Manually award a specific badge to a user from the Admin Dashboard
  * Bypasses normal score checks.
  */
-export async function manuallyAwardBadge(userId: string, badgeId: string) {
+export async function manuallyAwardBadge(userId: string, badgeId: string, customMessage?: string) {
   try {
     // Gamification only applies to 'alumni'
     const { data: userRoleData } = await supabase
@@ -313,7 +443,7 @@ export async function manuallyAwardBadge(userId: string, badgeId: string) {
       .maybeSingle();
 
     if (!userRoleData || userRoleData.user_role !== 'alumni') {
-      throw new Error("Badges can only be assigned to alumni.");
+      throw new Error("Badges can only be assigned to alumni users.");
     }
 
     // Verify the badge exists
@@ -370,9 +500,9 @@ export async function manuallyAwardBadge(userId: string, badgeId: string) {
       await createAndEmitNotification({
         userId,
         type: NotificationType.BADGE_EARNED,
-        title: "New Badge Awarded!",
-        content: `Admin manually awarded you the "${badge.name}" badge!`,
-        redirectUrl: "/profile/achievements",
+        title: customMessage ? "Top Ranker Achievement! 🏆" : "New Badge Awarded!",
+        content: customMessage || `Admin manually awarded you the "${badge.name}" badge!`,
+        redirectUrl: "/profile",
         metadata: {
           badgeId: badge.id,
           badgeName: badge.name,
@@ -567,6 +697,29 @@ const defaultBadges = [
     icon_url: null,
     is_enabled: true,
     display_order: 32,
+  },
+  // Competitive Badges
+  {
+    name: "Event Master",
+    description: "Highest event participation! Held by the #1 Event Explorer.",
+    category: "competitive",
+    series_type: "event",
+    required_score: 0,
+    tier: "platinum",
+    icon_url: null,
+    is_enabled: true,
+    display_order: 100,
+  },
+  {
+    name: "Top Contributor",
+    description: "Highest comments and replies! The reigning Community Voice.",
+    category: "competitive",
+    series_type: "thread",
+    required_score: 0,
+    tier: "platinum",
+    icon_url: null,
+    is_enabled: true,
+    display_order: 101,
   },
 ];
 

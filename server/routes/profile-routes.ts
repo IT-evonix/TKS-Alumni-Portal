@@ -636,7 +636,10 @@ router.post("/update", async (req, res) => {
             fundingStage,
             foundingYear,
             isStartupFounder,
-            timezone
+            timezone,
+            currentCity,
+            currentState,
+            currentCountry
         } = req.body;
 
         // Update user table (email)
@@ -652,11 +655,13 @@ router.post("/update", async (req, res) => {
             }
         }
 
-        // Map location string to alumni columns (alumni has current_city/current_state/current_country, not "location")
-        let current_city: string | undefined;
-        let current_state: string | undefined;
-        let current_country: string | undefined;
-        if (location && typeof location === "string") {
+        // Map location strings to alumni columns
+        let current_city: string | undefined = currentCity !== undefined ? currentCity : undefined;
+        let current_state: string | undefined = currentState !== undefined ? currentState : undefined;
+        let current_country: string | undefined = currentCountry !== undefined ? currentCountry : undefined;
+        
+        // Fallback for legacy 'location' field if sent
+        if (location && typeof location === "string" && !current_city) {
             const parts = location.split(",").map((p: string) => p.trim()).filter(Boolean);
             if (parts.length >= 3) {
                 current_city = parts[0];
@@ -692,11 +697,11 @@ router.post("/update", async (req, res) => {
             volunteer_interests: volunteerInterests,
             keywords: keywords,
             employment_status: employmentStatus,
-            years_of_experience: yearsOfExperience,
+            years_of_experience: yearsOfExperience === "" ? null : (yearsOfExperience !== undefined ? Number(yearsOfExperience) : undefined),
             startup_name: startupName,
             startup_role: startupRole,
             funding_stage: fundingStage,
-            founding_year: foundingYear,
+            founding_year: foundingYear === "" ? null : (foundingYear !== undefined ? Number(foundingYear) : undefined),
             is_startup_founder: isStartupFounder,
             timezone: timezone,
             updated_at: new Date().toISOString()

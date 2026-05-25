@@ -18,6 +18,7 @@ interface LeaderboardEntry {
   connection_score: number;
   current_streak_days: number;
   badgesCount?: number;
+  topBadges?: any[];
 }
 
 export function GamificationLeaderboard() {
@@ -44,21 +45,31 @@ export function GamificationLeaderboard() {
     };
     fetchLeaderboard();
 
+    let timeoutId: NodeJS.Timeout;
+
+    const debouncedFetch = () => {
+      clearTimeout(timeoutId);
+      timeoutId = setTimeout(() => {
+        fetchLeaderboard();
+      }, 500);
+    };
+
     const channel = supabase
       .channel('gamification-leaderboard-changes')
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'user_scores' },
-        () => { fetchLeaderboard(); }
+        () => { debouncedFetch(); }
       )
       .on(
         'postgres_changes',
         { event: '*', schema: 'public', table: 'user_badges' },
-        () => { fetchLeaderboard(); }
+        () => { debouncedFetch(); }
       )
       .subscribe();
 
     return () => {
+      clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
   }, []);
@@ -72,7 +83,7 @@ export function GamificationLeaderboard() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {[1,2,3].map(i => (
+          {[1, 2, 3].map(i => (
             <div key={i} className="flex items-center gap-3">
               <Skeleton className="w-8 h-8 rounded-full" />
               <div className="space-y-2">
@@ -103,17 +114,17 @@ export function GamificationLeaderboard() {
       <CardContent className="p-0">
         <div className="divide-y divide-amber-100/50 dark:divide-amber-900/20">
           {leaderboard.slice(0, 5).map((user, idx) => (
-            <div 
-              key={user.user_id} 
+            <div
+              key={user.user_id}
               className="flex items-center justify-between p-3 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors cursor-pointer group"
               onClick={() => setLocation(`/profile/${user.user_id}`)}
             >
               <div className="flex items-center gap-3 min-w-0">
                 <div className="relative font-bold text-lg w-6 text-center text-slate-400 group-hover:text-amber-500">
-                  {idx === 0 ? <Medal className="w-5 h-5 mx-auto text-amber-500" /> : 
-                   idx === 1 ? <Medal className="w-5 h-5 mx-auto text-slate-400" /> : 
-                   idx === 2 ? <Medal className="w-5 h-5 mx-auto text-orange-400" /> : 
-                   `#${idx + 1}`}
+                  {idx === 0 ? <Medal className="w-5 h-5 mx-auto text-amber-500" /> :
+                    idx === 1 ? <Medal className="w-5 h-5 mx-auto text-slate-400" /> :
+                      idx === 2 ? <Medal className="w-5 h-5 mx-auto text-orange-400" /> :
+                        `#${idx + 1}`}
                 </div>
                 <Avatar className="w-9 h-9 border-2 border-white dark:border-slate-800 shadow-sm">
                   <AvatarImage src={user.profilePicture || ''} />
@@ -131,9 +142,30 @@ export function GamificationLeaderboard() {
                       </span>
                     )}
                   </div>
+                  {user.topBadges && user.topBadges.length > 0 && (
+                    <div className="flex items-center gap-1 mt-1">
+                      {user.topBadges.map((badge, bIdx) => (
+                        <div
+                          key={bIdx}
+                          className={`w-4 h-4 rounded-full flex items-center justify-center shrink-0 border border-slate-200 dark:border-slate-700 ${badge.category === 'competitive' ? 'shadow-[0_0_5px_rgba(251,191,36,0.5)] border-amber-300' : ''}`}
+                          title={badge.name}
+                        >
+                          {badge.icon_url ? (
+                            badge.icon_url.startsWith('http') || badge.icon_url.startsWith('/') ? (
+                              <img src={badge.icon_url} alt={badge.name} className="w-2.5 h-2.5" />
+                            ) : (
+                              <span className="text-[10px] leading-none">{badge.icon_url}</span>
+                            )
+                          ) : (
+                            <div className={`w-2.5 h-2.5 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`} />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </div>
-              
+
               <div className="flex flex-col items-end shrink-0 ml-2">
                 <div className="text-right">
                   <div className="text-sm font-bold text-primary">{user.total_points}</div>

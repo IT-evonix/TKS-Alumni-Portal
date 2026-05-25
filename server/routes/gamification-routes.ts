@@ -188,11 +188,11 @@ router.delete("/admin/badges/:id", async (req: Request, res: Response) => {
  */
 router.get("/admin/users", async (req: Request, res: Response) => {
   try {
-    // Only include alumni in gamification
+    // Only include students, alumni, and regular users in gamification
     const { data: validRoleUsers, error: usersError } = await supabase
       .from("users")
       .select("id, email, username, created_at")
-      .in("user_role", ["alumni"]);
+      .in("user_role", ["student", "alumni", "user"]);
       
     if (usersError) {
       return res.status(500).json({ error: "Failed to fetch users" });
@@ -408,6 +408,22 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
   try {
     const { userId } = req.params;
 
+    // Gamification is only for alumni users
+    const { data: userData } = await supabase
+      .from("users")
+      .select("user_role")
+      .eq("id", userId)
+      .maybeSingle();
+
+    if (!userData || userData.user_role !== 'alumni') {
+      return res.json({
+        earnedBadges: [],
+        progress: [],
+        scores: { thread_score: 0, event_score: 0, connection_score: 0, total_points: 0 },
+        globalRank: 0,
+      });
+    }
+
     // Get user scores
     const { data: scores } = await supabase
       .from("user_scores")
@@ -442,11 +458,47 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
 
     const progress: any[] = [];
 
+    // Get top scores for competitive badge calculations
+    const topScores: Record<string, number> = {};
     for (const badge of allBadges || []) {
-      if (badge.category === "series" && badge.series_type && !earnedBadgeIds.has(badge.id)) {
+      if (badge.category === "competitive" && badge.series_type && !earnedBadgeIds.has(badge.id)) {
+        if (topScores[badge.series_type] === undefined) {
+          const scoreField = badge.series_type === "thread" ? "thread_score" : 
+                             badge.series_type === "event" ? "event_score" : 
+                             badge.series_type === "connection" ? "connection_score" : null;
+          if (scoreField) {
+            const { data: topScorer } = await supabase
+              .from("user_scores")
+              .select(scoreField)
+              .order(scoreField, { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            topScores[badge.series_type] = topScorer ? ((topScorer as any)[scoreField] as number || 0) : 0;
+          }
+        }
+      }
+    }
+
+    for (const badge of allBadges || []) {
+      if (!earnedBadgeIds.has(badge.id)) {
         const currentScore = userScores[badge.series_type] || 0;
-        const required = badge.required_score || 0;
-        if (currentScore < required) {
+        
+        if (badge.category === "series") {
+          const required = badge.required_score || 0;
+          if (currentScore < required) {
+            progress.push({
+              badge,
+              currentScore,
+              requiredScore: required,
+              remaining: required - currentScore,
+              percentComplete: Math.round((currentScore / required) * 100),
+            });
+          }
+        } else if (badge.category === "competitive") {
+          // Required score to steal a competitive badge is Top Score + 1
+          const topScore = topScores[badge.series_type] || 0;
+          const required = topScore + 1;
+          
           progress.push({
             badge,
             currentScore,
@@ -458,11 +510,11 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
       }
     }
 
-    // Only consider alumni for global rank
+    // Only consider students, alumni, and regular users for global rank
     const { data: validRoleUsers } = await supabase
       .from("users")
       .select("id")
-      .in("user_role", ["alumni"]);
+      .in("user_role", ["student", "alumni", "user"]);
     const validIds = new Set(validRoleUsers?.map(u => u.id) || []);
 
     // Calculate global rank
@@ -521,11 +573,11 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
  */
 router.get("/leaderboard", async (req: Request, res: Response) => {
   try {
-    // Only include alumni in public leaderboard
+    // Only include alumni in the public leaderboard
     const { data: validRoleUsers } = await supabase
       .from("users")
       .select("id, username, created_at")
-      .in("user_role", ["alumni"]);
+      .eq("user_role", "alumni");
 
     const { data: alumniUsers } = await supabase
       .from("alumni")
@@ -540,7 +592,9 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
       return res.status(500).json({ error: "Failed to fetch leaderboard" });
     }
 
-    const { data: allUserBadges } = await supabase.from("user_badges").select("user_id");
+    const { data: allUserBadges } = await supabase
+      .from("user_badges")
+      .select("user_id, badge_id, gamification_badges(name, tier, icon_url, series_type, category)");
 
     const enriched = (validRoleUsers || []).map(u => {
       const alumni = alumniUsers?.find(a => a.user_id === u.id);
@@ -558,7 +612,24 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
       }
 
       const scoreData: any = userScores?.find(s => s.user_id === u.id) || {};
-      const badgeCount = allUserBadges?.filter(b => b.user_id === u.id).length || 0;
+      const userBadgesList = allUserBadges?.filter(b => b.user_id === u.id) || [];
+      const badgeCount = userBadgesList.length;
+
+      // Extract up to 3 most important badges to display on the leaderboard
+      // Prioritize competitive -> platinum -> gold -> silver -> bronze
+      const formattedBadges = userBadgesList
+        .map(b => b.gamification_badges)
+        .filter(Boolean)
+        .sort((a: any, b: any) => {
+          if (a.category === 'competitive' && b.category !== 'competitive') return -1;
+          if (b.category === 'competitive' && a.category !== 'competitive') return 1;
+          
+          const tierWeight: any = { platinum: 4, gold: 3, silver: 2, bronze: 1 };
+          const aWeight = tierWeight[a.tier] || 0;
+          const bWeight = tierWeight[b.tier] || 0;
+          return bWeight - aWeight;
+        })
+        .slice(0, 3);
 
       return {
         user_id: u.id,
@@ -572,6 +643,7 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
         connection_score: scoreData.connection_score || 0,
         current_streak_days: scoreData.current_streak_days || 0,
         badgesCount: badgeCount,
+        topBadges: formattedBadges,
         created_at: u.created_at
       };
     });

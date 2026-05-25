@@ -23,6 +23,7 @@ import { LanguageManager } from "@/components/profile/LanguageManager";
 import { ResumeUpload } from "@/components/profile/ResumeUpload";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { BackButton } from "@/components/common/BackButton";
+import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 import { validateName, validateEmail, validateLinkedInURL, validateTextLength, sanitizeString, validateGitHubURL, validateTwitterURL, validateWebsiteURL } from "@/utils/validation";
 import { getGraduationYearOptions } from "@/constants/graduationYear";
 
@@ -100,6 +101,9 @@ export const UserProfilePage = (): JSX.Element => {
     batch: '',
     currentCompany: '',
     currentRole: '',
+    currentCity: '',
+    currentState: '',
+    currentCountry: '',
     location: '',
     linkedinUrl: '',
     githubUrl: '',
@@ -204,6 +208,9 @@ export const UserProfilePage = (): JSX.Element => {
             batch: data.alumni.batch || '',
             currentCompany: data.alumni.current_company || '',
             currentRole: data.alumni.current_role || '',
+            currentCity: data.alumni.current_city || '',
+            currentState: data.alumni.current_state || '',
+            currentCountry: data.alumni.current_country || '',
             location: data.alumni.location || (data.alumni.current_city ? `${data.alumni.current_city}${data.alumni.current_country ? `, ${data.alumni.current_country}` : ''}` : ''),
             linkedinUrl: data.alumni.linkedin_url || '',
             bio: data.alumni.bio || '',
@@ -472,6 +479,9 @@ export const UserProfilePage = (): JSX.Element => {
           gender: profile.gender,
           currentCompany: sanitizeString(profile.currentCompany),
           currentRole: sanitizeString(profile.currentRole),
+          currentCity: sanitizeString(profile.currentCity),
+          currentState: sanitizeString(profile.currentState),
+          currentCountry: sanitizeString(profile.currentCountry),
           location: sanitizeString(profile.location),
           linkedinUrl: profile.linkedinUrl?.trim() || null,
           bio: sanitizeString(profile.bio),
@@ -708,6 +718,9 @@ export const UserProfilePage = (): JSX.Element => {
           gender: profile.gender,
           currentCompany: sanitizeString(profile.currentCompany),
           currentRole: sanitizeString(profile.currentRole),
+          currentCity: sanitizeString(profile.currentCity),
+          currentState: sanitizeString(profile.currentState),
+          currentCountry: sanitizeString(profile.currentCountry),
           location: sanitizeString(profile.location),
           linkedinUrl: profile.linkedinUrl?.trim() || null,
           githubUrl: profile.githubUrl?.trim() || null,
@@ -1562,18 +1575,45 @@ export const UserProfilePage = (): JSX.Element => {
 
 
 
-              <div>
-                <Label htmlFor="location">Location</Label>
-                <Input
-                  id="location"
-                  value={profile.location}
-                  onChange={(e) => {
-                    setProfile({ ...profile, location: e.target.value });
-                  }}
-                  placeholder="City, Country"
-                  disabled={isPreviewMode}
-                  className="min-h-[44px]"
-                />
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label htmlFor="city">City</Label>
+                  <CityAutocomplete
+                    city={profile.currentCity}
+                    onCityChange={(city) => setProfile({ ...profile, currentCity: city })}
+                    onLocationSelect={(city, state, country) => {
+                      setProfile({
+                        ...profile,
+                        currentCity: city,
+                        currentState: state,
+                        currentCountry: country
+                      });
+                    }}
+                    disabled={isPreviewMode}
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="state">State / Province</Label>
+                  <Input
+                    id="state"
+                    value={profile.currentState}
+                    onChange={(e) => setProfile({ ...profile, currentState: e.target.value })}
+                    placeholder="State"
+                    disabled={isPreviewMode}
+                    className="min-h-[44px]"
+                  />
+                </div>
+                <div>
+                  <Label htmlFor="country">Country</Label>
+                  <Input
+                    id="country"
+                    value={profile.currentCountry}
+                    onChange={(e) => setProfile({ ...profile, currentCountry: e.target.value })}
+                    placeholder="Country"
+                    disabled={isPreviewMode}
+                    className="min-h-[44px]"
+                  />
+                </div>
               </div>
 
               {/* Added Employment Status and Experience */}
@@ -1818,8 +1858,8 @@ export const UserProfilePage = (): JSX.Element => {
           {/* Achievements & Gamification Section */}
           <div ref={achievementsRef}>
             {user?.id && <AchievementManager userId={user.id} />}
-            {/* Gamification badges and scores ONLY visible to alumni */}
-            {user?.id && user.user_role === 'alumni' && <AchievementBadges userId={user.id} />}
+            {/* Gamification badges only for alumni users */}
+            {user?.id && user?.user_role === 'alumni' && <AchievementBadges userId={user.id} />}
           </div>
 
 
