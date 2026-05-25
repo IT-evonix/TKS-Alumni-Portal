@@ -350,7 +350,7 @@ export function AdminUserRankings() {
                   userOwnedBadges.map(badge => (
                     <div key={badge.id} className="flex items-center justify-between p-2 bg-white border rounded shadow-sm">
                       <div className="flex items-center gap-2">
-                        <span className={`w-3 h-3 shrink-0 rounded-full ${badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
+                        <span className={`w-3 h-3 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
                         <div className="flex flex-col">
                           <span className="font-semibold text-sm">{badge.name}</span>
                           <span className="text-[10px] text-muted-foreground uppercase">{badge.category} • {badge.tier}</span>
@@ -384,7 +384,7 @@ export function AdminUserRankings() {
                     <SelectItem key={badge.id} value={badge.id} className="cursor-pointer">
                       <div className="flex flex-col gap-0.5 py-1">
                         <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 shrink-0 rounded-full ${badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
+                          <span className={`w-2 h-2 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
                           <span className="font-medium">{badge.name}</span>
                           <span className="text-muted-foreground text-[10px] uppercase ml-1">({badge.tier})</span>
                         </div>

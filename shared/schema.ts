@@ -846,6 +846,7 @@ export const gamificationBadges = pgTable("gamification_badges", {
   tier: text("tier"), // 'bronze', 'silver', 'gold', 'platinum'
   iconUrl: text("icon_url"),
   isEnabled: boolean("is_enabled").default(true),
+  isCompetitive: boolean("is_competitive").default(false), // Flag for dynamic top-ranker badges
   displayOrder: integer("display_order").default(0),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

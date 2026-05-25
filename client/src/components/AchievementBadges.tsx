@@ -87,21 +87,31 @@ export function AchievementBadges({ userId }: { userId: string }) {
     if (userId) {
       fetchGamificationProfile();
 
+      let timeoutId: NodeJS.Timeout;
+
+      const debouncedFetch = () => {
+        clearTimeout(timeoutId);
+        timeoutId = setTimeout(() => {
+          fetchGamificationProfile();
+        }, 500);
+      };
+
       const channel = supabase
         .channel(`gamification-profile-${userId}`)
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'user_badges', filter: `user_id=eq.${userId}` },
-          () => { fetchGamificationProfile(); }
+          () => { debouncedFetch(); }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'user_scores', filter: `user_id=eq.${userId}` },
-          () => { fetchGamificationProfile(); }
+          () => { debouncedFetch(); }
         )
         .subscribe();
 
       return () => {
+        clearTimeout(timeoutId);
         supabase.removeChannel(channel);
       };
     }
@@ -132,6 +142,7 @@ export function AchievementBadges({ userId }: { userId: string }) {
   // Group earned badges
   const commonBadges = earnedBadges.filter(b => b.gamification_badges?.category === 'common');
   const seriesBadges = earnedBadges.filter(b => b.gamification_badges?.category === 'series');
+  const competitiveBadges = earnedBadges.filter(b => b.gamification_badges?.category === 'competitive');
 
   // Sort progress by how close they are based on percentage
   const allProgress = [...progress].sort((a, b) => b.percentComplete - a.percentComplete);
@@ -180,6 +191,39 @@ export function AchievementBadges({ userId }: { userId: string }) {
                 </div>
               ) : (
                 <div className="space-y-6">
+                  {/* Competitive Leaderboard Badges */}
+                  {competitiveBadges.length > 0 && (
+                    <div>
+                      <h4 className="text-sm font-semibold mb-3 flex items-center text-slate-700 dark:text-slate-300">
+                        <Trophy className="w-4 h-4 mr-2 text-amber-500" /> Competitive Rankings
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        {competitiveBadges.map(eb => (
+                          <div key={eb.id} className="bg-gradient-to-r from-amber-50 to-white dark:from-amber-950/30 dark:to-slate-900 border border-amber-200 dark:border-amber-800 rounded-lg p-4 flex gap-4 items-center shadow-sm">
+                            <div className="w-12 h-12 rounded-full bg-amber-100 dark:bg-amber-900/50 flex items-center justify-center border-2 border-amber-300 dark:border-amber-700 shrink-0 shadow-[0_0_10px_rgba(251,191,36,0.3)]">
+                              {eb.gamification_badges.icon_url && eb.gamification_badges.icon_url.startsWith('http') ? (
+                                <img src={eb.gamification_badges.icon_url} alt="icon" className="w-6 h-6 object-contain drop-shadow-md" />
+                              ) : (
+                                getBadgeIcon(eb.gamification_badges.series_type, "w-5 h-5 text-amber-600 dark:text-amber-400 drop-shadow-sm")
+                              )}
+                            </div>
+                            <div className="flex-1 min-w-0">
+                              <div className="flex justify-between items-center mb-1">
+                                <h4 className="font-bold truncate pr-2 flex items-center gap-1.5 text-amber-900 dark:text-amber-300">
+                                  {eb.gamification_badges.name}
+                                </h4>
+                                <Badge variant="outline" className="text-[10px] uppercase font-black bg-amber-500 text-white border-amber-600 dark:bg-amber-600 dark:border-amber-500 shadow-sm whitespace-nowrap">
+                                  TOP RANKER
+                                </Badge>
+                              </div>
+                              <p className="text-xs font-medium text-amber-700 dark:text-amber-500/80 line-clamp-1">{eb.gamification_badges.description}</p>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Series Badges Group */}
                   {seriesBadges.length > 0 && (
                     <div>
