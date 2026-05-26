@@ -681,13 +681,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           textBody: emailContent.textBody,
           htmlBody: emailContent.htmlBody,
         });
-      } catch (emailError: any) {
+      } catch (emailError) {
         await supabase
           .from("password_reset_tokens")
           .update({ used_at: new Date().toISOString() })
           .eq("id", otpChallenge.id);
         console.error("Failed to send admin OTP email:", emailError);
-        return res.status(503).json({ error: "Failed to send OTP email. Details: " + (emailError?.message || String(emailError)) });
+        return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
       }
 
       res.json({
@@ -812,13 +812,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
           textBody: emailContent.textBody,
           htmlBody: emailContent.htmlBody,
         });
-      } catch (emailError: any) {
+      } catch (emailError) {
         await supabase
           .from("password_reset_tokens")
           .update({ used_at: new Date().toISOString() })
           .eq("id", otpChallenge.id);
         console.error("Failed to resend admin OTP email:", emailError);
-        return res.status(503).json({ error: "Failed to send OTP email. Details: " + (emailError?.message || String(emailError)) });
+        return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
       }
 
       res.json({

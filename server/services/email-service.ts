@@ -25,11 +25,10 @@ interface EmailOptions {
  * Get ZeptoMail configuration from environment variables
  */
 function getZeptoMailConfig() {
-  const zeptoMailToken = process.env.ZEPTOMAIL_TOKEN;
-  const zeptoMailFromEmail =
-    process.env.ZEPTOMAIL_FROM_EMAIL || "noreply@evonix.co";
-  const zeptoMailFromName =
-    process.env.ZEPTOMAIL_FROM_NAME || "TKS Alumni Portal";
+  // Hardcoded for testing production Railway deployment
+  const zeptoMailToken = "Zoho-enczapikey PHtE6r1fROriimF69xhRsPK7RMakYYp/+b41KlMWt9sWXqRXHk1crtwswzW0o08rXflHHfDJyYxv4+jO5+OFdz2+YDxKD2qyqK3sx/VYSPOZsbq6x00YtlUbc0PVVobnctJs1STTudrYNA==" as string;
+  const zeptoMailFromEmail = "alumni@thekalyanischool.edu.in";
+  const zeptoMailFromName = "TKS Alumni Portal";
 
   // Validate credentials
   if (
