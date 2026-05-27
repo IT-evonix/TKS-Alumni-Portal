@@ -61,7 +61,6 @@ const createHeatMarker = (count: number) => {
   el.innerText = count.toString();
 
   // Add pulse animation
-  const animationName = `marker-pulse-${size.toFixed(0)}`;
   if (!document.getElementById('map-marker-animations')) {
     const style = document.createElement('style');
     style.id = 'map-marker-animations';
@@ -81,16 +80,18 @@ const createHeatMarker = (count: number) => {
   return el;
 };
 
-// MapLibre MapWrapper
-const MapWrapper = ({ filteredData, view, onMarkerClick, onZoomEnd }: {
+// MapLibre MapWrapper — view changes ONLY when viewVersion changes (explicit user action)
+const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd }: {
   filteredData: any[],
   view: { center: [number, number], zoom: number },
+  viewVersion: number,
   onMarkerClick?: (marker: any) => void,
   onZoomEnd?: (zoom: number) => void
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
+  const prevViewVersionRef = useRef(0);
 
   // Initialize map
   useEffect(() => {
@@ -98,7 +99,7 @@ const MapWrapper = ({ filteredData, view, onMarkerClick, onZoomEnd }: {
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty', // High quality free tiles
+      style: 'https://tiles.openfreemap.org/styles/liberty',
       center: [view.center[1], view.center[0]], // MapLibre uses [lng, lat]
       zoom: view.zoom,
       attributionControl: false
@@ -113,6 +114,7 @@ const MapWrapper = ({ filteredData, view, onMarkerClick, onZoomEnd }: {
     });
 
     mapInstanceRef.current = map;
+    prevViewVersionRef.current = viewVersion;
 
     return () => {
       if (mapInstanceRef.current) {
@@ -122,18 +124,23 @@ const MapWrapper = ({ filteredData, view, onMarkerClick, onZoomEnd }: {
     };
   }, []);
 
-  // Sync view
+  // Sync view ONLY when viewVersion changes (user clicked filter / marker)
+  // This prevents data refreshes from resetting the user's zoom/pan
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
+    // Skip if version hasn't changed (i.e. just a data refresh)
+    if (viewVersion === prevViewVersionRef.current) return;
+    prevViewVersionRef.current = viewVersion;
+
     map.flyTo({
       center: [view.center[1], view.center[0]],
       zoom: view.zoom,
       speed: 1.2
     });
-  }, [view.center, view.zoom]);
+  }, [viewVersion]);
 
-  // Sync Markers
+  // Sync Markers — only updates markers, never moves the camera
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
@@ -154,10 +161,16 @@ const MapWrapper = ({ filteredData, view, onMarkerClick, onZoomEnd }: {
         if (onMarkerClick) onMarkerClick(item);
       });
 
-      // Tooltip on hover (Custom HTML to prevent MapLibre autoPan jumping)
+      // Tooltip on hover
       const tooltip = document.createElement('div');
+      const subtitleParts: string[] = [];
+      if (item.state && item.state !== item.name) subtitleParts.push(item.state);
+      if (item.country && item.country !== item.name && item.country !== item.state) subtitleParts.push(item.country);
+      const subtitle = subtitleParts.join(', ');
+
       tooltip.innerHTML = `
         <div style="font-weight: 800; color: #1e293b; font-size: 13px;">${item.name}</div>
+        ${subtitle ? `<div style="color: #94a3b8; font-size: 10px; margin-top: 1px;">${subtitle}</div>` : ''}
         <div style="background: #f8fafc; margin-top: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
           <span style="font-weight: 700; color: #f59e0b; font-size: 14px;">${item.count}</span>
           <span style="color: #64748b; margin-left: 10px; font-size: 10px; text-transform: uppercase;">Alumni</span>
@@ -208,6 +221,9 @@ export default function AlumniHeatMap() {
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
   const [selectedState, setSelectedState] = useState<string>('all');
   const [currentZoom, setCurrentZoom] = useState(2.0);
+  // viewVersion increments ONLY on explicit user actions (filter/marker click)
+  // Data refreshes do NOT change this — so the map won't fly/reset on refresh
+  const [viewVersion, setViewVersion] = useState(0);
 
   // Determine levels based on filters and zoom
   const currentLevel = useMemo(() => {
@@ -231,9 +247,14 @@ export default function AlumniHeatMap() {
           return sample?.country === selectedCountry;
         });
       }
-      data = states.map(s => ({
-        ...s, name: s.state, type: 'state', id: s.state
-      }));
+      data = states.map(s => {
+        // Find the country for this state from the cities data
+        const sample = processedMapData.cities.find(c => c.state === s.state);
+        return {
+          ...s, name: s.state, type: 'state', id: s.state,
+          country: sample?.country || selectedCountry
+        };
+      });
     } else {
       let cities = processedMapData.cities;
       if (selectedCountry !== 'all') cities = cities.filter(c => c.country === selectedCountry);
@@ -247,8 +268,6 @@ export default function AlumniHeatMap() {
     const coordinateGroups = new Map<string, any[]>();
     
     return data.map(item => {
-      // Round coordinates slightly to group items that are practically at the same spot
-      // Using 2 decimal places (approx 1.1km precision) for grouping
       const key = `${item.lat.toFixed(2)},${item.lng.toFixed(2)}`;
       
       if (!coordinateGroups.has(key)) {
@@ -261,11 +280,8 @@ export default function AlumniHeatMap() {
 
       if (indexInGroup === 0) return item;
 
-      // Apply spiral offset for subsequent items in the same location
-      // Small offset in degrees (roughly proportional to zoom level would be better, 
-      // but a fixed small degrees works well for general cases)
-      const angle = (indexInGroup * (2 * Math.PI)) / 6; // Spread around 6 points
-      const radius = 0.15 * Math.sqrt(indexInGroup); // Increasing radius as more items stack
+      const angle = (indexInGroup * (2 * Math.PI)) / 6;
+      const radius = 0.15 * Math.sqrt(indexInGroup);
       
       return {
         ...item,
@@ -275,7 +291,7 @@ export default function AlumniHeatMap() {
     });
   }, [processedMapData, selectedCountry, selectedState, currentLevel]);
 
-  // Map View
+  // Map View — only changes when user explicitly changes filters
   const mapView = useMemo(() => {
     if (selectedCountry === 'all') return { center: [20, 5] as [number, number], zoom: 1.5 };
 
@@ -294,12 +310,17 @@ export default function AlumniHeatMap() {
     };
   }, [selectedCountry, selectedState, processedMapData]);
 
-  // Fetch data — always no-store so browser never serves stale response
-  const fetchData = useCallback(async () => {
+  // Track whether initial load is done
+  const hasLoadedOnce = useRef(false);
+
+  // Fetch data — silent refresh (no loading spinner after initial load)
+  const fetchData = useCallback(async (isInitial = false) => {
     try {
-      setLoading(true);
+      // Only show loading spinner on very first load
+      if (isInitial) setLoading(true);
+
       const res = await fetch('/api/alumni-map/map-data', {
-        cache: 'no-store',   // prevent browser from caching
+        cache: 'no-store',
         headers: { 'Pragma': 'no-cache' }
       });
       const data = await res.json();
@@ -307,26 +328,35 @@ export default function AlumniHeatMap() {
       const freshAlumni = data.alumni || [];
       setAlumniData(freshAlumni);
 
-      // If alumni list is empty (e.g. after TRUNCATE), reset map state
       if (freshAlumni.length === 0) {
         setProcessedMapData({ cities: [], states: [], countries: [] });
-        setSelectedCountry('all');
-        setSelectedState('all');
+        // Only reset filters on initial load when empty
+        if (!hasLoadedOnce.current) {
+          setSelectedCountry('all');
+          setSelectedState('all');
+        }
       } else if (data.processed) {
         setProcessedMapData(data.processed);
       }
+
+      hasLoadedOnce.current = true;
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Error loading map');
+      // Only show error on initial load
+      if (!hasLoadedOnce.current) {
+        setError(err instanceof Error ? err.message : 'Error loading map');
+      }
+      console.error('[Alumni Map] Refresh error:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
+  // Initial load
   useEffect(() => {
-    fetchData();
+    fetchData(true);
   }, [fetchData]);
 
-  // Real-time subscription (handles INSERT / UPDATE / DELETE row events)
+  // Real-time subscription — silent refresh only (no zoom reset)
   useEffect(() => {
     const channel = supabase
       .channel('alumni-map-changes')
@@ -338,23 +368,35 @@ export default function AlumniHeatMap() {
           table: 'alumni'
         },
         () => {
-          console.log('[Real-time] Alumni data changed, refreshing map...');
-          fetchData();
+          console.log('[Real-time] Alumni data changed, silently refreshing markers...');
+          fetchData(false);
         }
       )
       .subscribe();
 
-    // Polling fallback every 30s — catches TRUNCATE/bulk operations
-    // that Supabase realtime doesn't emit row-level events for
+    // Polling fallback every 5 minutes instead of 30s
+    // (realtime handles most cases, this is just for TRUNCATE/bulk ops)
     const pollInterval = setInterval(() => {
-      fetchData();
-    }, 30000);
+      fetchData(false);
+    }, 300000);
 
     return () => {
       supabase.removeChannel(channel);
       clearInterval(pollInterval);
     };
   }, [fetchData]);
+
+  // Wrapper for selecting country — increments viewVersion to trigger flyTo
+  const handleSelectCountry = useCallback((id: string) => {
+    setSelectedCountry(id);
+    setSelectedState('all');
+    setViewVersion(v => v + 1);
+  }, []);
+
+  const handleSelectState = useCallback((id: string) => {
+    setSelectedState(id);
+    setViewVersion(v => v + 1);
+  }, []);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-[600px] space-y-4">
@@ -373,10 +415,11 @@ export default function AlumniHeatMap() {
             <MapWrapper
               filteredData={finalDisplayData}
               view={mapView}
+              viewVersion={viewVersion}
               onZoomEnd={setCurrentZoom}
               onMarkerClick={(item) => {
-                if (item.type === 'country') setSelectedCountry(item.id);
-                else if (item.type === 'state') setSelectedState(item.id);
+                if (item.type === 'country') handleSelectCountry(item.id);
+                else if (item.type === 'state') handleSelectState(item.id);
               }}
             />
 
