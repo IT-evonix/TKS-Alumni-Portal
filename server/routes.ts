@@ -4044,6 +4044,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           redirectUrl: NotificationRedirectUrl.FEED,
           actorId: adminId
         });
+
+        // Gamification Points for Feed Post (upon admin approval)
+        incrementScore(post.author_id, "thread_score", "feed_create", 1).catch(err => 
+          console.error("Gamification feed create error (admin approve):", err)
+        );
       }
 
       res.json({ message: "Post approved" });
@@ -4384,6 +4389,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
             userId,
           });
         }
+        
+        // Gamification Points for Feed Post
+        incrementScore(userId, "thread_score", "feed_create", 1).catch(err => 
+          console.error("Gamification feed create error:", err)
+        );
       }
 
       // Notify admins when a user submits a post for approval (with user details for context)
@@ -4548,6 +4558,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Delete post error:", error);
         return res.status(500).json({ error: "Failed to delete post" });
       }
+
+      // Gamification Deduction: Post deleted
+      incrementScore(userId, "thread_score", "feed_create", -1).catch(err => 
+        console.error("Gamification post delete error:", err)
+      );
 
       res.json({ message: "Post deleted successfully" });
     } catch (error) {
@@ -4841,6 +4856,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
+      // Gamification Points for Feed Post Comment
+      incrementScore(userId, "thread_score", "post_reply", 1).catch(err => 
+        console.error("Gamification post reply error:", err)
+      );
+
       res.status(201).json({ comment: enrichedComment });
     } catch (error) {
       console.error("Create comment error:", error);
@@ -4894,6 +4914,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .update({ comments_count: Math.max(0, post.comments_count - 1) })
           .eq("id", postId);
       }
+
+      // Gamification Deduction: Comment deleted
+      incrementScore(userId, "thread_score", "post_reply", -1).catch(err => 
+        console.error("Gamification comment delete error:", err)
+      );
 
       res.json({ message: "Comment deleted successfully" });
     } catch (error) {
@@ -5054,6 +5079,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           });
         }
       }
+
+      // Gamification: Award points for replying to a comment
+      incrementScore(userId, "connection_score", "comment_reply", 1).catch(err => 
+        console.error("Gamification comment reply error:", err)
+      );
 
       res.status(201).json({ reply: enrichedReply });
     } catch (error) {
@@ -5381,6 +5411,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Failed to create job posting" });
       }
 
+      // Gamification: Award points for posting a job
+      incrementScore(userId, "job_score", "job_post", 1).catch(err => 
+        console.error("Gamification job post error:", err)
+      );
+
       res.status(201).json({ job });
     } catch (error) {
       console.error("Create job error:", error);
@@ -5548,6 +5583,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Apply to job error:", error);
         return res.status(500).json({ error: "Failed to apply" });
       }
+
+      // Gamification: Award points for applying to a job
+      incrementScore(userId, "job_score", "job_apply", 1).catch(err => 
+        console.error("Gamification job apply error:", err)
+      );
 
       res.json({ message: "Application submitted" });
     } catch (error) {
@@ -6288,12 +6328,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select(
           `
           *,
-          sender:users!messages_sender_id_fkey (
+          sender:users!sender_id (
             id,
             username,
             email
           ),
-          receiver:users!messages_receiver_id_fkey (
+          receiver:users!receiver_id (
             id,
             username,
             email
@@ -6383,8 +6423,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from("messages")
           .select(`
             *,
-            sender:users!messages_sender_id_fkey(id, username, email),
-            receiver:users!messages_receiver_id_fkey(id, username, email),
+            sender:users!sender_id(id, username, email),
+            receiver:users!receiver_id(id, username, email),
             reactions:message_reactions(*, user:users!message_reactions_user_id_fkey(id, username, email)),
             replies:message_replies(*, sender:users!message_replies_sender_id_fkey(id, username, email))
           `)
@@ -6394,8 +6434,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from("messages")
           .select(`
             *,
-            sender:users!messages_sender_id_fkey(id, username, email),
-            receiver:users!messages_receiver_id_fkey(id, username, email),
+            sender:users!sender_id(id, username, email),
+            receiver:users!receiver_id(id, username, email),
             reactions:message_reactions(*, user:users!message_reactions_user_id_fkey(id, username, email)),
             replies:message_replies(*, sender:users!message_replies_sender_id_fkey(id, username, email))
           `)
@@ -6478,7 +6518,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select(
           `
           *,
-          sender:users!messages_sender_id_fkey (
+          sender:users!sender_id (
             id,
             username,
             email
@@ -6518,8 +6558,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .select(
           `
           *,
-          sender:users!messages_sender_id_fkey (id, username, email),
-          receiver:users!messages_receiver_id_fkey (id, username, email),
+          sender:users!sender_id (id, username, email),
+          receiver:users!receiver_id (id, username, email),
           reactions:message_reactions(*),
           replies:message_replies(*)
         `,
@@ -6616,6 +6656,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         redirectUrl: NotificationRedirectUrl.INBOX,
         actorId: userId,
       });
+
+      // Removed Gamification Points for Messaging as requested
 
       // Emit real-time message event to receiver
       const io = (global as any).io;
@@ -7033,6 +7075,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           actorId: userId,
         });
       }
+
+      // Removed Gamification Points for Messaging as requested
 
       res.status(201).json({ reply });
     } catch (error) {
@@ -7894,7 +7938,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
           // Deduct gamification points if they were attending
           if (existingRsvp.status === "attending") {
-            incrementScore(userId, "event_score", -1).catch(err => console.error("Gamification event RSVP revert error:", err));
+            incrementScore(userId, "event_score", "event_rsvp", -1).catch(err => console.error("Gamification event RSVP revert error:", err));
           }
 
           return res.json({
@@ -7921,9 +7965,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
         // Gamification points
         if (existingRsvp.status !== "attending" && status === "attending") {
-          incrementScore(userId, "event_score", 1).catch(err => console.error("Gamification event RSVP error:", err));
+          incrementScore(userId, "event_score", "event_rsvp", 1).catch(err => console.error("Gamification event RSVP error:", err));
         } else if (existingRsvp.status === "attending" && status !== "attending") {
-          incrementScore(userId, "event_score", -1).catch(err => console.error("Gamification event RSVP revert error:", err));
+          incrementScore(userId, "event_score", "event_rsvp", -1).catch(err => console.error("Gamification event RSVP revert error:", err));
         }
 
         res.json({
@@ -7987,7 +8031,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         // Award points if attending
         if (status === "attending") {
           // Fire and forget gamification updates
-          incrementScore(userId, "event_score", 1).catch(err => console.error("Gamification event RSVP error:", err));
+          incrementScore(userId, "event_score", "event_rsvp", 1).catch(err => console.error("Gamification event RSVP error:", err));
         }
 
         res.status(201).json({
@@ -11710,7 +11754,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Update gamification points for thread creation
-        incrementScore(userId, "thread_score", 2).catch(err => console.error("Gamification thread create error:", err));
+        incrementScore(userId, "thread_score", "thread_create", 1).catch(err => console.error("Gamification thread create error:", err));
       } catch (err) {
         console.error("Reputation update error:", err);
       }
@@ -11810,7 +11854,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Deduct gamification points for thread deletion
-      incrementScore(thread.author_id, "thread_score", -2).catch(err => console.error("Gamification thread delete error:", err));
+      incrementScore(thread.author_id, "thread_score", "thread_create", -1).catch(err => console.error("Gamification thread delete error:", err));
+
+      // Gamification Deduction: Forum thread deleted
+      incrementScore(userId, "thread_score", "thread_create", -1).catch(err => 
+        console.error("Gamification thread delete error:", err)
+      );
 
       res.json({ message: "Thread deleted successfully" });
     } catch (error) {
@@ -11880,7 +11929,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
         
         // Update gamification points for post reply
-        incrementScore(userId, "thread_score", 1).catch(err => console.error("Gamification post reply error:", err));
+        incrementScore(userId, "thread_score", "post_reply", 1).catch(err => console.error("Gamification post reply error:", err));
       } catch (err) {
         console.error("Reputation update error:", err);
       }
@@ -12030,7 +12079,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Deduct gamification points for post deletion
-      incrementScore(post.author_id, "thread_score", -1).catch(err => console.error("Gamification post delete error:", err));
+      incrementScore(post.author_id, "thread_score", "post_reply", -1).catch(err => console.error("Gamification post delete error:", err));
 
       res.json({ message: "Post deleted successfully" });
     } catch (error) {

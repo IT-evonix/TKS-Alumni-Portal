@@ -8,7 +8,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
-import { Trash2, Plus, Edit2, RefreshCw } from "lucide-react";
+import { Trash2, Plus, Edit2, RefreshCw, Trophy, Award, Star, Medal, Shield, Sparkles } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -227,54 +227,81 @@ export function AdminBadgeManager() {
                   </TableRow>
                 ) : (
                   badges.map((badge) => (
-                    <TableRow key={badge.id}>
-                      <TableCell className="font-medium">
+                    <TableRow key={badge.id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all duration-200 group border-b border-slate-100 dark:border-slate-800/50">
+                      <TableCell className="font-medium p-4">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <div className="flex items-center gap-2 cursor-help">
-                              <div className={`w-8 h-8 rounded-full flex shrink-0 items-center justify-center text-xs
-                                ${badge.tier === 'gold' ? 'bg-amber-100 text-amber-700' :
-                                  badge.tier === 'silver' ? 'bg-slate-100 text-slate-700' :
-                                    badge.tier === 'bronze' ? 'bg-orange-100 text-orange-700' : 
-                                    badge.tier === 'platinum' ? 'bg-slate-800 text-white' : 'bg-primary/10'}
+                            <div className="flex items-center gap-4 cursor-help">
+                              <div className={`w-10 h-10 rounded-xl flex shrink-0 items-center justify-center shadow-sm border
+                                ${badge.tier === 'gold' ? 'bg-gradient-to-br from-amber-100 to-amber-200 border-amber-300 text-amber-700 shadow-amber-200/50' :
+                                  badge.tier === 'silver' ? 'bg-gradient-to-br from-slate-100 to-slate-200 border-slate-300 text-slate-700 shadow-slate-200/50' :
+                                    badge.tier === 'bronze' ? 'bg-gradient-to-br from-orange-100 to-orange-200 border-orange-300 text-orange-700 shadow-orange-200/50' : 
+                                    badge.tier === 'platinum' ? 'bg-gradient-to-br from-slate-800 to-slate-950 border-slate-600 text-slate-200 shadow-slate-900/50' : 'bg-primary/5 border-primary/20 text-primary'}
                               `}>
-                                {badge.tier ? badge.tier.charAt(0).toUpperCase() : 'B'}
+                                {badge.tier === 'gold' ? <Trophy className="w-5 h-5" /> : 
+                                 badge.tier === 'silver' ? <Medal className="w-5 h-5" /> :
+                                 badge.tier === 'bronze' ? <Award className="w-5 h-5" /> :
+                                 badge.tier === 'platinum' ? <Star className="w-5 h-5 fill-current" /> :
+                                 <Shield className="w-5 h-5" />}
                               </div>
-                              <div className="min-w-0">
-                                <div className="font-semibold truncate">{badge.name}</div>
-                                {badge.description && <div className="text-xs text-muted-foreground line-clamp-1 max-w-[200px]">{badge.description}</div>}
+                              <div className="min-w-0 flex flex-col justify-center">
+                                <div className="font-bold text-slate-900 dark:text-slate-100 truncate text-base">{badge.name}</div>
+                                {badge.description && <div className="text-[11px] font-medium text-slate-500 line-clamp-1 max-w-[250px]">{badge.description}</div>}
                               </div>
                             </div>
                           </TooltipTrigger>
-                          <TooltipContent className="max-w-[300px] p-3 shadow-lg">
-                            <p className="font-bold text-sm mb-1 text-foreground">{badge.name}</p>
+                          <TooltipContent className="max-w-[300px] p-4 shadow-xl border-slate-200/50 dark:border-slate-800">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Sparkles className="w-4 h-4 text-amber-500" />
+                              <p className="font-bold text-sm text-foreground">{badge.name}</p>
+                            </div>
                             <p className="text-xs leading-relaxed text-muted-foreground">{badge.description || "No description provided."}</p>
                           </TooltipContent>
                         </Tooltip>
                       </TableCell>
                       <TableCell>
-                        <Badge variant={badge.category === 'common' ? 'secondary' : 'default'} className="capitalize">
+                        <Badge variant="outline" className={`capitalize border shadow-sm px-2.5 py-0.5 text-[10px] font-bold tracking-wider
+                          ${badge.category === 'competitive' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800' : 
+                            badge.category === 'series' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800' :
+                            'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}
+                        `}>
                           {badge.category}
                         </Badge>
                       </TableCell>
-                      <TableCell className="capitalize">{badge.series_type || 'N/A'}</TableCell>
-                      <TableCell>{badge.required_score > 0 ? (
-                        <span className="text-primary font-bold">{badge.required_score} points</span>
-                      ) : (
-                        <span className="text-muted-foreground italic">Auto</span>
-                      )}</TableCell>
                       <TableCell>
-                        <Switch
-                          checked={badge.is_enabled}
-                          onCheckedChange={() => toggleBadge(badge.id, badge.is_enabled)}
-                        />
+                        <div className="flex items-center gap-2">
+                          <span className="capitalize text-sm font-semibold text-slate-600 dark:text-slate-400">
+                            {badge.series_type === 'connection' ? 'Network Connections' : badge.series_type || 'Custom'}
+                          </span>
+                        </div>
                       </TableCell>
-                      <TableCell className="text-right">
-                        <div className="flex justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => handleEdit(badge)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50">
+                      <TableCell>
+                        {badge.required_score > 0 ? (
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-primary font-bold text-sm bg-primary/10 px-2 py-0.5 rounded-md border border-primary/20">{badge.required_score} pts</span>
+                        </div>
+                      ) : (
+                        <span className="text-slate-400 text-sm font-medium italic">Dynamic / Manual</span>
+                      )}
+                      </TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Switch
+                            checked={badge.is_enabled}
+                            onCheckedChange={() => toggleBadge(badge.id, badge.is_enabled)}
+                            className="data-[state=checked]:bg-emerald-500"
+                          />
+                          <span className={`text-[10px] font-bold uppercase tracking-wider ${badge.is_enabled ? 'text-emerald-600' : 'text-slate-400'}`}>
+                            {badge.is_enabled ? 'Active' : 'Disabled'}
+                          </span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-right pr-4">
+                        <div className="flex justify-end gap-1 opacity-60 group-hover:opacity-100 transition-opacity">
+                          <Button variant="ghost" size="icon" onClick={() => handleEdit(badge)} className="h-8 w-8 text-blue-600 hover:text-blue-700 hover:bg-blue-50 rounded-lg">
                             <Edit2 className="h-4 w-4" />
                           </Button>
-                          <Button variant="ghost" size="icon" onClick={() => deleteBadge(badge.id)} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50">
+                          <Button variant="ghost" size="icon" onClick={() => deleteBadge(badge.id)} className="h-8 w-8 text-red-600 hover:text-red-700 hover:bg-red-50 rounded-lg">
                             <Trash2 className="h-4 w-4" />
                           </Button>
                         </div>
@@ -323,7 +350,8 @@ export function AdminBadgeManager() {
                   <SelectTrigger><SelectValue /></SelectTrigger>
                   <SelectContent>
                     <SelectItem value="common">Common (One-time)</SelectItem>
-                    <SelectItem value="series">Series (Rank-based)</SelectItem>
+                    <SelectItem value="series">Series (Rank-based/Auto)</SelectItem>
+                    <SelectItem value="competitive">Competitive (#1 Ranker)</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -339,23 +367,25 @@ export function AdminBadgeManager() {
                     <SelectItem value="profile">Profile Completion</SelectItem>
                     <SelectItem value="thread">Thread Interactions</SelectItem>
                     <SelectItem value="event">Event RSVPs</SelectItem>
-                    <SelectItem value="connection">Connections</SelectItem>
+                    <SelectItem value="connection">Network Connections</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
             </div>
             
-            {editingBadge?.category === 'series' && (
+            {['series', 'competitive'].includes(editingBadge?.category || '') && (
               <div className="grid grid-cols-2 gap-4">
-                <div className="grid gap-2">
-                  <Label>Required Score/Points</Label>
-                  <Input 
-                    type="number"
-                    value={editingBadge?.required_score || 0} 
-                    onChange={e => setEditingBadge(prev => ({...prev, required_score: Number(e.target.value)}) as any)}
-                  />
-                </div>
-                <div className="grid gap-2">
+                {editingBadge?.category === 'series' && (
+                  <div className="grid gap-2">
+                    <Label>Required Score/Points</Label>
+                    <Input 
+                      type="number"
+                      value={editingBadge?.required_score || 0} 
+                      onChange={e => setEditingBadge(prev => ({...prev, required_score: Number(e.target.value)}) as any)}
+                    />
+                  </div>
+                )}
+                <div className={`grid gap-2 ${editingBadge?.category === 'competitive' ? 'col-span-2' : ''}`}>
                   <Label>Tier</Label>
                   <Select 
                     value={editingBadge?.tier || 'bronze'} 
@@ -366,7 +396,7 @@ export function AdminBadgeManager() {
                       <SelectItem value="bronze">Bronze</SelectItem>
                       <SelectItem value="silver">Silver</SelectItem>
                       <SelectItem value="gold">Gold</SelectItem>
-                      <SelectItem value="platinum">Platinum</SelectItem>
+                      <SelectItem value="platinum">Platinum (Best for Competitive)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
