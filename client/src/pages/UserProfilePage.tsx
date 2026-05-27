@@ -482,7 +482,7 @@ export const UserProfilePage = (): JSX.Element => {
           currentCity: sanitizeString(profile.currentCity),
           currentState: sanitizeString(profile.currentState),
           currentCountry: sanitizeString(profile.currentCountry),
-          location: sanitizeString(profile.location),
+          location: [profile.currentCity, profile.currentState, profile.currentCountry].filter(Boolean).join(', ') || sanitizeString(profile.location),
           linkedinUrl: profile.linkedinUrl?.trim() || null,
           bio: sanitizeString(profile.bio),
 
@@ -721,7 +721,7 @@ export const UserProfilePage = (): JSX.Element => {
           currentCity: sanitizeString(profile.currentCity),
           currentState: sanitizeString(profile.currentState),
           currentCountry: sanitizeString(profile.currentCountry),
-          location: sanitizeString(profile.location),
+          location: [profile.currentCity, profile.currentState, profile.currentCountry].filter(Boolean).join(', ') || sanitizeString(profile.location),
           linkedinUrl: profile.linkedinUrl?.trim() || null,
           githubUrl: profile.githubUrl?.trim() || null,
           twitterUrl: profile.twitterUrl?.trim() || null,

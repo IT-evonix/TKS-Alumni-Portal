@@ -107,24 +107,33 @@ const normalizeName = (name: string): string => {
 };
 
 // Robust coordinate lookup with auto-geocoding
-const getCoordinates = async (name: string) => {
+// Accepts a single name or a full context string for better accuracy
+const getCoordinates = async (name: string, context?: string) => {
   const normalized = normalizeName(name);
   if (!normalized) return null;
+
+  // Build a cache key that includes context for specificity
+  const cacheKey = context ? `${normalized}|${context}` : normalized;
 
   // 1. Check fixed overrides (for overlaps/prio)
   if (COORDINATES[normalized]) return COORDINATES[normalized];
 
   // 2. Check local session cache
-  if (GEO_CACHE[normalized]) return GEO_CACHE[normalized];
+  if (GEO_CACHE[cacheKey]) return GEO_CACHE[cacheKey];
 
   // 3. Fallback to auto-geocoding (Nominatim)
+  // Use context-aware search for better accuracy
+  // e.g. "Dharangaon, Jalgaon, Maharashtra, India" instead of just "Dharangaon"
+  const searchQuery = context ? `${normalized}, ${context}` : normalized;
+
   try {
-    console.log(`[GEO] Fetching coordinates for: ${normalized}`);
+    console.log(`[GEO] Fetching coordinates for: ${searchQuery}`);
     const response = await axios.get(`https://nominatim.openstreetmap.org/search`, {
       params: {
-        q: normalized,
+        q: searchQuery,
         format: 'json',
-        limit: 1
+        limit: 1,
+        addressdetails: 1
       },
       headers: {
         'User-Agent': 'TKS-Alumni-Portal/1.0'
@@ -134,11 +143,33 @@ const getCoordinates = async (name: string) => {
     if (response.data && response.data.length > 0) {
       const { lat, lon } = response.data[0];
       const coords = { lat: parseFloat(lat), lng: parseFloat(lon) };
-      GEO_CACHE[normalized] = coords;
+      GEO_CACHE[cacheKey] = coords;
       return coords;
     }
+
+    // If context search failed, try without context as fallback
+    if (context) {
+      console.log(`[GEO] Context search failed, retrying without context: ${normalized}`);
+      const fallbackResponse = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+        params: {
+          q: normalized,
+          format: 'json',
+          limit: 1
+        },
+        headers: {
+          'User-Agent': 'TKS-Alumni-Portal/1.0'
+        }
+      });
+
+      if (fallbackResponse.data && fallbackResponse.data.length > 0) {
+        const { lat, lon } = fallbackResponse.data[0];
+        const coords = { lat: parseFloat(lat), lng: parseFloat(lon) };
+        GEO_CACHE[cacheKey] = coords;
+        return coords;
+      }
+    }
   } catch (error) {
-    console.error(`[GEO] Failed to fetch coordinates for ${normalized}:`, error);
+    console.error(`[GEO] Failed to fetch coordinates for ${searchQuery}:`, error);
   }
 
   return null;
@@ -237,8 +268,13 @@ router.get('/map-data', async (req, res) => {
 
     const cityDataArray = Array.from(cityMap.values());
     const cityData = await Promise.all(cityDataArray.map(async (cityInfo) => {
-      const cityCoords = await getCoordinates(cityInfo.city);
-      const stateCoords = !cityCoords ? await getCoordinates(cityInfo.state) : null;
+      // Build full context for accurate geocoding
+      // e.g. "Maharashtra, India" so Nominatim can find "Dharangaon" in the right state
+      const contextParts = [cityInfo.state, cityInfo.country].filter(Boolean);
+      const context = contextParts.join(', ');
+
+      const cityCoords = await getCoordinates(cityInfo.city, context);
+      const stateCoords = !cityCoords ? await getCoordinates(cityInfo.state, cityInfo.country) : null;
       const countryCoords = (!cityCoords && !stateCoords) ? await getCoordinates(cityInfo.country) : null;
 
       const coords = cityCoords || stateCoords || countryCoords || { lat: 20.5937, lng: 78.9629 };
