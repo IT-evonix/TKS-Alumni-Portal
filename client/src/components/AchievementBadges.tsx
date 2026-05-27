@@ -299,12 +299,12 @@ export function AchievementBadges({ userId }: { userId: string }) {
                   {allProgress.length > 0 ? allProgress.map((item, idx) => (
                     <Tooltip key={idx}>
                       <TooltipTrigger asChild>
-                        <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-4 flex gap-4 items-center hover:border-primary/50 transition-colors cursor-help">
-                          <div className="w-12 h-12 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center border-2 border-dashed border-slate-300 dark:border-slate-600 shrink-0">
+                        <div className={`border rounded-lg p-4 flex gap-4 items-center transition-colors cursor-help ${item.badge.category === 'competitive' ? 'bg-amber-50/50 dark:bg-amber-950/10 border-amber-200 dark:border-amber-800/50 hover:border-amber-400' : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-primary/50'}`}>
+                          <div className={`w-12 h-12 rounded-full flex items-center justify-center border-2 border-dashed shrink-0 ${item.badge.category === 'competitive' ? 'bg-amber-50 dark:bg-amber-900/30 border-amber-300 dark:border-amber-700' : 'bg-slate-100 dark:bg-slate-800 border-slate-300 dark:border-slate-600'}`}>
                             {item.badge.icon_url && item.badge.icon_url.startsWith('http') ? (
                               <img src={item.badge.icon_url} alt="icon" className="w-6 h-6 object-contain opacity-50 grayscale" />
                             ) : (
-                              getBadgeIcon(item.badge.series_type, "w-5 h-5 text-slate-400")
+                              getBadgeIcon(item.badge.series_type, `w-5 h-5 ${item.badge.category === 'competitive' ? 'text-amber-400' : 'text-slate-400'}`)
                             )}
                           </div>
                           <div className="flex-1 min-w-0">
@@ -314,10 +314,10 @@ export function AchievementBadges({ userId }: { userId: string }) {
                                 {item.currentScore} / {item.requiredScore}
                               </span>
                             </div>
-                            <Progress value={item.percentComplete} className="h-2" />
+                            <Progress value={item.percentComplete} className={`h-2 ${item.badge.category === 'competitive' ? 'bg-amber-100 dark:bg-amber-950/50 [&>div]:bg-amber-500' : ''}`} />
                             <p className="text-[11px] text-muted-foreground mt-2 truncate">
                               {item.percentComplete > 0 ? (
-                                <>Just <strong className="text-primary">{item.remaining}</strong> more to unlock!</>
+                                <>Just <strong className={item.badge.category === 'competitive' ? 'text-amber-600' : 'text-primary'}>{item.remaining}</strong> more to {item.badge.category === 'competitive' ? 'steal rank!' : 'unlock!'}</>
                               ) : (
                                 <>Not started yet</>
                               )}
@@ -325,21 +325,28 @@ export function AchievementBadges({ userId }: { userId: string }) {
                           </div>
                         </div>
                       </TooltipTrigger>
-                      <TooltipContent side="top" className="max-w-[250px] p-4 bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 shadow-xl">
+                      <TooltipContent side="top" className={`max-w-[250px] p-4 bg-white dark:bg-slate-900 shadow-xl ${item.badge.category === 'competitive' ? 'border-amber-200 dark:border-amber-800' : 'border-slate-200 dark:border-slate-800'}`}>
                         <div className="space-y-2">
-                          <div className="flex items-center gap-2">
-                            {getBadgeIcon(item.badge.series_type, "w-4 h-4 text-primary")}
-                            <h4 className="font-bold text-sm">{item.badge.name}</h4>
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex items-center gap-2">
+                              {getBadgeIcon(item.badge.series_type, `w-4 h-4 ${item.badge.category === 'competitive' ? 'text-amber-500' : 'text-primary'}`)}
+                              <h4 className="font-bold text-sm">{item.badge.name}</h4>
+                            </div>
+                            {item.badge.category === 'competitive' && (
+                              <Badge variant="outline" className="text-[9px] uppercase font-bold text-amber-600 border-amber-300 px-1 py-0 h-4">
+                                #1 ONLY
+                              </Badge>
+                            )}
                           </div>
                           <p className="text-xs text-muted-foreground leading-relaxed">
                             {item.badge.description}
                           </p>
-                          <div className="pt-2 mt-2 border-t border-slate-100 dark:border-slate-800">
+                          <div className={`pt-2 mt-2 border-t ${item.badge.category === 'competitive' ? 'border-amber-100 dark:border-amber-900' : 'border-slate-100 dark:border-slate-800'}`}>
                             <p className="text-xs font-medium">
-                              <span className="text-primary">Requirement:</span> Earn {item.requiredScore} {item.badge.series_type} points to unlock.
+                              <span className={item.badge.category === 'competitive' ? 'text-amber-600' : 'text-primary'}>Target:</span> {item.badge.category === 'competitive' ? `Overtake current leader (${item.requiredScore - 1} pts)` : `Earn ${item.requiredScore} pts`}
                             </p>
-                            <p className="text-xs font-medium mt-1 text-amber-600 dark:text-amber-500">
-                              You need {item.remaining} more to get this badge!
+                            <p className={`text-xs font-medium mt-1 ${item.badge.category === 'competitive' ? 'text-red-500' : 'text-amber-600 dark:text-amber-500'}`}>
+                              You need {item.remaining} more to {item.badge.category === 'competitive' ? 'steal this badge!' : 'get this badge!'}
                             </p>
                           </div>
                         </div>

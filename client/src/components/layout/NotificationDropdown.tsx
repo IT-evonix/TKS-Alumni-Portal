@@ -769,7 +769,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
                             <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-1.5">
                               {notification.created_at ? (
                                 (() => {
-                                  const date = new Date(notification.created_at);
+                                  // Supabase timestamps may not include the Z (UTC identifier)
+                                  const dateStr = notification.created_at.endsWith('Z') 
+                                    ? notification.created_at 
+                                    : `${notification.created_at}Z`;
+                                  const date = new Date(dateStr);
                                   return isNaN(date.getTime()) ? 'Just now' : formatDistanceToNow(date, { addSuffix: true });
                                 })()
                               ) : 'Just now'}

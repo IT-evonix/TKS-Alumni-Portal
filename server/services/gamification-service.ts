@@ -5,6 +5,57 @@
 import { supabase } from "../supabase";
 import { createAndEmitNotification, NotificationType } from "./notification-helper";
 
+// ==================== POINT RULES CACHE ====================
+
+let pointRulesCache: Record<string, number> = {};
+let lastCacheUpdate = 0;
+const CACHE_TTL = 1000 * 60 * 5; // 5 minutes
+
+/**
+ * Fetch point rules from the database and cache them
+ */
+async function getPointRules(): Promise<Record<string, number>> {
+  const now = Date.now();
+  if (now - lastCacheUpdate < CACHE_TTL && Object.keys(pointRulesCache).length > 0) {
+    return pointRulesCache;
+  }
+
+  try {
+    const { data, error } = await supabase
+      .from("gamification_point_rules")
+      .select("action_key, points");
+
+    if (!error && data) {
+      const newRules: Record<string, number> = {};
+      data.forEach(rule => {
+        newRules[rule.action_key] = rule.points;
+      });
+      pointRulesCache = newRules;
+      lastCacheUpdate = now;
+    }
+  } catch (err) {
+    console.error("[Gamification] Failed to fetch point rules:", err);
+  }
+
+  // Return default fallbacks if cache is empty
+  return {
+    network_connect: pointRulesCache.network_connect ?? 5,
+    thread_create: pointRulesCache.thread_create ?? 10,
+    post_reply: pointRulesCache.post_reply ?? 2,
+    feed_create: pointRulesCache.feed_create ?? 5,
+    event_rsvp: pointRulesCache.event_rsvp ?? 15,
+    ...pointRulesCache
+  };
+}
+
+/**
+ * Force clear the cache when admin updates rules
+ */
+export function clearPointRulesCache() {
+  pointRulesCache = {};
+  lastCacheUpdate = 0;
+}
+
 // ==================== SCORE UPDATE HELPERS ====================
 
 /**
@@ -46,11 +97,14 @@ export async function ensureUserScores(userId: string) {
 
 /**
  * Increment a specific score field for a user and check for new badge unlocks.
+ * @param actionKey The specific action key (e.g., 'thread_create', 'post_reply') to fetch dynamic points.
+ * @param multiplier Use 1 to add points, -1 to subtract (e.g. when deleting a post or canceling RSVP).
  */
 export async function incrementScore(
   userId: string,
-  field: "thread_score" | "event_score" | "connection_score",
-  amount: number = 1
+  field: "thread_score" | "event_score" | "connection_score" | "job_score",
+  actionKey: string,
+  multiplier: number = 1
 ) {
   try {
     // Gamification only applies to alumni users
@@ -64,12 +118,17 @@ export async function incrementScore(
       return; // Silently skip non-alumni users
     }
 
+    // Determine actual amount to add based on dynamic rules
+    const rules = await getPointRules();
+    const baseAmount = rules[actionKey] !== undefined ? rules[actionKey] : 1;
+    const actualAmount = baseAmount * multiplier;
+
     // Ensure row exists
     const scores = await ensureUserScores(userId);
     if (!scores) return;
 
     const currentValue = (scores[field] as number) || 0;
-    const newValue = Math.max(0, currentValue + amount);
+    const newValue = Math.max(0, currentValue + actualAmount);
     const currentTotal = (scores.total_points as number) || 0;
 
     // Calculate actual difference applied to keep total_points perfectly synced
@@ -87,6 +146,20 @@ export async function incrementScore(
     if (error) {
       console.error(`[Gamification] Failed to increment ${field}:`, error);
       return;
+    }
+
+    // Send a real-time notification for the point change
+    if (actualDiff !== 0) {
+      const actionName = actionKey.replace('_', ' ').replace(/\b\w/g, l => l.toUpperCase());
+      const changeWord = actualDiff > 0 ? "earned" : "lost";
+      
+      createAndEmitNotification({
+        userId,
+        type: "gamification_point",
+        title: `Points ${changeWord}!`,
+        content: `You ${changeWord} ${Math.abs(actualDiff)} point(s) for: ${actionName}.`,
+        redirectUrl: "/profile",
+      }).catch(err => console.error("Gamification point notification error:", err));
     }
 
     // Map DB field to series_type used in gamification_badges table
@@ -234,11 +307,10 @@ export async function awardCommonBadge(userId: string, seriesType: string) {
       return; // Do not award badges to non-alumni
     }
 
-    // Find the matching common badge
+    // Find the matching badge for the given series type (ignoring category in case admin changed it)
     const { data: badge } = await supabase
       .from("gamification_badges")
       .select("id, name")
-      .eq("category", "common")
       .eq("series_type", seriesType)
       .eq("is_enabled", true)
       .maybeSingle();

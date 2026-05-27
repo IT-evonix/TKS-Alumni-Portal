@@ -4,11 +4,70 @@
  */
 import { Router, Request, Response } from "express";
 import { supabase } from "../supabase";
-import { manuallyAwardBadge, revokeBadge } from "../services/gamification-service";
+import { manuallyAwardBadge, revokeBadge, clearPointRulesCache } from "../services/gamification-service";
 
 const router = Router();
 
 // ==================== ADMIN ROUTES ====================
+
+/**
+ * GET /api/admin/gamification/point-rules
+ * Fetch all dynamic gamification point rules
+ */
+router.get("/admin/point-rules", async (req: Request, res: Response) => {
+  try {
+    const { data: rules, error } = await supabase
+      .from("gamification_point_rules")
+      .select("*")
+      .order("category", { ascending: true })
+      .order("action_key", { ascending: true });
+
+    if (error) {
+      console.error("[Gamification] Admin fetch rules error:", error);
+      return res.status(500).json({ error: "Failed to fetch point rules" });
+    }
+
+    res.json({ rules: rules || [] });
+  } catch (err) {
+    console.error("[Gamification] Admin point rules route error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
+/**
+ * PUT /api/admin/gamification/point-rules/:key
+ * Update points for a specific action
+ */
+router.put("/admin/point-rules/:key", async (req: Request, res: Response) => {
+  try {
+    const { key } = req.params;
+    const { points } = req.body;
+
+    if (typeof points !== 'number' || points < 0) {
+      return res.status(400).json({ error: "Points must be a positive number" });
+    }
+
+    const { data: updatedRule, error } = await supabase
+      .from("gamification_point_rules")
+      .update({ points, updated_at: new Date().toISOString() })
+      .eq("action_key", key)
+      .select("*")
+      .single();
+
+    if (error) {
+      console.error("[Gamification] Update point rule error:", error);
+      return res.status(500).json({ error: "Failed to update point rule" });
+    }
+
+    // Clear cache so the next action uses the new value
+    clearPointRulesCache();
+
+    res.json({ rule: updatedRule });
+  } catch (err) {
+    console.error("[Gamification] Update point rule route error:", err);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
 
 /**
  * GET /api/admin/gamification/badges
@@ -248,13 +307,13 @@ router.get("/admin/users", async (req: Request, res: Response) => {
       };
     });
 
-    // Sort by badges count first (so manual assignments rise to top), then by total points, then by account age (older first)
+    // Sort by total points first, then by badges count, then by account age (older first)
     enriched.sort((a, b) => {
-      if (b.badgesCount !== a.badgesCount) {
-        return b.badgesCount - a.badgesCount;
-      }
       if (b.total_points !== a.total_points) {
         return b.total_points - a.total_points;
+      }
+      if (b.badgesCount !== a.badgesCount) {
+        return b.badgesCount - a.badgesCount;
       }
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
@@ -538,10 +597,10 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
         return { ...us, badgesCount };
       });
 
-      // Sort matching the admin ranking logic: badgesCount desc, then total_points desc
+      // Sort matching the admin ranking logic: total_points desc, then badgesCount desc
       enrichedScores.sort((a, b) => {
-        if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
-        return b.total_points - a.total_points;
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        return b.badgesCount - a.badgesCount;
       });
 
       const idx = enrichedScores.findIndex(s => s.user_id === userId);
@@ -648,10 +707,10 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
       };
     });
 
-    // Sort by badgesCount desc, then total_points desc, then created_at asc (older first)
+    // Sort by total_points desc, then badgesCount desc, then created_at asc (older first)
     enriched.sort((a, b) => {
-      if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
       if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+      if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
       return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
     });
 

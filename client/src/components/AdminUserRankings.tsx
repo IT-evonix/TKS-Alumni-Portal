@@ -237,44 +237,65 @@ export function AdminUserRankings() {
                 ) : (
                   paginatedUsers.map((user, idx) => {
                     const actualRank = (currentPage - 1) * itemsPerPage + idx + 1;
+                    const rankStyles = actualRank === 1 ? 'bg-gradient-to-br from-amber-100 to-amber-300 text-amber-900 border-amber-400 shadow-amber-300/50 shadow-md' :
+                                       actualRank === 2 ? 'bg-gradient-to-br from-slate-100 to-slate-300 text-slate-800 border-slate-400 shadow-slate-300/50 shadow-md' :
+                                       actualRank === 3 ? 'bg-gradient-to-br from-orange-100 to-orange-300 text-orange-900 border-orange-400 shadow-orange-300/50 shadow-md' :
+                                       'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-transparent';
+
                     return (
-                      <TableRow key={user.user_id}>
-                        <TableCell className="text-center font-bold text-slate-500">
-                          #{actualRank}
+                      <TableRow key={user.user_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all duration-200 group border-b border-slate-100 dark:border-slate-800/50">
+                        <TableCell className="text-center font-bold">
+                          <div className={`mx-auto w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm border ${rankStyles}`}>
+                            #{actualRank}
+                          </div>
                         </TableCell>
-                        <TableCell className="font-medium">
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-9 w-9">
-                              <AvatarImage src={user.profilePicture || ''} />
-                              <AvatarFallback className="bg-primary/10 text-primary">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</AvatarFallback>
-                            </Avatar>
+                        <TableCell className="font-medium p-4">
+                          <div className="flex items-center gap-4">
+                            <div className="relative">
+                              <Avatar className={`h-12 w-12 border-2 shadow-sm ${actualRank === 1 ? 'border-amber-400' : actualRank === 2 ? 'border-slate-400' : actualRank === 3 ? 'border-orange-400' : 'border-slate-200 dark:border-slate-700'}`}>
+                                <AvatarImage src={user.profilePicture || ''} />
+                                <AvatarFallback className="bg-primary/5 text-primary font-bold text-lg">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</AvatarFallback>
+                              </Avatar>
+                              {actualRank === 1 && (
+                                <div className="absolute -top-3.5 -right-2 text-2xl drop-shadow-md z-10" title="Top Ranker">👑</div>
+                              )}
+                            </div>
                             <div>
-                              <div className="font-semibold text-slate-900">{user.firstName} {user.lastName}</div>
-                              <div className="text-xs text-muted-foreground">{user.email}</div>
+                              <div className="font-bold text-slate-900 dark:text-slate-100 text-base">{user.firstName} {user.lastName}</div>
+                              <div className="text-xs font-medium text-muted-foreground mt-0.5">{user.email}</div>
                             </div>
                           </div>
                         </TableCell>
-                        <TableCell className="text-right font-bold text-primary">
-                          {user.total_points}
+                        <TableCell className="text-right">
+                          <div className="flex justify-end items-center gap-1.5">
+                            <span className="text-primary font-black text-lg bg-primary/10 px-3 py-1 rounded-lg border border-primary/20 shadow-sm">{user.total_points}</span>
+                            <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">pts</span>
+                          </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="secondary" className="px-2 py-0.5">
-                            <Trophy className="w-3 h-3 mr-1 text-amber-500" /> {user.badgesCount}
+                          <Badge variant="outline" className={`px-3 py-1.5 shadow-sm border text-xs font-bold tracking-wider
+                            ${user.badgesCount > 0 ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800' : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700'}
+                          `}>
+                            <Trophy className={`w-4 h-4 mr-1.5 ${user.badgesCount > 0 ? 'text-amber-500 fill-amber-100 dark:fill-amber-900/50' : 'text-slate-400'}`} /> 
+                            {user.badgesCount} {user.badgesCount === 1 ? 'Badge' : 'Badges'}
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
                           <div className="flex items-center justify-center text-sm font-medium">
                             {user.current_streak_days > 0 ? (
-                              <><Flame className="w-4 h-4 text-orange-500 mr-1" /> {user.current_streak_days} days</>
+                              <div className="flex items-center bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 px-3 py-1 rounded-full shadow-sm">
+                                <Flame className="w-4 h-4 text-orange-500 mr-1.5 fill-orange-500" /> 
+                                <span className="font-bold">{user.current_streak_days} days</span>
+                              </div>
                             ) : (
-                              <span className="text-slate-400">-</span>
+                              <span className="text-slate-300 dark:text-slate-600 font-black">-</span>
                             )}
                           </div>
                         </TableCell>
-                        <TableCell className="text-right">
-                          <Button size="sm" variant="outline" className="text-primary hover:text-primary hover:bg-primary/10 border-primary/20" onClick={() => handleManageClick(user)}>
+                        <TableCell className="text-right pr-4">
+                          <Button size="sm" variant="ghost" className="opacity-70 group-hover:opacity-100 transition-all duration-300 bg-primary/5 text-primary hover:text-primary hover:bg-primary/15 border border-primary/10 hover:border-primary/30 shadow-sm" onClick={() => handleManageClick(user)}>
                             <Settings2 className="w-4 h-4 mr-2" />
-                            Manage Badges
+                            Manage
                           </Button>
                         </TableCell>
                       </TableRow>

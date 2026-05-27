@@ -10,7 +10,8 @@ import { useState } from "react";
 import { AdminBadgeManager } from "@/components/AdminBadgeManager";
 import { AdminUserRankings } from "@/components/AdminUserRankings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users } from "lucide-react";
+import { Trophy, Users, Sliders } from "lucide-react";
+import { AdminPointRules } from "@/components/AdminPointRules";
 
 export const AdminGamificationPage = () => {
     const [, setLocation] = useLocation();
@@ -82,19 +83,25 @@ export const AdminGamificationPage = () => {
                     </div>
                 </header>
                 <div className="flex-1 p-4 sm:p-6 lg:p-8 max-w-7xl mx-auto w-full space-y-6">
-                    <Tabs defaultValue="rules" className="w-full">
-                        <TabsList className="grid w-full max-w-[400px] grid-cols-2 mb-6">
-                            <TabsTrigger value="rules" className="flex items-center gap-2">
-                                <Trophy className="w-4 h-4" /> Rules & Config
+                    <Tabs defaultValue="points" className="w-full">
+                        <TabsList className="grid w-full max-w-[600px] grid-cols-3 mb-6 bg-slate-100/50 p-1 rounded-xl">
+                            <TabsTrigger value="points" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                                <Sliders className="w-4 h-4" /> Point Rules
                             </TabsTrigger>
-                            <TabsTrigger value="users" className="flex items-center gap-2">
+                            <TabsTrigger value="rules" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
+                                <Trophy className="w-4 h-4" /> Badges Config
+                            </TabsTrigger>
+                            <TabsTrigger value="users" className="flex items-center gap-2 rounded-lg data-[state=active]:bg-white data-[state=active]:shadow-sm">
                                 <Users className="w-4 h-4" /> Alumni Rankings
                             </TabsTrigger>
                         </TabsList>
-                        <TabsContent value="rules" className="mt-0">
+                        <TabsContent value="points" className="mt-0 outline-none">
+                            <AdminPointRules />
+                        </TabsContent>
+                        <TabsContent value="rules" className="mt-0 outline-none">
                             <AdminBadgeManager />
                         </TabsContent>
-                        <TabsContent value="users" className="mt-0">
+                        <TabsContent value="users" className="mt-0 outline-none">
                             <AdminUserRankings />
                         </TabsContent>
                     </Tabs>
