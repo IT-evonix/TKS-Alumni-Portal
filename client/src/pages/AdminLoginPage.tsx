@@ -50,7 +50,7 @@ export const AdminLoginPage = (): JSX.Element => {
   const [resendCooldown, setResendCooldown] = useState(0);
   const [error, setError] = useState<string | null>(null);
   const [, setLocation] = useLocation();
-  const { adminUser, isAdministrator, setAdminSession } = useAuth();
+  const { adminUser, user, isAdministrator, setAdminSession } = useAuth();
   const { toast } = useToast();
 
   const isOtpStep = !!otpChallenge;
@@ -62,8 +62,10 @@ export const AdminLoginPage = (): JSX.Element => {
   React.useEffect(() => {
     if (adminUser && isAdministrator) {
       setLocation("/admin/dashboard");
+    } else if (user) {
+      setLocation("/feed");
     }
-  }, [adminUser, isAdministrator, setLocation]);
+  }, [adminUser, isAdministrator, user, setLocation]);
 
   React.useEffect(() => {
     if (resendCooldown <= 0) return;

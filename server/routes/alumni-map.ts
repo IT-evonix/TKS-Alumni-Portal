@@ -189,7 +189,10 @@ router.get('/map-data', async (req, res) => {
         email,
         current_city,
         current_state,
-        current_country
+        current_country,
+        latitude,
+        longitude,
+        location_label
       `);
 
     if (error) {
@@ -216,6 +219,8 @@ router.get('/map-data', async (req, res) => {
       const country = normalizeName(person.current_country);
       const state = normalizeName(person.current_state);
       const city = normalizeName(person.current_city);
+      const lat = person.latitude;
+      const lng = person.longitude;
 
       // Count by country
       countryMap.set(country, (countryMap.get(country) || 0) + 1);
@@ -224,16 +229,20 @@ router.get('/map-data', async (req, res) => {
         stateMap.set(state, (stateMap.get(state) || 0) + 1);
       }
 
-      const locationKey = `${city}-${state}-${country}`;
+      // Group by exact coordinates if available, otherwise by city-state-country
+      const locationKey = (lat != null && lng != null) ? `${lat}-${lng}` : `${city}-${state}-${country}`;
       const existingCity = cityMap.get(locationKey);
       if (existingCity) {
         existingCity.count++;
       } else {
         cityMap.set(locationKey, {
-          city,
+          city: person.location_label ? person.location_label.split(',')[0] : city, // Use specific label part
           state,
           country,
-          count: 1
+          count: 1,
+          lat,
+          lng,
+          fullLabel: person.location_label
         });
       }
     });
@@ -268,8 +277,18 @@ router.get('/map-data', async (req, res) => {
 
     const cityDataArray = Array.from(cityMap.values());
     const cityData = await Promise.all(cityDataArray.map(async (cityInfo) => {
-      // Build full context for accurate geocoding
-      // e.g. "Maharashtra, India" so Nominatim can find "Dharangaon" in the right state
+      // If we already have precise coordinates from DB, use them!
+      if (cityInfo.lat !== null && cityInfo.lat !== undefined && cityInfo.lng !== null && cityInfo.lng !== undefined) {
+        return {
+          ...cityInfo,
+          lat: parseFloat(cityInfo.lat),
+          lng: parseFloat(cityInfo.lng),
+          direction: undefined,
+          offset: undefined
+        };
+      }
+
+      // Fallback for older data without saved coordinates
       const contextParts = [cityInfo.state, cityInfo.country].filter(Boolean);
       const context = contextParts.join(', ');
 

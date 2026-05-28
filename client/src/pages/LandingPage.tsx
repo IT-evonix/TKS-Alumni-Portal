@@ -97,7 +97,7 @@ const SectionLoader = () => (
 // ─── Main component ──────────────────────────────────────────────────────────
 export const LandingPage = (): JSX.Element => {
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, adminUser } = useAuth();
   const [showScrollTop, setShowScrollTop] = React.useState(false);
   const heroRef = React.useRef<HTMLElement>(null);
 
@@ -115,7 +115,8 @@ export const LandingPage = (): JSX.Element => {
 
   React.useEffect(() => {
     if (user) setLocation("/feed");
-  }, [user, setLocation]);
+    else if (adminUser) setLocation("/admin/dashboard");
+  }, [user, adminUser, setLocation]);
 
   React.useEffect(() => {
     document.documentElement.style.scrollBehavior = 'smooth';
