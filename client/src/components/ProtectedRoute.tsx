@@ -14,7 +14,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
     component: Component,
     adminOnly = false
 }) => {
-    const { user, isLoading, isAdministrator } = useAuth();
+    const { user, adminUser, isLoading, isAdministrator } = useAuth();
 
     return (
         <Route path={path}>
@@ -29,10 +29,18 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
 
                 if (adminOnly) {
                     if (!isAdministrator) {
+                        // If they are a logged in user but not admin, send to their feed
+                        if (user) {
+                            return <Redirect to="/feed" />;
+                        }
                         return <Redirect to={`/admin/login?redirect=${encodeURIComponent(path)}`} />;
                     }
                 } else {
                     if (!user) {
+                        // If they are a logged in admin but not a normal user, send to admin dashboard
+                        if (isAdministrator) {
+                            return <Redirect to="/admin/dashboard" />;
+                        }
                         return <Redirect to={`/login?redirect=${encodeURIComponent(path)}`} />;
                     }
                 }

@@ -31,7 +31,7 @@ export const LoginPage = (): JSX.Element => {
   const [error, setError] = useState<string | null>(null);
   const [linkedinError, setLinkedinError] = useState<string | null>(null);
   const [, setLocation] = useLocation();
-  const { login, user } = useAuth();
+  const { login, user, adminUser } = useAuth();
   const { toast } = useToast();
 
   React.useEffect(() => {
@@ -51,8 +51,10 @@ export const LoginPage = (): JSX.Element => {
   React.useEffect(() => {
     if (user) {
       setLocation('/feed');
+    } else if (adminUser) {
+      setLocation('/admin/dashboard');
     }
-  }, [user, setLocation]);
+  }, [user, adminUser, setLocation]);
 
   // Secret key combination to access admin login (Ctrl+Shift+A)
   React.useEffect(() => {

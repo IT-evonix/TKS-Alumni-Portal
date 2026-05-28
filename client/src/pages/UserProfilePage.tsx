@@ -130,6 +130,9 @@ export const UserProfilePage = (): JSX.Element => {
     showEmail: true,
     showPhone: true,
     linkedin_photo_url: '',
+    latitude: null as number | null,
+    longitude: null as number | null,
+    locationLabel: '',
   });
   const [originalProfile, setOriginalProfile] = useState<typeof profile | null>(null);
   const [uploadingImage, setUploadingImage] = useState(false);
@@ -211,6 +214,9 @@ export const UserProfilePage = (): JSX.Element => {
             currentCity: data.alumni.current_city || '',
             currentState: data.alumni.current_state || '',
             currentCountry: data.alumni.current_country || '',
+            latitude: data.alumni.latitude || null,
+            longitude: data.alumni.longitude || null,
+            locationLabel: data.alumni.location_label || '',
             location: data.alumni.location || (data.alumni.current_city ? `${data.alumni.current_city}${data.alumni.current_country ? `, ${data.alumni.current_country}` : ''}` : ''),
             linkedinUrl: data.alumni.linkedin_url || '',
             bio: data.alumni.bio || '',
@@ -434,7 +440,7 @@ export const UserProfilePage = (): JSX.Element => {
         'personalWebsite', 'showEmail', 'showPhone', 'employmentStatus', 'yearsOfExperience',
         'expertiseAreas', 'volunteerInterests', 'keywords', 'timezone', 'resumeUrl',
         'isStartupFounder', 'startupName', 'startupRole', 'fundingStage', 'foundingYear',
-        'linkedin_photo_url'
+        'linkedin_photo_url', 'currentCity', 'currentState', 'currentCountry', 'latitude', 'longitude', 'locationLabel'
       ];
 
       for (const field of fieldsToCompare) {
@@ -505,6 +511,9 @@ export const UserProfilePage = (): JSX.Element => {
           startupRole: profile.startupRole,
           fundingStage: profile.fundingStage,
           foundingYear: profile.foundingYear,
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          locationLabel: profile.locationLabel,
         })
       });
 
@@ -743,6 +752,9 @@ export const UserProfilePage = (): JSX.Element => {
           startupRole: profile.startupRole,
           fundingStage: profile.fundingStage,
           foundingYear: profile.foundingYear,
+          latitude: profile.latitude,
+          longitude: profile.longitude,
+          locationLabel: profile.locationLabel,
         })
       });
 
@@ -1581,12 +1593,15 @@ export const UserProfilePage = (): JSX.Element => {
                   <CityAutocomplete
                     city={profile.currentCity}
                     onCityChange={(city) => setProfile({ ...profile, currentCity: city })}
-                    onLocationSelect={(city, state, country) => {
+                    onLocationSelect={(city, state, country, lat, lng, label) => {
                       setProfile({
                         ...profile,
                         currentCity: city,
                         currentState: state,
-                        currentCountry: country
+                        currentCountry: country,
+                        latitude: lat || null,
+                        longitude: lng || null,
+                        locationLabel: label || ''
                       });
                     }}
                     disabled={isPreviewMode}

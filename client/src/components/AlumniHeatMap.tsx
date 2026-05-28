@@ -99,7 +99,7 @@ const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd 
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://tiles.openfreemap.org/styles/liberty',
+      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
       center: [view.center[1], view.center[0]], // MapLibre uses [lng, lat]
       zoom: view.zoom,
       attributionControl: false
@@ -220,17 +220,18 @@ export default function AlumniHeatMap() {
   const [error, setError] = useState<string | null>(null);
   const [selectedCountry, setSelectedCountry] = useState<string>('all');
   const [selectedState, setSelectedState] = useState<string>('all');
+  const [selectedCity, setSelectedCity] = useState<string>('all');
   const [currentZoom, setCurrentZoom] = useState(2.0);
   // viewVersion increments ONLY on explicit user actions (filter/marker click)
   // Data refreshes do NOT change this — so the map won't fly/reset on refresh
   const [viewVersion, setViewVersion] = useState(0);
 
-  // Determine levels based on filters and zoom
+  // Determine levels based strictly on zoom so manual zooming works dynamically
   const currentLevel = useMemo(() => {
-    if (selectedCountry === 'all' || currentZoom < 3.5) return 'country';
-    if (selectedState === 'all' || currentZoom < 6.5) return 'state';
-    return 'city';
-  }, [selectedCountry, selectedState, currentZoom]);
+    if (currentZoom >= 6.5) return 'city';
+    if (currentZoom >= 3.5) return 'state';
+    return 'country';
+  }, [currentZoom]);
 
   // Determine what markers to show
   const finalDisplayData = useMemo(() => {
@@ -264,11 +265,12 @@ export default function AlumniHeatMap() {
       }));
     }
 
-    // Apply Jitter to prevent overlap for markers at the same or very close coordinates
+    // Apply minimal Jitter to prevent overlap for markers at the very close coordinates
+    // Using 0.002 degrees (~200 meters) instead of 0.15 degrees (~16.6 km)
     const coordinateGroups = new Map<string, any[]>();
     
     return data.map(item => {
-      const key = `${item.lat.toFixed(2)},${item.lng.toFixed(2)}`;
+      const key = `${item.lat.toFixed(3)},${item.lng.toFixed(3)}`;
       
       if (!coordinateGroups.has(key)) {
         coordinateGroups.set(key, []);
@@ -281,7 +283,7 @@ export default function AlumniHeatMap() {
       if (indexInGroup === 0) return item;
 
       const angle = (indexInGroup * (2 * Math.PI)) / 6;
-      const radius = 0.15 * Math.sqrt(indexInGroup);
+      const radius = 0.002 * Math.sqrt(indexInGroup);
       
       return {
         ...item,
@@ -293,9 +295,20 @@ export default function AlumniHeatMap() {
 
   // Map View — only changes when user explicitly changes filters
   const mapView = useMemo(() => {
-    if (selectedCountry === 'all') return { center: [20, 5] as [number, number], zoom: 1.5 };
+    if (selectedCity !== 'all') {
+      const data = processedMapData.cities.find(c => c.city === selectedCity);
+      if (data) return { center: [data.lat, data.lng] as [number, number], zoom: 12 };
+    }
 
-    if (selectedState === 'all') {
+    if (selectedState !== 'all') {
+      const data = processedMapData.states.find(s => s.state === selectedState);
+      return {
+        center: (data ? [data.lat, data.lng] : [20, 78]) as [number, number],
+        zoom: 7
+      };
+    }
+
+    if (selectedCountry !== 'all') {
       const data = processedMapData.countries.find(c => c.country === selectedCountry);
       return {
         center: (data ? [data.lat, data.lng] : [20, 78]) as [number, number],
@@ -303,12 +316,8 @@ export default function AlumniHeatMap() {
       };
     }
 
-    const data = processedMapData.states.find(s => s.state === selectedState);
-    return {
-      center: (data ? [data.lat, data.lng] : [20, 78]) as [number, number],
-      zoom: 7
-    };
-  }, [selectedCountry, selectedState, processedMapData]);
+    return { center: [20, 5] as [number, number], zoom: 1.5 };
+  }, [selectedCountry, selectedState, selectedCity, processedMapData]);
 
   // Track whether initial load is done
   const hasLoadedOnce = useRef(false);
@@ -334,6 +343,7 @@ export default function AlumniHeatMap() {
         if (!hasLoadedOnce.current) {
           setSelectedCountry('all');
           setSelectedState('all');
+          setSelectedCity('all');
         }
       } else if (data.processed) {
         setProcessedMapData(data.processed);
@@ -390,11 +400,18 @@ export default function AlumniHeatMap() {
   const handleSelectCountry = useCallback((id: string) => {
     setSelectedCountry(id);
     setSelectedState('all');
+    setSelectedCity('all');
     setViewVersion(v => v + 1);
   }, []);
 
   const handleSelectState = useCallback((id: string) => {
     setSelectedState(id);
+    setSelectedCity('all');
+    setViewVersion(v => v + 1);
+  }, []);
+
+  const handleSelectCity = useCallback((id: string) => {
+    setSelectedCity(id);
     setViewVersion(v => v + 1);
   }, []);
 
@@ -409,9 +426,76 @@ export default function AlumniHeatMap() {
 
   return (
     <div className="p-4 space-y-6">
-      <Card className="border-none shadow-2xl overflow-hidden rounded-2xl bg-muted/20">
-        <CardContent className="p-0">
-          <div className="relative h-[800px] overflow-hidden">
+      <Card className="border-none shadow-2xl overflow-hidden rounded-2xl bg-card">
+        <CardContent className="p-0 flex flex-col lg:flex-row h-[800px]">
+          
+          {/* Sidebar Directory */}
+          <div className="w-full lg:w-[350px] border-r border-border bg-muted/10 flex flex-col h-[350px] lg:h-full overflow-hidden shrink-0">
+            <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between">
+              <h3 className="font-bold text-lg flex items-center gap-2">
+                <Globe className="w-5 h-5 text-primary"/> Alumni Directory
+              </h3>
+              {(selectedCountry !== 'all' || selectedState !== 'all' || selectedCity !== 'all') && (
+                <Button variant="ghost" size="sm" onClick={() => { 
+                  setSelectedCountry('all'); 
+                  setSelectedState('all'); 
+                  setSelectedCity('all');
+                  setViewVersion(v => v + 1); 
+                }}>
+                  Reset Map
+                </Button>
+              )}
+            </div>
+            
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              <div className="mb-4">
+                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
+                  {currentLevel === 'country' ? 'Global Reach' : (currentLevel === 'state' ? `States in ${selectedCountry}` : 'Cities')}
+                </p>
+                <p className="text-xs text-muted-foreground">Zoom map to drill down automatically.</p>
+              </div>
+
+              {currentLevel === 'country' && processedMapData.countries.sort((a,b)=>b.count-a.count).map(item => (
+                <div key={item.country} 
+                     className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border border-border/50 hover:border-border shadow-sm"
+                     onClick={() => handleSelectCountry(item.country)}>
+                  <span className="font-medium">{item.country}</span>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">{item.count} Alumni</Badge>
+                </div>
+              ))}
+
+              {currentLevel === 'state' && processedMapData.states
+                .filter(s => selectedCountry === 'all' || processedMapData.cities.find(c => c.state === s.state)?.country === selectedCountry)
+                .sort((a,b)=>b.count-a.count).map(item => (
+                <div key={item.state} 
+                     className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border border-border/50 hover:border-border shadow-sm"
+                     onClick={() => handleSelectState(item.state)}>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{item.state}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">{selectedCountry !== 'all' ? selectedCountry : 'Multiple Countries'}</span>
+                  </div>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">{item.count} Alumni</Badge>
+                </div>
+              ))}
+
+              {currentLevel === 'city' && processedMapData.cities
+                .filter(c => (selectedCountry === 'all' || c.country === selectedCountry) && (selectedState === 'all' || c.state === selectedState))
+                .sort((a,b)=>b.count-a.count).map(item => (
+                <div key={item.city} 
+                     className={`flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm ${selectedCity === item.city ? 'border-primary ring-1 ring-primary' : 'border-border/50 hover:border-border'}`}
+                     onClick={() => handleSelectCity(item.city)}>
+                  <div className="flex flex-col">
+                    <span className="font-medium">{item.city}</span>
+                    <span className="text-[10px] text-muted-foreground uppercase">{item.state}</span>
+                  </div>
+                  <Badge variant="secondary" className="bg-primary/10 text-primary">{item.count} Alumni</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Map Area */}
+          <div className="relative flex-1 h-[500px] lg:h-full overflow-hidden">
             <MapWrapper
               filteredData={finalDisplayData}
               view={mapView}
@@ -420,12 +504,13 @@ export default function AlumniHeatMap() {
               onMarkerClick={(item) => {
                 if (item.type === 'country') handleSelectCountry(item.id);
                 else if (item.type === 'state') handleSelectState(item.id);
+                else if (item.type === 'city') handleSelectCity(item.id);
               }}
             />
 
             {/* Float Legend */}
-            <div className="absolute bottom-8 left-8 z-10 bg-white/90 backdrop-blur p-5 rounded-2xl border shadow-2xl">
-              <h4 className="text-[10px] font-black uppercase tracking-tighter text-slate-400 mb-4">Concentration Map</h4>
+            <div className="absolute bottom-8 left-8 z-10 bg-background/90 backdrop-blur p-5 rounded-2xl border border-border/50 shadow-2xl">
+              <h4 className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground mb-4">Concentration Map</h4>
               <div className="space-y-2">
                 {[
                   { label: '1 Alumnus', color: '#fbbf24' },
@@ -436,17 +521,17 @@ export default function AlumniHeatMap() {
                 ].map(row => (
                   <div key={row.label} className="flex items-center gap-3">
                     <div className="w-3 h-3 rounded-full" style={{ background: row.color }}></div>
-                    <span className="text-[11px] font-bold text-slate-600">{row.label}</span>
+                    <span className="text-[11px] font-bold text-foreground">{row.label}</span>
                   </div>
                 ))}
               </div>
             </div>
 
             {/* Header Overlay */}
-            <div className="absolute top-8 left-8 z-10">
-              <Badge variant="outline" className="bg-white/90 backdrop-blur py-2 px-4 shadow-xl border-amber-500/20">
-                <Users className="w-3 h-3 mr-2 text-amber-500" />
-                <span className="text-xs font-black uppercase tracking-widest text-slate-700">
+            <div className="absolute top-8 left-8 z-10 pointer-events-none">
+              <Badge variant="outline" className="bg-background/90 backdrop-blur py-2 px-4 shadow-xl border-amber-500/20">
+                <Users className="w-4 h-4 mr-2 text-amber-500" />
+                <span className="text-sm font-black uppercase tracking-widest text-foreground">
                   {currentLevel === 'country' ? 'Global Reach' : (currentLevel === 'state' ? `Inside ${selectedCountry}` : `Inside ${selectedState}`)}
                 </span>
               </Badge>
