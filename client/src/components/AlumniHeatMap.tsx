@@ -168,7 +168,7 @@ const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd,
       const el = createHeatMarker(item.count);
 
       // Set anchor to 'bottom' and offset it slightly upwards so it doesn't overlap the city name
-      const marker = new maplibregl.Marker({ 
+      const marker = new maplibregl.Marker({
         element: el,
         anchor: 'bottom',
         offset: [0, -5] // Push it 5px further up from the bottom anchor
@@ -237,17 +237,16 @@ export default function AlumniHeatMap() {
 
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedCountry, setSelectedCountry] = useState<string>('all');
-  const [selectedState, setSelectedState] = useState<string>('all');
-  const [selectedCity, setSelectedCity] = useState<string>('all');
   const [currentZoom, setCurrentZoom] = useState(2.0);
   const [mapBounds, setMapBounds] = useState<{ sw: { lng: number, lat: number }, ne: { lng: number, lat: number } } | null>(null);
   const [mapCenter, setMapCenter] = useState<{ lat: number, lng: number } | null>(null);
   const [currentAreaName, setCurrentAreaName] = useState<string | null>(null);
 
-  // viewVersion increments ONLY on explicit user actions (filter/marker click)
-  // Data refreshes do NOT change this — so the map won't fly/reset on refresh
+  // Instead of derived map view, we use direct state for flying to locations
+  const [mapView, setMapView] = useState<{ center: [number, number], zoom: number }>({ center: [20, 5], zoom: 1.5 });
   const [viewVersion, setViewVersion] = useState(0);
+
+  const hasLoadedOnce = useRef(false);
 
   // helper to check if a lat/lng is within map bounds
   const isInBounds = useCallback((lat: number, lng: number) => {
@@ -310,7 +309,7 @@ export default function AlumniHeatMap() {
     return () => clearTimeout(timer);
   }, [mapCenter, currentLevel]);
 
-  // Determine what markers to show
+  // Determine what markers to show (GLOBALLY based on zoom level)
   const finalDisplayData = useMemo(() => {
     let data: any[] = [];
     if (currentLevel === 'country') {
@@ -318,26 +317,15 @@ export default function AlumniHeatMap() {
         ...c, name: c.country, type: 'country', id: c.country
       }));
     } else if (currentLevel === 'state') {
-      let states = processedMapData.states;
-      if (selectedCountry !== 'all') {
-        states = states.filter(s => {
-          const sample = processedMapData.cities.find(c => c.state === s.state);
-          return sample?.country === selectedCountry;
-        });
-      }
-      data = states.map(s => {
-        // Find the country for this state from the cities data
+      data = processedMapData.states.map(s => {
         const sample = processedMapData.cities.find(c => c.state === s.state);
         return {
           ...s, name: s.state, type: 'state', id: s.state,
-          country: sample?.country || selectedCountry
+          country: sample?.country || 'Unknown'
         };
       });
     } else {
-      let cities = processedMapData.cities;
-      if (selectedCountry !== 'all') cities = cities.filter(c => c.country === selectedCountry);
-      if (selectedState !== 'all') cities = cities.filter(c => c.state === selectedState);
-      data = cities.map(c => ({
+      data = processedMapData.cities.map(c => ({
         ...c, name: c.city, type: 'city', id: c.city
       }));
     }
@@ -368,7 +356,7 @@ export default function AlumniHeatMap() {
         lng: item.lng + radius * Math.cos(angle)
       };
     });
-  }, [processedMapData, selectedCountry, selectedState, currentLevel]);
+  }, [processedMapData, currentLevel]);
 
   // Find the active area based on markers currently inside the bounds
   const activeArea = useMemo(() => {
@@ -393,13 +381,12 @@ export default function AlumniHeatMap() {
     return { country: topCountry, state: topState };
   }, [mapBounds, processedMapData.cities, isInBounds]);
 
-  // Determine items for the sidebar hierarchically based on the active area
+  // Determine items for the sidebar hierarchically based on the active area ONLY
   const sidebarItems = useMemo(() => {
     let items: any[] = [];
 
-    // We only restrict by active area if the user hasn't explicitly selected something
-    const targetCountry = selectedCountry !== 'all' ? selectedCountry : activeArea.country;
-    const targetState = selectedState !== 'all' ? selectedState : activeArea.state;
+    const targetCountry = activeArea.country;
+    const targetState = activeArea.state;
 
     if (currentLevel === 'country') {
       // 1. Show ALL countries
@@ -438,7 +425,7 @@ export default function AlumniHeatMap() {
     }
 
     return items.sort((a, b) => b.count - a.count);
-  }, [processedMapData, currentLevel, activeArea, selectedCountry, selectedState]);
+  }, [processedMapData, currentLevel, activeArea]);
 
   // Determine dynamic top badge text based on active area
   const topBadgeText = useMemo(() => {
@@ -450,42 +437,11 @@ export default function AlumniHeatMap() {
     if (currentLevel === 'country') {
       return 'Global Reach';
     } else if (currentLevel === 'state') {
-      const targetCountry = selectedCountry !== 'all' ? selectedCountry : activeArea.country;
-      return targetCountry ? `Inside ${targetCountry}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Regional View');
+      return activeArea.country ? `Inside ${activeArea.country}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Regional View');
     } else {
-      const targetState = selectedState !== 'all' ? selectedState : activeArea.state;
-      return targetState ? `Inside ${targetState}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Local View');
+      return activeArea.state ? `Inside ${activeArea.state}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Local View');
     }
-  }, [currentLevel, sidebarItems.length, currentAreaName, activeArea, selectedCountry, selectedState]);
-
-  // Map View — only changes when user explicitly changes filters
-  const mapView = useMemo(() => {
-    if (selectedCity !== 'all') {
-      const data = processedMapData.cities.find(c => c.city === selectedCity);
-      if (data) return { center: [data.lat, data.lng] as [number, number], zoom: 12 };
-    }
-
-    if (selectedState !== 'all') {
-      const data = processedMapData.states.find(s => s.state === selectedState);
-      return {
-        center: (data ? [data.lat, data.lng] : [20, 78]) as [number, number],
-        zoom: 7
-      };
-    }
-
-    if (selectedCountry !== 'all') {
-      const data = processedMapData.countries.find(c => c.country === selectedCountry);
-      return {
-        center: (data ? [data.lat, data.lng] : [20, 78]) as [number, number],
-        zoom: 4.5
-      };
-    }
-
-    return { center: [20, 5] as [number, number], zoom: 1.5 };
-  }, [selectedCountry, selectedState, selectedCity, processedMapData]);
-
-  // Track whether initial load is done
-  const hasLoadedOnce = useRef(false);
+  }, [currentLevel, sidebarItems.length, currentAreaName, activeArea]);
 
   // Fetch data — silent refresh (no loading spinner after initial load)
   const fetchData = useCallback(async (isInitial = false) => {
@@ -504,12 +460,6 @@ export default function AlumniHeatMap() {
 
       if (freshAlumni.length === 0) {
         setProcessedMapData({ cities: [], states: [], countries: [] });
-        // Only reset filters on initial load when empty
-        if (!hasLoadedOnce.current) {
-          setSelectedCountry('all');
-          setSelectedState('all');
-          setSelectedCity('all');
-        }
       } else if (data.processed) {
         setProcessedMapData(data.processed);
       }
@@ -561,24 +511,30 @@ export default function AlumniHeatMap() {
     };
   }, [fetchData]);
 
-  // Wrapper for selecting country — increments viewVersion to trigger flyTo
+  // Handlers for flying to locations when clicking in sidebar
   const handleSelectCountry = useCallback((id: string) => {
-    setSelectedCountry(id);
-    setSelectedState('all');
-    setSelectedCity('all');
-    setViewVersion(v => v + 1);
-  }, []);
+    const data = processedMapData.countries.find(c => c.country === id);
+    if (data) {
+      setMapView({ center: [data.lat, data.lng], zoom: 4.5 });
+      setViewVersion(v => v + 1);
+    }
+  }, [processedMapData.countries]);
 
   const handleSelectState = useCallback((id: string) => {
-    setSelectedState(id);
-    setSelectedCity('all');
-    setViewVersion(v => v + 1);
-  }, []);
+    const data = processedMapData.states.find(s => s.state === id);
+    if (data) {
+      setMapView({ center: [data.lat, data.lng], zoom: 7 });
+      setViewVersion(v => v + 1);
+    }
+  }, [processedMapData.states]);
 
   const handleSelectCity = useCallback((id: string) => {
-    setSelectedCity(id);
-    setViewVersion(v => v + 1);
-  }, []);
+    const data = processedMapData.cities.find(c => c.city === id);
+    if (data) {
+      setMapView({ center: [data.lat, data.lng], zoom: 12 });
+      setViewVersion(v => v + 1);
+    }
+  }, [processedMapData.cities]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-[600px] space-y-4">
@@ -592,7 +548,7 @@ export default function AlumniHeatMap() {
   return (
     <div className="p-4 space-y-6">
       <Card className="border-none shadow-2xl overflow-hidden rounded-2xl bg-card">
-        <CardContent className="p-0 flex flex-col lg:flex-row h-[800px]">
+        <CardContent className="p-0 flex flex-col-reverse lg:flex-row h-[800px]">
 
           {/* Sidebar Directory */}
           <div className="w-full lg:w-[350px] border-r border-border bg-muted/10 flex flex-col h-[350px] lg:h-full overflow-hidden shrink-0">
@@ -600,16 +556,12 @@ export default function AlumniHeatMap() {
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Globe className="w-5 h-5 text-primary" /> Alumni Directory
               </h3>
-              {(selectedCountry !== 'all' || selectedState !== 'all' || selectedCity !== 'all') && (
-                <Button variant="ghost" size="sm" onClick={() => {
-                  setSelectedCountry('all');
-                  setSelectedState('all');
-                  setSelectedCity('all');
-                  setViewVersion(v => v + 1);
-                }}>
-                  Reset Map
-                </Button>
-              )}
+              <Button variant="ghost" size="sm" onClick={() => {
+                setMapView({ center: [20, 5], zoom: 1.5 });
+                setViewVersion(v => v + 1);
+              }}>
+                Reset Map
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
@@ -623,11 +575,7 @@ export default function AlumniHeatMap() {
               {sidebarItems.length > 0 ? (
                 sidebarItems.map(item => (
                   <div key={item.id}
-                    className={`flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm ${(currentLevel === 'city' && selectedCity === item.id) ||
-                      (currentLevel === 'state' && selectedState === item.id) ||
-                      (currentLevel === 'country' && selectedCountry === item.id)
-                      ? 'border-primary ring-1 ring-primary' : 'border-border/50 hover:border-border'
-                      }`}
+                    className={`flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm border-border/50 hover:border-border`}
                     onClick={() => {
                       if (item.type === 'country') handleSelectCountry(item.id);
                       else if (item.type === 'state') handleSelectState(item.id);
