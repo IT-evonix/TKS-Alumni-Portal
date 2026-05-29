@@ -178,7 +178,7 @@ const getCoordinates = async (name: string, context?: string) => {
 // Get alumni data for heat map
 router.get('/map-data', async (req, res) => {
   try {
-    // Query alumni with location data
+    // Query alumni with location data, ensuring we only get users with 'alumni' role
     const { data: alumni, error } = await db
       .from('alumni')
       .select(`
@@ -192,8 +192,12 @@ router.get('/map-data', async (req, res) => {
         current_country,
         latitude,
         longitude,
-        location_label
-      `);
+        location_label,
+        users!inner (
+          user_role
+        )
+      `)
+      .eq('users.user_role', 'alumni');
 
     if (error) {
       console.error('Error fetching alumni map data:', error);
@@ -337,7 +341,8 @@ router.get('/state-stats', async (req, res) => {
   try {
     const { data, error } = await db
       .from('alumni')
-      .select('current_state')
+      .select('current_state, users!inner(user_role)')
+      .eq('users.user_role', 'alumni')
       .not('current_state', 'is', null);
 
     if (error) {
@@ -374,7 +379,8 @@ router.get('/city-stats', async (req, res) => {
   try {
     const { data, error } = await db
       .from('alumni')
-      .select('current_city, current_state')
+      .select('current_city, current_state, users!inner(user_role)')
+      .eq('users.user_role', 'alumni')
       .not('current_city', 'is', null)
       .not('current_state', 'is', null);
 
