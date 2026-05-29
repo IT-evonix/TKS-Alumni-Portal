@@ -658,14 +658,14 @@ export default function AlumniHeatMap() {
             </div>
 
             {/* Header Overlay */}
-            <div className="absolute top-8 left-8 z-10 pointer-events-none">
+            {/* <div className="absolute top-8 left-8 z-10 pointer-events-none">
               <Badge variant="outline" className="bg-background/90 backdrop-blur py-2 px-4 shadow-xl border-amber-500/20">
                 <Users className="w-4 h-4 mr-2 text-amber-500" />
                 <span className="text-sm font-black uppercase tracking-widest text-foreground">
                   {topBadgeText}
                 </span>
               </Badge>
-            </div>
+            </div> */}
           </div>
         </CardContent>
       </Card>
