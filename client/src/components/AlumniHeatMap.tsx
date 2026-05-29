@@ -41,28 +41,40 @@ const createHeatMarker = (count: number) => {
   };
 
   const { color, shadow } = getColorData(count);
-  const size = Math.min(32 + Math.sqrt(count) * 4, 60);
 
   const el = document.createElement('div');
   el.className = 'custom-heat-marker';
-  el.style.width = `${size}px`;
-  el.style.height = `${size * 1.3}px`;
-  el.style.position = 'relative';
+  el.style.width = `25px`;
+  el.style.height = `25px`;
+  el.style.backgroundColor = color;
+  el.style.borderRadius = '50%';
   el.style.display = 'flex';
-  el.style.flexDirection = 'column';
   el.style.alignItems = 'center';
+  el.style.justifyContent = 'center';
+  el.style.color = 'white';
+  el.style.fontWeight = '800';
+  el.style.fontSize = `10px`;
+  el.style.boxShadow = `0 0 0 2px white, 0 0 10px ${shadow}`;
+  el.style.border = '2px solid rgba(255,255,255,0.7)';
   el.style.cursor = 'pointer';
-  el.style.filter = `drop-shadow(0 4px 8px ${shadow})`;
+  el.innerText = count.toString();
 
-  // SVG Pin with Count inside
-  el.innerHTML = `
-    <svg viewBox="0 0 24 24" width="100%" height="100%" style="fill: ${color}; stroke: white; stroke-width: 1.5px;">
-      <path d="M12 2C8.13 2 5 5.13 5 9c0 5.25 7 13 7 13s7-7.75 7-13c0-3.87-3.13-7-7-7z"/>
-    </svg>
-    <div style="position: absolute; top: 38%; left: 50%; transform: translate(-50%, -50%); color: white; font-weight: 900; font-size: ${Math.max(12, size * 0.28)}px;">
-      ${count}
-    </div>
-  `;
+  // Add pulse animation
+  if (!document.getElementById('map-marker-animations')) {
+    const style = document.createElement('style');
+    style.id = 'map-marker-animations';
+    style.innerHTML = `
+      @keyframes marker-pulse {
+        0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.4); }
+        70% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
+        100% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0); }
+      }
+      .custom-heat-marker {
+        animation: marker-pulse 2s infinite ease-out;
+      }
+    `;
+    document.head.appendChild(style);
+  }
 
   return el;
 };
@@ -155,7 +167,12 @@ const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd,
     filteredData.forEach(item => {
       const el = createHeatMarker(item.count);
 
-      const marker = new maplibregl.Marker({ element: el, anchor: 'bottom' })
+      // Set anchor to 'bottom' and offset it slightly upwards so it doesn't overlap the city name
+      const marker = new maplibregl.Marker({ 
+        element: el,
+        anchor: 'bottom',
+        offset: [0, -5] // Push it 5px further up from the bottom anchor
+      })
         .setLngLat([item.lng, item.lat])
         .addTo(map);
 
@@ -353,51 +370,79 @@ export default function AlumniHeatMap() {
     });
   }, [processedMapData, selectedCountry, selectedState, currentLevel]);
 
-  // Determine visible items for the sidebar based on bounds and level
-  const visibleSidebarItems = useMemo(() => {
+  // Find the active area based on markers currently inside the bounds
+  const activeArea = useMemo(() => {
+    if (!mapBounds) return { country: null, state: null };
+
+    // Get all cities that are in bounds, because cities have country and state info
+    const citiesInBounds = processedMapData.cities.filter(c => isInBounds(c.lat, c.lng));
+
+    if (citiesInBounds.length === 0) return { country: null, state: null };
+
+    const countryCounts: Record<string, number> = {};
+    const stateCounts: Record<string, number> = {};
+
+    citiesInBounds.forEach(c => {
+      if (c.country) countryCounts[c.country] = (countryCounts[c.country] || 0) + c.count;
+      if (c.state) stateCounts[c.state] = (stateCounts[c.state] || 0) + c.count;
+    });
+
+    const topCountry = Object.entries(countryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+    const topState = Object.entries(stateCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
+
+    return { country: topCountry, state: topState };
+  }, [mapBounds, processedMapData.cities, isInBounds]);
+
+  // Determine items for the sidebar hierarchically based on the active area
+  const sidebarItems = useMemo(() => {
     let items: any[] = [];
+
+    // We only restrict by active area if the user hasn't explicitly selected something
+    const targetCountry = selectedCountry !== 'all' ? selectedCountry : activeArea.country;
+    const targetState = selectedState !== 'all' ? selectedState : activeArea.state;
+
     if (currentLevel === 'country') {
+      // 1. Show ALL countries
       items = processedMapData.countries.map(c => ({
         ...c, name: c.country, type: 'country', id: c.country
       }));
     } else if (currentLevel === 'state') {
+      // 2. Show states of the Active Country
+      if (!targetCountry) return []; // Empty area
+
       let states = processedMapData.states;
-      if (selectedCountry !== 'all') {
-        states = states.filter(s => {
-          const sample = processedMapData.cities.find(c => c.state === s.state);
-          return sample?.country === selectedCountry;
-        });
-      }
-      items = states.map(s => {
+      states = states.filter(s => {
         const sample = processedMapData.cities.find(c => c.state === s.state);
-        return {
-          ...s, name: s.state, type: 'state', id: s.state,
-          country: sample?.country || selectedCountry
-        };
+        return sample?.country === targetCountry;
       });
+
+      items = states.map(s => ({
+        ...s, name: s.state, type: 'state', id: s.state,
+        country: targetCountry
+      }));
     } else {
+      // 3. Show cities of the Active State (or Country)
+      if (!targetState && !targetCountry) return []; // Empty area
+
       let cities = processedMapData.cities;
-      if (selectedCountry !== 'all') cities = cities.filter(c => c.country === selectedCountry);
-      if (selectedState !== 'all') cities = cities.filter(c => c.state === selectedState);
+      if (targetState) {
+        cities = cities.filter(c => c.state === targetState);
+      } else if (targetCountry) {
+        cities = cities.filter(c => c.country === targetCountry);
+      }
+
       items = cities.map(c => ({
         ...c, name: c.city, type: 'city', id: c.city,
         country: c.country, state: c.state
       }));
     }
 
-    // Filter by map bounds (except for country level) and sort
-    if (currentLevel === 'country') {
-      return items.sort((a, b) => b.count - a.count);
-    }
+    return items.sort((a, b) => b.count - a.count);
+  }, [processedMapData, currentLevel, activeArea, selectedCountry, selectedState]);
 
-    return items
-      .filter(item => isInBounds(item.lat, item.lng))
-      .sort((a, b) => b.count - a.count);
-  }, [processedMapData, selectedCountry, selectedState, currentLevel, isInBounds]);
-
-  // Determine dynamic top badge text based on visible items
+  // Determine dynamic top badge text based on active area
   const topBadgeText = useMemo(() => {
-    if (visibleSidebarItems.length === 0) {
+    if (sidebarItems.length === 0) {
       if (currentAreaName === 'Ocean / Unmapped') return 'Ocean / Unmapped';
       return currentAreaName ? `Inside ${currentAreaName}` : 'Locating...';
     }
@@ -405,27 +450,13 @@ export default function AlumniHeatMap() {
     if (currentLevel === 'country') {
       return 'Global Reach';
     } else if (currentLevel === 'state') {
-      const countryCounts: Record<string, number> = {};
-      visibleSidebarItems.forEach(item => {
-        if (item.country) {
-          countryCounts[item.country] = (countryCounts[item.country] || 0) + item.count;
-        }
-      });
-      const topCountry = Object.entries(countryCounts).sort((a, b) => b[1] - a[1])[0];
-      if (topCountry && topCountry[0] !== 'undefined') return `Inside ${topCountry[0]}`;
-      return currentAreaName ? `Inside ${currentAreaName}` : 'Regional View';
+      const targetCountry = selectedCountry !== 'all' ? selectedCountry : activeArea.country;
+      return targetCountry ? `Inside ${targetCountry}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Regional View');
     } else {
-      const stateCounts: Record<string, number> = {};
-      visibleSidebarItems.forEach(item => {
-        if (item.state) {
-          stateCounts[item.state] = (stateCounts[item.state] || 0) + item.count;
-        }
-      });
-      const topState = Object.entries(stateCounts).sort((a, b) => b[1] - a[1])[0];
-      if (topState && topState[0] !== 'undefined') return `Inside ${topState[0]}`;
-      return currentAreaName ? `Inside ${currentAreaName}` : 'Local View';
+      const targetState = selectedState !== 'all' ? selectedState : activeArea.state;
+      return targetState ? `Inside ${targetState}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Local View');
     }
-  }, [currentLevel, visibleSidebarItems, currentAreaName]);
+  }, [currentLevel, sidebarItems.length, currentAreaName, activeArea, selectedCountry, selectedState]);
 
   // Map View — only changes when user explicitly changes filters
   const mapView = useMemo(() => {
@@ -589,8 +620,8 @@ export default function AlumniHeatMap() {
                 <p className="text-xs text-muted-foreground">Zoom map to drill down automatically.</p>
               </div>
 
-              {visibleSidebarItems.length > 0 ? (
-                visibleSidebarItems.map(item => (
+              {sidebarItems.length > 0 ? (
+                sidebarItems.map(item => (
                   <div key={item.id}
                     className={`flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm ${(currentLevel === 'city' && selectedCity === item.id) ||
                       (currentLevel === 'state' && selectedState === item.id) ||
@@ -657,16 +688,17 @@ export default function AlumniHeatMap() {
               </div>
             </div>
 
-
-            {/* Header Overlay */}
-            {/* <div className="absolute top-8 left-8 z-10 pointer-events-none">
+            {/* Header Overlay - Commented out as requested */}
+            {/* 
+            <div className="absolute top-8 left-8 z-10 pointer-events-none">
               <Badge variant="outline" className="bg-background/90 backdrop-blur py-2 px-4 shadow-xl border-amber-500/20">
                 <Users className="w-4 h-4 mr-2 text-amber-500" />
                 <span className="text-sm font-black uppercase tracking-widest text-foreground">
                   {topBadgeText}
                 </span>
               </Badge>
-            </div> */}
+            </div>
+            */}
           </div>
         </CardContent>
       </Card>
