@@ -408,20 +408,20 @@ export default function AlumniHeatMap() {
       const countryCounts: Record<string, number> = {};
       visibleSidebarItems.forEach(item => {
         if (item.country) {
-           countryCounts[item.country] = (countryCounts[item.country] || 0) + item.count;
+          countryCounts[item.country] = (countryCounts[item.country] || 0) + item.count;
         }
       });
-      const topCountry = Object.entries(countryCounts).sort((a,b) => b[1] - a[1])[0];
+      const topCountry = Object.entries(countryCounts).sort((a, b) => b[1] - a[1])[0];
       if (topCountry && topCountry[0] !== 'undefined') return `Inside ${topCountry[0]}`;
       return currentAreaName ? `Inside ${currentAreaName}` : 'Regional View';
     } else {
       const stateCounts: Record<string, number> = {};
       visibleSidebarItems.forEach(item => {
         if (item.state) {
-           stateCounts[item.state] = (stateCounts[item.state] || 0) + item.count;
+          stateCounts[item.state] = (stateCounts[item.state] || 0) + item.count;
         }
       });
-      const topState = Object.entries(stateCounts).sort((a,b) => b[1] - a[1])[0];
+      const topState = Object.entries(stateCounts).sort((a, b) => b[1] - a[1])[0];
       if (topState && topState[0] !== 'undefined') return `Inside ${topState[0]}`;
       return currentAreaName ? `Inside ${currentAreaName}` : 'Local View';
     }
@@ -593,9 +593,9 @@ export default function AlumniHeatMap() {
                 visibleSidebarItems.map(item => (
                   <div key={item.id}
                     className={`flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm ${(currentLevel === 'city' && selectedCity === item.id) ||
-                        (currentLevel === 'state' && selectedState === item.id) ||
-                        (currentLevel === 'country' && selectedCountry === item.id)
-                        ? 'border-primary ring-1 ring-primary' : 'border-border/50 hover:border-border'
+                      (currentLevel === 'state' && selectedState === item.id) ||
+                      (currentLevel === 'country' && selectedCountry === item.id)
+                      ? 'border-primary ring-1 ring-primary' : 'border-border/50 hover:border-border'
                       }`}
                     onClick={() => {
                       if (item.type === 'country') handleSelectCountry(item.id);
@@ -657,15 +657,16 @@ export default function AlumniHeatMap() {
               </div>
             </div>
 
+
             {/* Header Overlay */}
-            <div className="absolute top-8 left-8 z-10 pointer-events-none">
+            {/* <div className="absolute top-8 left-8 z-10 pointer-events-none">
               <Badge variant="outline" className="bg-background/90 backdrop-blur py-2 px-4 shadow-xl border-amber-500/20">
                 <Users className="w-4 h-4 mr-2 text-amber-500" />
                 <span className="text-sm font-black uppercase tracking-widest text-foreground">
                   {topBadgeText}
                 </span>
               </Badge>
-            </div>
+            </div> */}
           </div>
         </CardContent>
       </Card>
