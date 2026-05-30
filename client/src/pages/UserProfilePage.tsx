@@ -18,7 +18,6 @@ import { EducationManager } from "@/components/profile/EducationManager";
 import { ProjectManager } from "@/components/profile/ProjectManager";
 import { CertificationManager } from "@/components/profile/CertificationManager";
 import { AchievementManager } from "@/components/profile/AchievementManager";
-import { AchievementBadges } from "@/components/AchievementBadges";
 import { LanguageManager } from "@/components/profile/LanguageManager";
 import { ResumeUpload } from "@/components/profile/ResumeUpload";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
@@ -1587,12 +1586,12 @@ export const UserProfilePage = (): JSX.Element => {
 
 
 
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 gap-4">
                 <div>
-                  <Label htmlFor="city">City</Label>
+                  <Label htmlFor="location">Your Precise Location (City / Area / Village)</Label>
                   <CityAutocomplete
-                    city={profile.currentCity}
-                    onCityChange={(city) => setProfile({ ...profile, currentCity: city })}
+                    city={profile.locationLabel || profile.currentCity}
+                    onCityChange={(val) => setProfile({ ...profile, locationLabel: val })}
                     onLocationSelect={(city, state, country, lat, lng, label) => {
                       setProfile({
                         ...profile,
@@ -1606,28 +1605,9 @@ export const UserProfilePage = (): JSX.Element => {
                     }}
                     disabled={isPreviewMode}
                   />
-                </div>
-                <div>
-                  <Label htmlFor="state">State / Province</Label>
-                  <Input
-                    id="state"
-                    value={profile.currentState}
-                    onChange={(e) => setProfile({ ...profile, currentState: e.target.value })}
-                    placeholder="State"
-                    disabled={isPreviewMode}
-                    className="min-h-[44px]"
-                  />
-                </div>
-                <div>
-                  <Label htmlFor="country">Country</Label>
-                  <Input
-                    id="country"
-                    value={profile.currentCountry}
-                    onChange={(e) => setProfile({ ...profile, currentCountry: e.target.value })}
-                    placeholder="Country"
-                    disabled={isPreviewMode}
-                    className="min-h-[44px]"
-                  />
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Search and select your exact location. This powers the interactive Alumni Map.
+                  </p>
                 </div>
               </div>
 
@@ -1870,11 +1850,9 @@ export const UserProfilePage = (): JSX.Element => {
             {user?.id && <LanguageManager userId={user.id} />}
           </div>
 
-          {/* Achievements & Gamification Section */}
+          {/* Achievements Section */}
           <div ref={achievementsRef}>
             {user?.id && <AchievementManager userId={user.id} />}
-            {/* Gamification badges only for alumni users */}
-            {user?.id && user?.user_role === 'alumni' && <AchievementBadges userId={user.id} />}
           </div>
 
 

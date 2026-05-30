@@ -639,7 +639,10 @@ router.post("/update", async (req, res) => {
             timezone,
             currentCity,
             currentState,
-            currentCountry
+            currentCountry,
+            latitude,
+            longitude,
+            locationLabel
         } = req.body;
 
         // Update user table (email)
@@ -709,6 +712,9 @@ router.post("/update", async (req, res) => {
         if (current_city !== undefined) alumniUpdateData.current_city = current_city;
         if (current_state !== undefined) alumniUpdateData.current_state = current_state;
         if (current_country !== undefined) alumniUpdateData.current_country = current_country;
+        if (latitude !== undefined) alumniUpdateData.latitude = latitude === null ? null : Number(latitude);
+        if (longitude !== undefined) alumniUpdateData.longitude = longitude === null ? null : Number(longitude);
+        if (locationLabel !== undefined) alumniUpdateData.location_label = locationLabel;
 
         // Auto-sync graduation_year from batch if strictly 4 digits
         if (batch) {
@@ -789,6 +795,9 @@ router.post("/update", async (req, res) => {
                 current_city: current_city ?? null,
                 current_state: current_state ?? null,
                 current_country: current_country ?? null,
+                latitude: latitude === null ? null : (latitude !== undefined ? Number(latitude) : null),
+                longitude: longitude === null ? null : (longitude !== undefined ? Number(longitude) : null),
+                location_label: locationLabel ?? null,
                 linkedin_url: linkedinUrl ?? null,
                 bio: bio ?? null,
                 resume_url: resumeUrl ?? null,

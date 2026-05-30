@@ -1,97 +1,36 @@
 import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { MapPin, Users, TrendingUp, Globe, Filter, Search } from 'lucide-react';
+import { MapPin, Globe } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { supabase } from '@/lib/supabase';
 
 interface AlumniData {
   id: string;
-  user_id: string;
   first_name: string;
   last_name: string;
-  email: string;
-  current_city: string;
-  current_state: string;
-  current_country: string;
-
+  latitude: number;
+  longitude: number;
+  location_label: string;
+  current_city?: string;
+  current_state?: string;
+  current_country?: string;
 }
 
-interface CityCount {
-  city: string;
-  state: string;
-  country: string;
-  count: number;
-  lat: number;
-  lng: number;
-}
-
-// Custom Marker Generator for MapLibre
-const createHeatMarker = (count: number) => {
-  const getColorData = (c: number) => {
-    if (c === 1) return { color: '#fbbf24', shadow: 'rgba(251, 191, 36, 0.4)' };
-    if (c < 10) return { color: '#f59e0b', shadow: 'rgba(245, 158, 11, 0.4)' };
-    if (c < 25) return { color: '#d97706', shadow: 'rgba(217, 119, 6, 0.4)' };
-    if (c < 50) return { color: '#b45309', shadow: 'rgba(180, 83, 9, 0.4)' };
-    return { color: '#78350f', shadow: 'rgba(120, 53, 15, 0.5)' };
-  };
-
-  const { color, shadow } = getColorData(count);
-
-  const el = document.createElement('div');
-  el.className = 'custom-heat-marker';
-  el.style.width = `25px`;
-  el.style.height = `25px`;
-  el.style.backgroundColor = color;
-  el.style.borderRadius = '50%';
-  el.style.display = 'flex';
-  el.style.alignItems = 'center';
-  el.style.justifyContent = 'center';
-  el.style.color = 'white';
-  el.style.fontWeight = '800';
-  el.style.fontSize = `10px`;
-  el.style.boxShadow = `0 0 0 2px white, 0 0 10px ${shadow}`;
-  el.style.border = '2px solid rgba(255,255,255,0.7)';
-  el.style.cursor = 'pointer';
-  el.innerText = count.toString();
-
-  // Add pulse animation
-  if (!document.getElementById('map-marker-animations')) {
-    const style = document.createElement('style');
-    style.id = 'map-marker-animations';
-    style.innerHTML = `
-      @keyframes marker-pulse {
-        0% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0.4); }
-        70% { box-shadow: 0 0 0 15px rgba(255, 255, 255, 0); }
-        100% { box-shadow: 0 0 0 0px rgba(255, 255, 255, 0); }
-      }
-      .custom-heat-marker {
-        animation: marker-pulse 2s infinite ease-out;
-      }
-    `;
-    document.head.appendChild(style);
-  }
-
-  return el;
-};
-
-// MapLibre MapWrapper — view changes ONLY when viewVersion changes (explicit user action)
-const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd, onBoundsChange }: {
-  filteredData: any[],
-  view: { center: [number, number], zoom: number },
+const MapWrapper = ({ data, view, viewVersion, onBoundsChange }: {
+  data: AlumniData[],
+  view: { center: [number, number], zoom: number, bounds?: [[number, number], [number, number]] },
   viewVersion: number,
-  onMarkerClick?: (marker: any) => void,
-  onZoomEnd?: (zoom: number) => void,
-  onBoundsChange?: (bounds: { sw: { lng: number, lat: number }, ne: { lng: number, lat: number } }, center: { lng: number, lat: number }) => void
+  onBoundsChange?: (bounds: { sw: { lng: number, lat: number }, ne: { lng: number, lat: number }, zoom: number }) => void
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
-  const markersRef = useRef<maplibregl.Marker[]>([]);
   const prevViewVersionRef = useRef(0);
+  
+  const dataRef = useRef<AlumniData[]>(data);
+  useEffect(() => { dataRef.current = data; }, [data]);
 
   // Initialize map
   useEffect(() => {
@@ -99,33 +38,384 @@ const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd,
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json',
-      center: [view.center[1], view.center[0]], // MapLibre uses [lng, lat]
+      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      center: view.center, // view.center is already [lng, lat]
       zoom: view.zoom,
+      maxZoom: 9, // Restrict maximum zoom level
       attributionControl: false
     });
 
-    map.addControl(new maplibregl.NavigationControl({
-      showCompass: false
-    }), 'top-right');
+    map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
-    const handleMoveEnd = () => {
-      if (onZoomEnd) onZoomEnd(map.getZoom());
-      if (onBoundsChange) {
-        const b = map.getBounds();
-        const c = map.getCenter();
-        onBoundsChange(
-          {
-            sw: { lng: b.getSouthWest().lng, lat: b.getSouthWest().lat },
-            ne: { lng: b.getNorthEast().lng, lat: b.getNorthEast().lat }
-          },
-          { lng: c.lng, lat: c.lat }
-        );
+    map.on('load', () => {
+      // Enhance administrative boundaries to clearly delineate Countries, States, and Cities/Counties
+      const styleLayers = map.getStyle().layers;
+      if (styleLayers) {
+        styleLayers.forEach(layer => {
+          if (['boundary_county', 'boundary_state', 'boundary_country_outline', 'boundary_country_inner'].includes(layer.id) && layer.type === 'line') {
+            // Use a distinct but elegant slate color for borders
+            map.setPaintProperty(layer.id, 'line-color', '#94a3b8');
+            map.setPaintProperty(layer.id, 'line-opacity', 0.8);
+
+            // Dynamic line-width depending on the boundary type
+            let widthStyle = 1 as any;
+            if (layer.id.includes('country')) {
+              widthStyle = [
+                'interpolate', ['linear'], ['zoom'],
+                0, 0.5,
+                4, 1.5,
+                10, 2.5
+              ];
+            } else if (layer.id.includes('state')) {
+              widthStyle = [
+                'interpolate', ['linear'], ['zoom'],
+                3, 0.1,
+                6, 1.2,
+                12, 2
+              ];
+              map.setPaintProperty(layer.id, 'line-dasharray', [3, 2]); // Dashed lines for states
+            } else {
+              widthStyle = [
+                'interpolate', ['linear'], ['zoom'],
+                7, 0.1,
+                11, 1,
+                15, 1.5
+              ];
+              map.setPaintProperty(layer.id, 'line-dasharray', [2, 3]); // Dotted lines for counties/cities
+            }
+
+            map.setPaintProperty(layer.id, 'line-width', widthStyle);
+          }
+        });
       }
-    };
 
-    map.on('moveend', handleMoveEnd);
-    map.on('load', handleMoveEnd);
+      // Add a raw GeoJSON source for true heatmap
+      map.addSource('alumni-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] }
+      });
+
+      // Separate clustered source for city-area borders (merges nearby alumni)
+      map.addSource('alumni-area-source', {
+        type: 'geojson',
+        data: { type: 'FeatureCollection', features: [] },
+        cluster: true,
+        clusterRadius: 80,
+        clusterMaxZoom: 12
+      });
+
+      // 1. Heatmap layer
+      map.addLayer({
+        id: 'alumni-heat',
+        type: 'heatmap',
+        source: 'alumni-source',
+        maxzoom: 15,
+        paint: {
+          // Increase the heatmap weight based on frequency
+          'heatmap-weight': 1,
+
+          // Increase the heatmap intensity by zoom level
+          'heatmap-intensity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 1,
+            15, 3
+          ],
+
+          // Beautiful light-theme friendly heat gradient starting with brand colors
+          'heatmap-color': [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0, 'rgba(0, 0, 0, 0)',
+            0.2, '#99f6e4', // teal-200
+            0.4, '#10b981', // emerald-500 (brand primary)
+            0.6, '#fbbf24', // amber-400
+            0.8, '#f97316', // orange-500
+            1, '#ef4444'    // red-500
+          ],
+
+          // Adjust the heatmap radius by zoom level
+          'heatmap-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 20,   // Large radius to show continent-wide hotspots
+            3, 16,   // Still broad for regions
+            6, 12,   // Country level
+            10, 24,  // State level
+            15, 40   // City level
+          ],
+
+          // Transition from heatmap to circle layer by zoom level
+          'heatmap-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            10, 1,
+            15, 0.3
+          ]
+        }
+      });
+
+      // 1.5 Highlight Area Border for Cities (Green boundary covering the city area)
+      map.addLayer({
+        id: 'alumni-city-area',
+        type: 'circle',
+        source: 'alumni-area-source',
+        minzoom: 8,
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 30,
+            10, 100
+          ],
+          'circle-color': 'rgba(16, 185, 129, 0.06)', // Very faint green fill
+          'circle-stroke-color': '#10b981', // Solid Green Border
+          'circle-stroke-width': 2,
+          'circle-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 0,
+            9, 1
+          ],
+          'circle-stroke-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 0,
+            9, 1
+          ]
+        }
+      });
+
+      // 2. Point layer for higher zoom levels
+      map.addLayer({
+        id: 'alumni-point',
+        type: 'circle',
+        source: 'alumni-source',
+        minzoom: 8,
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 3,
+            15, 8
+          ],
+          'circle-color': '#10b981', // emerald-500
+          'circle-stroke-color': '#ffffff',
+          'circle-stroke-width': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 0,
+            12, 2
+          ],
+          'circle-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 0,
+            12, 1
+          ],
+          'circle-stroke-opacity': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            8, 0,
+            12, 1
+          ]
+        }
+      });
+
+      // 3. Invisible interactive layer for hovering across all zoom levels
+      map.addLayer({
+        id: 'alumni-interactive',
+        type: 'circle',
+        source: 'alumni-source',
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['zoom'],
+            0, 12,
+            15, 24
+          ],
+          'circle-color': 'rgba(0,0,0,0)', // Completely transparent
+          'circle-stroke-width': 0
+        }
+      });
+
+      // Click to zoom in and open detailed window
+      map.on('click', 'alumni-interactive', (e) => {
+        if (!e.features || e.features.length === 0) return;
+        const coordinates = (e.features[0].geometry as any).coordinates.slice();
+
+        while (Math.abs(e.lngLat.lng - coordinates[0]) > 180) {
+          coordinates[0] += e.lngLat.lng > coordinates[0] ? 360 : -360;
+        }
+
+        const currentZoom = map.getZoom();
+        const clickedProp = e.features[0].properties;
+        
+        if (currentZoom < 4) {
+          // Clicked at World view -> Auto-fit to the Country
+          const country = clickedProp?.country;
+          if (country) {
+            const groupAlumni = dataRef.current.filter(a => a.current_country === country || a.location_label?.includes(country));
+            if (groupAlumni.length > 0) {
+              let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+              groupAlumni.forEach(a => {
+                if (a.longitude < minLng) minLng = a.longitude;
+                if (a.longitude > maxLng) maxLng = a.longitude;
+                if (a.latitude < minLat) minLat = a.latitude;
+                if (a.latitude > maxLat) maxLat = a.latitude;
+              });
+              if (minLng !== maxLng || minLat !== maxLat) {
+                map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 50, maxZoom: 5.5, duration: 800 });
+              } else {
+                map.easeTo({ center: coordinates, zoom: 5.5, duration: 800 });
+              }
+            }
+          }
+          return;
+        } else if (currentZoom < 6) {
+          // Clicked at Country view -> Auto-fit to the State
+          const state = clickedProp?.state;
+          if (state) {
+            const groupAlumni = dataRef.current.filter(a => a.current_state === state || a.location_label?.includes(state));
+            if (groupAlumni.length > 0) {
+              let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+              groupAlumni.forEach(a => {
+                if (a.longitude < minLng) minLng = a.longitude;
+                if (a.longitude > maxLng) maxLng = a.longitude;
+                if (a.latitude < minLat) minLat = a.latitude;
+                if (a.latitude > maxLat) maxLat = a.latitude;
+              });
+              if (minLng !== maxLng || minLat !== maxLat) {
+                map.fitBounds([[minLng, minLat], [maxLng, maxLat]], { padding: 50, maxZoom: 7.5, duration: 800 });
+              } else {
+                map.easeTo({ center: coordinates, zoom: 7.5, duration: 800 });
+              }
+            }
+          }
+          return;
+        }
+
+        // If we are here, we click at City level
+        map.easeTo({
+          center: coordinates,
+          zoom: 8,
+          duration: 800
+        });
+
+        // ONLY open the detailed location popup if we are already zoomed in near the city level
+        if (currentZoom < 7.5) {
+          return;
+        }
+
+        // Query all features at the clicked point
+        const rawFeatures = map.queryRenderedFeatures(e.point, { layers: ['alumni-interactive'] });
+        
+        // Filter out overlapping nearby cities by strictly matching the exact coordinates of the clicked pin
+        const features = rawFeatures.filter(f => {
+          const coords = (f.geometry as any).coordinates;
+          return coords[0] === coordinates[0] && coords[1] === coordinates[1];
+        });
+
+        const labelCounts = new Map<string, number>();
+        let totalCount = 0;
+
+        features.forEach(f => {
+          const label = f.properties?.label || 'Unknown Location';
+          labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
+          totalCount++;
+        });
+
+        const sortedLabels = Array.from(labelCounts.entries()).sort((a, b) => b[1] - a[1]);
+        const labelsHtml = sortedLabels.map(([name, count]) => `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; gap: 16px; align-items: center; padding: 8px 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
+            <span style="font-weight: 600; color: #334155; word-break: break-word; font-size: 13px;">${name}</span>
+            <span style="background: #f59e0b; color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-weight: 700; font-size: 11px; box-shadow: 0 2px 4px rgba(245,158,11,0.2);">${count}</span>
+          </div>
+        `).join('');
+
+        const html = `
+          <style>
+            .custom-click-popup .maplibregl-popup-content {
+              border-radius: 16px !important;
+              padding: 16px !important;
+              box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
+              border: 1px solid #e2e8f0;
+            }
+            .custom-click-popup .maplibregl-popup-close-button {
+              font-size: 20px !important;
+              color: #94a3b8 !important;
+              top: 10px !important;
+              right: 10px !important;
+              padding: 0 !important;
+              width: 28px !important;
+              height: 28px !important;
+              display: flex;
+              align-items: center;
+              justify-content: center;
+              border-radius: 50% !important;
+              background: transparent;
+              transition: all 0.2s ease;
+            }
+            .custom-click-popup .maplibregl-popup-close-button:hover {
+              background-color: #f1f5f9 !important;
+              color: #0f172a !important;
+            }
+          </style>
+          <div style="color: #0f172a; padding: 4px; min-width: 250px; max-width: 300px; font-family: inherit;">
+            <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; padding-right: 24px;">
+              <div style="background: #fffbeb; color: #d97706; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 1px solid #fef3c7;">
+                📍
+              </div>
+              <div>
+                <h3 style="margin: 0;  font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: -0.01em;">Location Details</h3>
+                <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; margin-top: 2px;">${totalCount} ${totalCount === 1 ? 'Alumnus' : 'Alumni'} located here</p>
+              </div>
+            </div>
+            <div style="max-height: 240px; overflow-y: auto; padding-right: 6px;" class="custom-scrollbar">
+              ${labelsHtml}
+            </div>
+          </div>
+        `;
+
+        new maplibregl.Popup({
+          closeButton: true,
+          closeOnClick: true,
+          offset: 15,
+          maxWidth: '320px',
+          className: 'custom-click-popup'
+        })
+          .setLngLat(coordinates)
+          .setHTML(html)
+          .addTo(map);
+      });
+
+      const handleMoveEnd = () => {
+        if (onBoundsChange) {
+          const b = map.getBounds();
+          onBoundsChange({
+            sw: { lng: b.getSouthWest().lng, lat: b.getSouthWest().lat },
+            ne: { lng: b.getNorthEast().lng, lat: b.getNorthEast().lat },
+            zoom: map.getZoom()
+          });
+        }
+      };
+
+      map.on('moveend', handleMoveEnd);
+      map.on('zoomend', handleMoveEnd);
+      handleMoveEnd(); // Initial bounds call
+    });
 
     mapInstanceRef.current = map;
     prevViewVersionRef.current = viewVersion;
@@ -138,461 +428,289 @@ const MapWrapper = ({ filteredData, view, viewVersion, onMarkerClick, onZoomEnd,
     };
   }, []);
 
-  // Sync view ONLY when viewVersion changes (user clicked filter / marker)
-  // This prevents data refreshes from resetting the user's zoom/pan
+  // Update Data Source when data changes
   useEffect(() => {
     const map = mapInstanceRef.current;
     if (!map) return;
-    // Skip if version hasn't changed (i.e. just a data refresh)
+
+    const geojson: GeoJSON.FeatureCollection = {
+      type: 'FeatureCollection',
+      features: data.map(alumnus => ({
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [alumnus.longitude, alumnus.latitude] // MapLibre takes [lng, lat] for GeoJSON
+        },
+        properties: {
+          id: alumnus.id,
+          label: alumnus.location_label || 'Unknown Location',
+          city: alumnus.current_city || '',
+          state: alumnus.current_state || '',
+          country: alumnus.current_country || ''
+        }
+      }))
+    };
+
+    const updateSource = () => {
+      const source = map.getSource('alumni-source') as maplibregl.GeoJSONSource;
+      if (source) {
+        source.setData(geojson);
+      }
+      const areaSource = map.getSource('alumni-area-source') as maplibregl.GeoJSONSource;
+      if (areaSource) {
+        areaSource.setData(geojson);
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      updateSource();
+    } else {
+      map.once('load', updateSource);
+    }
+  }, [data]);
+
+  // Sync camera position ONLY on explicit external actions (e.g., sidebar click, Reset button)
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
     if (viewVersion === prevViewVersionRef.current) return;
     prevViewVersionRef.current = viewVersion;
 
-    map.flyTo({
-      center: [view.center[1], view.center[0]],
-      zoom: view.zoom,
-      speed: 1.2
-    });
+    if (view.bounds) {
+      map.fitBounds(view.bounds, { padding: 50, maxZoom: 10, speed: 1.2 });
+    } else {
+      map.flyTo({
+        center: view.center,
+        zoom: view.zoom,
+        speed: 1.2
+      });
+    }
   }, [viewVersion]);
-
-  // Sync Markers — only updates markers, never moves the camera
-  useEffect(() => {
-    const map = mapInstanceRef.current;
-    if (!map) return;
-
-    // Clear old markers
-    markersRef.current.forEach(m => m.remove());
-    markersRef.current = [];
-
-    // Add new markers
-    filteredData.forEach(item => {
-      const el = createHeatMarker(item.count);
-
-      // Set anchor to 'bottom' and offset it slightly upwards so it doesn't overlap the city name
-      const marker = new maplibregl.Marker({
-        element: el,
-        anchor: 'bottom',
-        offset: [0, -5] // Push it 5px further up from the bottom anchor
-      })
-        .setLngLat([item.lng, item.lat])
-        .addTo(map);
-
-      el.addEventListener('click', () => {
-        if (onMarkerClick) onMarkerClick(item);
-      });
-
-      // Tooltip on hover
-      const tooltip = document.createElement('div');
-      const subtitleParts: string[] = [];
-      if (item.state && item.state !== item.name) subtitleParts.push(item.state);
-      if (item.country && item.country !== item.name && item.country !== item.state) subtitleParts.push(item.country);
-      const subtitle = subtitleParts.join(', ');
-
-      tooltip.innerHTML = `
-        <div style="font-weight: 800; color: #1e293b; font-size: 13px;">${item.name}</div>
-        ${subtitle ? `<div style="color: #94a3b8; font-size: 10px; margin-top: 1px;">${subtitle}</div>` : ''}
-        <div style="background: #f8fafc; margin-top: 4px; padding: 4px 8px; border-radius: 4px; border: 1px solid #e2e8f0; display: flex; justify-content: space-between; align-items: center;">
-          <span style="font-weight: 700; color: #f59e0b; font-size: 14px;">${item.count}</span>
-          <span style="color: #64748b; margin-left: 10px; font-size: 10px; text-transform: uppercase;">Alumni</span>
-        </div>
-      `;
-      tooltip.style.position = 'absolute';
-      tooltip.style.bottom = '100%';
-      tooltip.style.left = '50%';
-      tooltip.style.transform = 'translate(-50%, -15px)';
-      tooltip.style.backgroundColor = 'white';
-      tooltip.style.padding = '8px';
-      tooltip.style.minWidth = '120px';
-      tooltip.style.borderRadius = '8px';
-      tooltip.style.boxShadow = '0 4px 15px rgba(0,0,0,0.15)';
-      tooltip.style.opacity = '0';
-      tooltip.style.pointerEvents = 'none';
-      tooltip.style.transition = 'opacity 0.2s, transform 0.2s';
-      tooltip.style.zIndex = '1000';
-
-      el.appendChild(tooltip);
-
-      el.addEventListener('mouseenter', () => {
-        tooltip.style.opacity = '1';
-        tooltip.style.transform = 'translate(-50%, -20px)';
-      });
-      el.addEventListener('mouseleave', () => {
-        tooltip.style.opacity = '0';
-        tooltip.style.transform = 'translate(-50%, -15px)';
-      });
-
-      markersRef.current.push(marker);
-    });
-  }, [filteredData]);
 
   return <div ref={containerRef} className="w-full h-full rounded-2xl" />;
 };
 
 export default function AlumniHeatMap() {
   const [alumniData, setAlumniData] = useState<AlumniData[]>([]);
-  const [processedMapData, setProcessedMapData] = useState<{
-    cities: any[],
-    states: any[],
-    countries: any[]
-  }>({ cities: [], states: [], countries: [] });
-
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [currentZoom, setCurrentZoom] = useState(2.0);
-  const [mapBounds, setMapBounds] = useState<{ sw: { lng: number, lat: number }, ne: { lng: number, lat: number } } | null>(null);
-  const [mapCenter, setMapCenter] = useState<{ lat: number, lng: number } | null>(null);
-  const [currentAreaName, setCurrentAreaName] = useState<string | null>(null);
 
-  // Instead of derived map view, we use direct state for flying to locations
-  const [mapView, setMapView] = useState<{ center: [number, number], zoom: number }>({ center: [20, 5], zoom: 1.5 });
+  const [mapBounds, setMapBounds] = useState<{ sw: { lng: number, lat: number }, ne: { lng: number, lat: number }, zoom: number } | null>(null);
+  const [mapView, setMapView] = useState<{ center: [number, number], zoom: number, bounds?: [[number, number], [number, number]] }>({ center: [0, 20], zoom: 1 });
   const [viewVersion, setViewVersion] = useState(0);
 
   const hasLoadedOnce = useRef(false);
 
-  // helper to check if a lat/lng is within map bounds
-  const isInBounds = useCallback((lat: number, lng: number) => {
-    if (!mapBounds) return true;
-
-    const { sw, ne } = mapBounds;
-    const inLat = lat >= sw.lat && lat <= ne.lat;
-    if (!inLat) return false;
-
-    let inLng = false;
-    // MapLibre bounds might have sw.lng < -180 or ne.lng > 180 when zoomed out
-    for (let offset = -360; offset <= 360; offset += 360) {
-      const adjustedLng = lng + offset;
-      if (adjustedLng >= sw.lng && adjustedLng <= ne.lng) {
-        inLng = true;
-        break;
-      }
-    }
-
-    return inLng;
-  }, [mapBounds]);
-
-  // Determine levels based strictly on zoom so manual zooming works dynamically
-  const currentLevel = useMemo(() => {
-    if (currentZoom >= 6.5) return 'city';
-    if (currentZoom >= 3.5) return 'state';
-    return 'country';
-  }, [currentZoom]);
-
-  // Reverse geocoding for empty areas
-  useEffect(() => {
-    if (!mapCenter) return;
-
-    const timer = setTimeout(async () => {
-      try {
-        let zoomParam = 3;
-        if (currentLevel === 'state') zoomParam = 8;
-        if (currentLevel === 'city') zoomParam = 12;
-
-        const res = await fetch(`https://nominatim.openstreetmap.org/reverse?format=json&lat=${mapCenter.lat}&lon=${mapCenter.lng}&zoom=${zoomParam}`);
-        const data = await res.json();
-
-        if (data && data.address) {
-          const { country, state, city, town, village, county } = data.address;
-          if (currentLevel === 'country') {
-            setCurrentAreaName(country || 'Unknown Region');
-          } else if (currentLevel === 'state') {
-            setCurrentAreaName(state || country || 'Unknown Region');
-          } else {
-            setCurrentAreaName(city || town || village || county || state || country || 'Unknown Location');
-          }
-        } else {
-          setCurrentAreaName(currentLevel === 'country' ? 'Ocean / Unmapped' : 'Unknown Location');
-        }
-      } catch (err) {
-        console.error('Geocoding error:', err);
-      }
-    }, 800);
-
-    return () => clearTimeout(timer);
-  }, [mapCenter, currentLevel]);
-
-  // Determine what markers to show (GLOBALLY based on zoom level)
-  const finalDisplayData = useMemo(() => {
-    let data: any[] = [];
-    if (currentLevel === 'country') {
-      data = processedMapData.countries.map(c => ({
-        ...c, name: c.country, type: 'country', id: c.country
-      }));
-    } else if (currentLevel === 'state') {
-      data = processedMapData.states.map(s => {
-        const sample = processedMapData.cities.find(c => c.state === s.state);
-        return {
-          ...s, name: s.state, type: 'state', id: s.state,
-          country: sample?.country || 'Unknown'
-        };
-      });
-    } else {
-      data = processedMapData.cities.map(c => ({
-        ...c, name: c.city, type: 'city', id: c.city
-      }));
-    }
-
-    // Apply minimal Jitter to prevent overlap for markers at the very close coordinates
-    // Using 0.002 degrees (~200 meters) instead of 0.15 degrees (~16.6 km)
-    const coordinateGroups = new Map<string, any[]>();
-
-    return data.map(item => {
-      const key = `${item.lat.toFixed(3)},${item.lng.toFixed(3)}`;
-
-      if (!coordinateGroups.has(key)) {
-        coordinateGroups.set(key, []);
-      }
-
-      const group = coordinateGroups.get(key)!;
-      const indexInGroup = group.length;
-      group.push(item);
-
-      if (indexInGroup === 0) return item;
-
-      const angle = (indexInGroup * (2 * Math.PI)) / 6;
-      const radius = 0.002 * Math.sqrt(indexInGroup);
-
-      return {
-        ...item,
-        lat: item.lat + radius * Math.sin(angle),
-        lng: item.lng + radius * Math.cos(angle)
-      };
-    });
-  }, [processedMapData, currentLevel]);
-
-  // Find the active area based on markers currently inside the bounds
-  const activeArea = useMemo(() => {
-    if (!mapBounds) return { country: null, state: null };
-
-    // Get all cities that are in bounds, because cities have country and state info
-    const citiesInBounds = processedMapData.cities.filter(c => isInBounds(c.lat, c.lng));
-
-    if (citiesInBounds.length === 0) return { country: null, state: null };
-
-    const countryCounts: Record<string, number> = {};
-    const stateCounts: Record<string, number> = {};
-
-    citiesInBounds.forEach(c => {
-      if (c.country) countryCounts[c.country] = (countryCounts[c.country] || 0) + c.count;
-      if (c.state) stateCounts[c.state] = (stateCounts[c.state] || 0) + c.count;
-    });
-
-    const topCountry = Object.entries(countryCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-    const topState = Object.entries(stateCounts).sort((a, b) => b[1] - a[1])[0]?.[0] || null;
-
-    return { country: topCountry, state: topState };
-  }, [mapBounds, processedMapData.cities, isInBounds]);
-
-  // Determine items for the sidebar hierarchically based on the active area ONLY
-  const sidebarItems = useMemo(() => {
-    let items: any[] = [];
-
-    const targetCountry = activeArea.country;
-    const targetState = activeArea.state;
-
-    if (currentLevel === 'country') {
-      // 1. Show ALL countries
-      items = processedMapData.countries.map(c => ({
-        ...c, name: c.country, type: 'country', id: c.country
-      }));
-    } else if (currentLevel === 'state') {
-      // 2. Show states of the Active Country
-      if (!targetCountry) return []; // Empty area
-
-      let states = processedMapData.states;
-      states = states.filter(s => {
-        const sample = processedMapData.cities.find(c => c.state === s.state);
-        return sample?.country === targetCountry;
-      });
-
-      items = states.map(s => ({
-        ...s, name: s.state, type: 'state', id: s.state,
-        country: targetCountry
-      }));
-    } else {
-      // 3. Show cities of the Active State (or Country)
-      if (!targetState && !targetCountry) return []; // Empty area
-
-      let cities = processedMapData.cities;
-      if (targetState) {
-        cities = cities.filter(c => c.state === targetState);
-      } else if (targetCountry) {
-        cities = cities.filter(c => c.country === targetCountry);
-      }
-
-      items = cities.map(c => ({
-        ...c, name: c.city, type: 'city', id: c.city,
-        country: c.country, state: c.state
-      }));
-    }
-
-    return items.sort((a, b) => b.count - a.count);
-  }, [processedMapData, currentLevel, activeArea]);
-
-  // Determine dynamic top badge text based on active area
-  const topBadgeText = useMemo(() => {
-    if (sidebarItems.length === 0) {
-      if (currentAreaName === 'Ocean / Unmapped') return 'Ocean / Unmapped';
-      return currentAreaName ? `Inside ${currentAreaName}` : 'Locating...';
-    }
-
-    if (currentLevel === 'country') {
-      return 'Global Reach';
-    } else if (currentLevel === 'state') {
-      return activeArea.country ? `Inside ${activeArea.country}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Regional View');
-    } else {
-      return activeArea.state ? `Inside ${activeArea.state}` : (currentAreaName ? `Inside ${currentAreaName}` : 'Local View');
-    }
-  }, [currentLevel, sidebarItems.length, currentAreaName, activeArea]);
-
-  // Fetch data — silent refresh (no loading spinner after initial load)
   const fetchData = useCallback(async (isInitial = false) => {
     try {
-      // Only show loading spinner on very first load
       if (isInitial) setLoading(true);
-
-      const res = await fetch('/api/alumni-map/map-data', {
-        cache: 'no-store',
-        headers: { 'Pragma': 'no-cache' }
-      });
+      const res = await fetch('/api/alumni-map/map-data', { cache: 'no-store' });
       const data = await res.json();
-
-      const freshAlumni = data.alumni || [];
-      setAlumniData(freshAlumni);
-
-      if (freshAlumni.length === 0) {
-        setProcessedMapData({ cities: [], states: [], countries: [] });
-      } else if (data.processed) {
-        setProcessedMapData(data.processed);
+      const loadedAlumni = data.alumni || [];
+      setAlumniData(loadedAlumni);
+      
+      // Auto-fit to show all alumni on the globe on first load
+      if (isInitial && loadedAlumni.length > 0) {
+        let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+        loadedAlumni.forEach((a: any) => {
+          if (a.longitude < minLng) minLng = a.longitude;
+          if (a.longitude > maxLng) maxLng = a.longitude;
+          if (a.latitude < minLat) minLat = a.latitude;
+          if (a.latitude > maxLat) maxLat = a.latitude;
+        });
+        if (minLng !== maxLng || minLat !== maxLat) {
+          setMapView({
+            center: [(minLng + maxLng) / 2 as number, (minLat + maxLat) / 2 as number],
+            zoom: 1,
+            bounds: [[minLng, minLat], [maxLng, maxLat]]
+          });
+          setViewVersion(v => v + 1);
+        }
       }
-
+      
       hasLoadedOnce.current = true;
     } catch (err) {
-      // Only show error on initial load
-      if (!hasLoadedOnce.current) {
-        setError(err instanceof Error ? err.message : 'Error loading map');
-      }
-      console.error('[Alumni Map] Refresh error:', err);
+      if (!hasLoadedOnce.current) setError('Error loading map');
+      console.error('[Alumni Map] error:', err);
     } finally {
       setLoading(false);
     }
   }, []);
 
-  // Initial load
-  useEffect(() => {
-    fetchData(true);
-  }, [fetchData]);
+  useEffect(() => { fetchData(true); }, [fetchData]);
 
-  // Real-time subscription — silent refresh only (no zoom reset)
+  // Realtime updates
   useEffect(() => {
     const channel = supabase
       .channel('alumni-map-changes')
-      .on(
-        'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'alumni'
-        },
-        () => {
-          console.log('[Real-time] Alumni data changed, silently refreshing markers...');
-          fetchData(false);
-        }
-      )
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alumni' }, () => fetchData(false))
       .subscribe();
-
-    // Polling fallback every 5 minutes instead of 30s
-    // (realtime handles most cases, this is just for TRUNCATE/bulk ops)
-    const pollInterval = setInterval(() => {
-      fetchData(false);
-    }, 300000);
-
-    return () => {
-      supabase.removeChannel(channel);
-      clearInterval(pollInterval);
-    };
+    return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
 
-  // Handlers for flying to locations when clicking in sidebar
-  const handleSelectCountry = useCallback((id: string) => {
-    const data = processedMapData.countries.find(c => c.country === id);
-    if (data) {
-      setMapView({ center: [data.lat, data.lng], zoom: 4.5 });
-      setViewVersion(v => v + 1);
-    }
-  }, [processedMapData.countries]);
+  // Determine sidebar items hierarchically based on map zoom
+  const sidebarItems = useMemo(() => {
+    if (!mapBounds) return [];
 
-  const handleSelectState = useCallback((id: string) => {
-    const data = processedMapData.states.find(s => s.state === id);
-    if (data) {
-      setMapView({ center: [data.lat, data.lng], zoom: 7 });
-      setViewVersion(v => v + 1);
-    }
-  }, [processedMapData.states]);
+    // Filter alumni inside bounds
+    const visible = alumniData.filter(a => {
+      let lng = a.longitude;
+      while (lng < mapBounds.sw.lng) lng += 360;
+      while (lng > mapBounds.ne.lng) lng -= 360;
+      return a.latitude >= mapBounds.sw.lat && a.latitude <= mapBounds.ne.lat &&
+        lng >= mapBounds.sw.lng && lng <= mapBounds.ne.lng;
+    });
 
-  const handleSelectCity = useCallback((id: string) => {
-    const data = processedMapData.cities.find(c => c.city === id);
-    if (data) {
-      setMapView({ center: [data.lat, data.lng], zoom: 12 });
-      setViewVersion(v => v + 1);
-    }
-  }, [processedMapData.cities]);
+    const groups = new Map<string, { label: string, count: number, lat: number, lng: number }>();
+
+    // Determine grouping level
+    const z = mapBounds.zoom;
+    const isCountryLevel = z < 4;
+    const isStateLevel = z >= 4 && z < 7;
+    // Otherwise City level
+
+    visible.forEach(a => {
+      let label = '';
+
+      if (isCountryLevel) {
+        label = a.current_country || (a.location_label ? a.location_label.split(',').pop()?.trim() || '' : '') || 'Unknown Country';
+      } else if (isStateLevel) {
+        label = a.current_state || 'Unknown State';
+        if (label === 'Unknown State' && a.location_label) {
+          const parts = a.location_label.split(',');
+          if (parts.length >= 2) label = parts[parts.length - 2].trim();
+        }
+      } else {
+        label = a.location_label || 'Unknown Location';
+      }
+
+      if (!label) label = 'Unknown Area';
+
+      if (!groups.has(label)) {
+        groups.set(label, { label, count: 0, lat: a.latitude, lng: a.longitude });
+      }
+      groups.get(label)!.count++;
+    });
+
+    return Array.from(groups.values()).sort((a, b) => b.count - a.count);
+  }, [alumniData, mapBounds]);
 
   if (loading) return (
     <div className="flex flex-col items-center justify-center h-[600px] space-y-4">
       <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      <p className="text-muted-foreground animate-pulse">Loading Alumni Map...</p>
+      <p className="text-muted-foreground animate-pulse">Loading Map...</p>
     </div>
   );
 
   if (error) return <Card className="p-6 text-center text-destructive m-4">Error: {error}</Card>;
 
   return (
-    <div className="p-4 space-y-6">
+    <div className="p-2 md:p-4 space-y-6 w-full max-w-6xl mx-auto">
       <Card className="border-none shadow-2xl overflow-hidden rounded-2xl bg-card">
-        <CardContent className="p-0 flex flex-col-reverse lg:flex-row h-[800px]">
+        <CardContent className="p-0 flex flex-col-reverse lg:flex-row w-full h-[85vh] lg:h-[550px] min-h-[500px]">
 
-          {/* Sidebar Directory */}
-          <div className="w-full lg:w-[350px] border-r border-border bg-muted/10 flex flex-col h-[350px] lg:h-full overflow-hidden shrink-0">
+          {/* Sidebar */}
+          <div className="w-full lg:w-[350px] xl:w-[380px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0">
             <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <Globe className="w-5 h-5 text-primary" /> Alumni Directory
+                <Globe className="w-5 h-5 text-primary" /> Directory
               </h3>
               <Button variant="ghost" size="sm" onClick={() => {
-                setMapView({ center: [20, 5], zoom: 1.5 });
-                setViewVersion(v => v + 1);
-              }}>
-                Reset Map
-              </Button>
+                if (alumniData.length > 0) {
+                  let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+                  alumniData.forEach(a => {
+                    if (a.longitude < minLng) minLng = a.longitude;
+                    if (a.longitude > maxLng) maxLng = a.longitude;
+                    if (a.latitude < minLat) minLat = a.latitude;
+                    if (a.latitude > maxLat) maxLat = a.latitude;
+                  });
+                  if (minLng !== maxLng || minLat !== maxLat) {
+                    setMapView({
+                      center: [(minLng + maxLng) / 2 as number, (minLat + maxLat) / 2 as number],
+                      zoom: 1,
+                      bounds: [[minLng, minLat], [maxLng, maxLat]]
+                    });
+                    setViewVersion(v => v + 1);
+                  }
+                } else {
+                  setMapView({ center: [0, 20], zoom: 1 });
+                  setViewVersion(v => v + 1);
+                }
+              }}>Reset</Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <div className="mb-4">
-                <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-2">
-                  {currentLevel === 'country' ? 'Global Reach' : (currentLevel === 'state' ? `States in View` : 'Cities in View')}
-                </p>
-                <p className="text-xs text-muted-foreground">Zoom map to drill down automatically.</p>
-              </div>
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+                {mapBounds && mapBounds.zoom < 4 ? 'Countries in View' : (mapBounds && mapBounds.zoom < 7 ? 'States / Regions in View' : 'Cities / Locations in View')}
+              </p>
+              {sidebarItems.length > 0 ? sidebarItems.map(item => (
+                <div key={item.label}
+                  className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm border-border/50"
+                  onClick={() => {
+                    const z = mapBounds ? mapBounds.zoom : 1;
+                    const isCountryLevel = z < 4;
+                    const isStateLevel = z >= 4 && z < 7;
 
-              {sidebarItems.length > 0 ? (
-                sidebarItems.map(item => (
-                  <div key={item.id}
-                    className={`flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm border-border/50 hover:border-border`}
-                    onClick={() => {
-                      if (item.type === 'country') handleSelectCountry(item.id);
-                      else if (item.type === 'state') handleSelectState(item.id);
-                      else if (item.type === 'city') handleSelectCity(item.id);
-                    }}>
-                    <div className="flex flex-col">
-                      <span className="font-medium">{item.name}</span>
-                      {item.type === 'state' && <span className="text-[10px] text-muted-foreground uppercase">{item.country}</span>}
-                      {item.type === 'city' && <span className="text-[10px] text-muted-foreground uppercase">{item.state}</span>}
-                    </div>
-                    <Badge variant="secondary" className="bg-primary/10 text-primary">{item.count} Alumni</Badge>
+                    // Find all alumni matching this exact group label
+                    const groupAlumni = alumniData.filter(a => {
+                      if (isCountryLevel) {
+                        const country = a.current_country || (a.location_label ? a.location_label.split(',').pop()?.trim() || '' : '') || 'Unknown Country';
+                        return country === item.label;
+                      } else if (isStateLevel) {
+                        let st = a.current_state || 'Unknown State';
+                        if (st === 'Unknown State' && a.location_label) {
+                          const parts = a.location_label.split(',');
+                          if (parts.length >= 2) st = parts[parts.length - 2].trim();
+                        }
+                        return st === item.label;
+                      } else {
+                        return (a.location_label || 'Unknown Location') === item.label;
+                      }
+                    });
+
+                    if (groupAlumni.length > 0) {
+                      let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+                      groupAlumni.forEach(a => {
+                        if (a.longitude < minLng) minLng = a.longitude;
+                        if (a.longitude > maxLng) maxLng = a.longitude;
+                        if (a.latitude < minLat) minLat = a.latitude;
+                        if (a.latitude > maxLat) maxLat = a.latitude;
+                      });
+
+                      // If only 1 point or all points are identical
+                      if (minLng === maxLng && minLat === maxLat) {
+                        let targetZoom = 10;
+                        if (isCountryLevel) targetZoom = 5;
+                        else if (isStateLevel) targetZoom = 8;
+                        setMapView({ center: [minLng, minLat], zoom: targetZoom });
+                      } else {
+                        setMapView({
+                          center: [(minLng + maxLng) / 2, (minLat + maxLat) / 2],
+                          zoom: 12,
+                          bounds: [[minLng, minLat], [maxLng, maxLat]]
+                        });
+                      }
+                      setViewVersion(v => v + 1);
+                    }
+                  }}>
+                  <div className="flex-1 min-w-0 pr-3">
+                    <span className="font-medium text-sm block truncate" title={item.label}>
+                      {item.label.split(',')[0]}
+                    </span>
+                    {item.label.includes(',') && (
+                      <span className="text-xs text-muted-foreground block truncate" title={item.label}>
+                        {item.label.substring(item.label.indexOf(',') + 1).trim()}
+                      </span>
+                    )}
                   </div>
-                ))
-              ) : (
+                  <Badge variant="secondary" className="bg-primary/10 text-primary whitespace-nowrap shrink-0">
+                    {item.count} Alumni
+                  </Badge>
+                </div>
+              )) : (
                 <div className="p-6 mt-4 text-center border border-dashed border-border rounded-xl bg-muted/30">
                   <MapPin className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-foreground">No Alumni Found Here</p>
+                  <p className="text-sm font-medium text-foreground">No Alumni in View</p>
                   <p className="text-xs text-muted-foreground mt-1">Try zooming out or panning to a different location.</p>
                 </div>
               )}
@@ -600,53 +718,32 @@ export default function AlumniHeatMap() {
           </div>
 
           {/* Map Area */}
-          <div className="relative flex-1 h-[500px] lg:h-full overflow-hidden">
+          <div className="relative w-full h-[55%] lg:h-full flex-1 overflow-hidden">
             <MapWrapper
-              filteredData={finalDisplayData}
+              data={alumniData}
               view={mapView}
               viewVersion={viewVersion}
-              onZoomEnd={setCurrentZoom}
-              onBoundsChange={(bounds, center) => {
-                setMapBounds(bounds);
-                setMapCenter(center);
-              }}
-              onMarkerClick={(item) => {
-                if (item.type === 'country') handleSelectCountry(item.id);
-                else if (item.type === 'state') handleSelectState(item.id);
-                else if (item.type === 'city') handleSelectCity(item.id);
-              }}
+              onBoundsChange={setMapBounds}
             />
 
-            {/* Float Legend */}
-            <div className="absolute bottom-8 left-8 z-10 bg-background/90 backdrop-blur p-5 rounded-2xl border border-border/50 shadow-2xl">
-              <h4 className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground mb-4">Concentration Map</h4>
-              <div className="space-y-2">
+            {/* Legend - Compact dots on Mobile, Full on Desktop */}
+            <div className="absolute bottom-3 right-3 lg:bottom-8 lg:left-8 lg:right-auto z-10 bg-background/90 backdrop-blur-sm px-2.5 py-1.5 lg:p-5 rounded-full lg:rounded-2xl border border-border/50 shadow-md lg:shadow-xl">
+              <h4 className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground mb-4 hidden lg:block">Heatmap Density</h4>
+              <div className="flex flex-row lg:flex-col gap-1.5 lg:gap-2 items-center lg:items-start">
                 {[
-                  { label: '1 Alumnus', color: '#fbbf24' },
-                  { label: '2-10 Alumni', color: '#f59e0b' },
-                  { label: '10-25 Alumni', color: '#d97706' },
-                  { label: '25-50 Alumni', color: '#b45309' },
-                  { label: '50+ Alumni', color: '#78350f' }
+                  { label: 'Highest Density', color: '#ef4444' },
+                  { label: 'High Density', color: '#f97316' },
+                  { label: 'Medium Density', color: '#fbbf24' },
+                  { label: 'Low Density', color: '#10b981' },
+                  { label: 'Lowest Density', color: '#99f6e4' }
                 ].map(row => (
-                  <div key={row.label} className="flex items-center gap-3">
-                    <div className="w-3 h-3 rounded-full" style={{ background: row.color }}></div>
-                    <span className="text-[11px] font-bold text-foreground">{row.label}</span>
+                  <div key={row.label} className="flex items-center gap-3 shrink-0">
+                    <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full shrink-0" style={{ background: row.color, boxShadow: `0 0 6px ${row.color}` }}></div>
+                    <span className="text-[11px] font-bold text-foreground whitespace-nowrap hidden lg:inline">{row.label}</span>
                   </div>
                 ))}
               </div>
             </div>
-
-            {/* Header Overlay - Commented out as requested */}
-            {/* 
-            <div className="absolute top-8 left-8 z-10 pointer-events-none">
-              <Badge variant="outline" className="bg-background/90 backdrop-blur py-2 px-4 shadow-xl border-amber-500/20">
-                <Users className="w-4 h-4 mr-2 text-amber-500" />
-                <span className="text-sm font-black uppercase tracking-widest text-foreground">
-                  {topBadgeText}
-                </span>
-              </Badge>
-            </div>
-            */}
           </div>
         </CardContent>
       </Card>

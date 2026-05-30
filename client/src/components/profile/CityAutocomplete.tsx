@@ -57,19 +57,17 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
 
     setIsSearching(true);
     try {
-      // Using Photon API (by Komoot) - Built on OpenStreetMap for Autocomplete
-      // This guarantees coordinates match the base map EXACTLY, but gives much better suggestions than Nominatim.
+      // Use Photon API for fuzzy search (handles typos like "jalgoan", "dharngoan")
+      // It is much more tolerant than Nominatim for long unstructured addresses
       const params = new URLSearchParams({
         q: text,
-        limit: '10',
+        limit: '15',
         lang: 'en'
       });
 
       const res = await fetch(
         `https://photon.komoot.io/api/?${params.toString()}`,
-        {
-          signal: abortRef.current.signal
-        }
+        { signal: abortRef.current.signal }
       );
 
       if (!res.ok) {
@@ -79,33 +77,41 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
 
       const data = await res.json();
 
-      if (data.features) {
-        // Filter and deduplicate
-        const seenNames = new Set<string>();
+      if (data.features && data.features.length > 0) {
         const uniqueSuggestions = [];
+        const seenNames = new Set<string>();
 
         for (const feature of data.features) {
           const props = feature.properties;
+          
+          // Construct a highly detailed hierarchical name from Photon properties
+          const parts = [];
+          if (props.name) parts.push(props.name);
+          
+          // Sometimes name is same as city/town, avoid duplicates
+          const localName = props.village || props.town || props.city || props.locality || props.hamlet;
+          if (localName && localName !== props.name) parts.push(localName);
+          
+          if (props.county && props.county !== localName) parts.push(props.county);
+          if (props.state && props.state !== props.county) parts.push(props.state);
+          if (props.country) parts.push(props.country);
 
-          // Filter out purely commercial places or addresses if we only want cities/villages
-          if (['house', 'building', 'highway'].includes(props.osm_value)) {
-            continue;
-          }
-
-          const place = props.name || props.city || props.town || props.village || '';
-          const state = props.state || '';
-          const country = props.country || '';
-
-          const uniqueKey = `${place}-${state}-${country}`.toLowerCase().trim();
-
-          if (!seenNames.has(uniqueKey) && place) {
+          const fullDisplayName = parts.join(', ');
+          
+          const uniqueKey = fullDisplayName.toLowerCase().trim();
+          if (!seenNames.has(uniqueKey) && parts.length > 1) {
             seenNames.add(uniqueKey);
+            // Attach the constructed display name to the feature for later use
+            feature.display_name = fullDisplayName;
             uniqueSuggestions.push(feature);
           }
         }
 
-        setSuggestions(uniqueSuggestions.slice(0, 7));
+        setSuggestions(uniqueSuggestions.slice(0, 10));
         setShowSuggestions(uniqueSuggestions.length > 0);
+      } else {
+        setSuggestions([]);
+        setShowSuggestions(false);
       }
     } catch (error: any) {
       if (error?.name === 'AbortError') return;
@@ -121,47 +127,38 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
     onCityChange(text);
 
     if (debounceRef.current) clearTimeout(debounceRef.current);
+    // 500ms debounce is fine for Photon
     debounceRef.current = setTimeout(() => {
       fetchSuggestions(text);
-    }, 500);
+    }, 500); 
   };
 
-  const extractLocationParts = (feature: any) => {
-    const props = feature.properties;
-    const place = props.name || props.city || props.town || props.village || props.locality || '';
-    let state = props.state || '';
+  const extractLocationParts = (item: any) => {
+    const props = item.properties || {};
+    
+    // Attempt to extract the most specific local name first
+    const place = props.name || props.village || props.hamlet || props.town || props.city || props.locality || '';
+    const state = props.state || '';
     const country = props.country || '';
-    const district = props.county || props.district || '';
 
-    if (!state) {
-      state = place;
-    }
-
-    return { place, district, state, country };
+    return { place, state, country, full: item.display_name };
   };
 
-  const selectSuggestion = (feature: any) => {
+  const selectSuggestion = (item: any) => {
     isTypingRef.current = false;
-    const { place, state, country, district } = extractLocationParts(feature);
-    const displayCity = place;
-
-    setQuery(displayCity);
+    const { place, state, country, full } = extractLocationParts(item);
+    
+    // We display the full hierarchical name as requested
+    setQuery(full);
     setSuggestions([]);
     setShowSuggestions(false);
 
-    // Photon returns [lon, lat]
-    const lng = feature.geometry.coordinates[0];
-    const lat = feature.geometry.coordinates[1];
+    // Photon uses GeoJSON format: [lng, lat]
+    const lng = parseFloat(item.geometry.coordinates[0]);
+    const lat = parseFloat(item.geometry.coordinates[1]);
 
-    // Create a precise label for backend storage
-    const labelParts = [];
-    if (place) labelParts.push(place);
-    if (district && district !== place) labelParts.push(district);
-    if (state && state !== district && state !== place) labelParts.push(state);
-    if (country) labelParts.push(country);
-    const fullLabel = labelParts.join(', ');
-
-    onLocationSelect(displayCity, state, country, lat, lng, fullLabel);
+    // full variable contains the exact hierarchy: City/Village, Tehsil, District, State, Country
+    onLocationSelect(place, state, country, lat, lng, full);
   };
 
   const clearInput = () => {
@@ -173,25 +170,13 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
     setShowSuggestions(false);
   };
 
-  const formatDisplayParts = (feature: any) => {
-    const { place, district, state, country } = extractLocationParts(feature);
-
-    const primary = place;
-
-    const trailParts = [];
-    if (district && district !== primary) trailParts.push(district);
-    if (state && state !== primary && state !== district) trailParts.push(state);
-    if (country && country !== primary) trailParts.push(country);
-
-    return { primary, trail: trailParts.join(', ') };
-  };
-
-  const getPlaceType = (feature: any): string => {
-    const type = feature.properties.osm_value || '';
+  const getPlaceType = (item: any): string => {
+    const type = item.properties?.osm_value || '';
     if (['city', 'town', 'municipality'].includes(type)) return 'City';
     if (['village', 'hamlet'].includes(type)) return 'Village';
     if (['suburb', 'neighbourhood'].includes(type)) return 'Area';
-    if (['administrative', 'state', 'province'].includes(type)) return 'State/Region';
+    if (['administrative', 'state', 'province'].includes(type)) return 'Region';
+    if (['college', 'university', 'school'].includes(type)) return 'Education';
     return 'Location';
   };
 
@@ -210,7 +195,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
               isTypingRef.current = false;
             }, 300);
           }}
-          placeholder="Search for a city or village (e.g., Pune, Erandol...)"
+          placeholder="Search location (Village, City, State, Country...)"
           disabled={disabled}
           className="pl-9 pr-9 min-h-[44px]"
           autoComplete="off"
@@ -230,12 +215,14 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
       </div>
 
       {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-background rounded-md shadow-lg border border-border max-h-72 overflow-auto">
+        <div className="absolute z-50 w-full mt-1 bg-background rounded-md shadow-lg border border-border max-h-80 overflow-auto">
           {suggestions.map((suggestion, index) => {
-            const { primary, trail } = formatDisplayParts(suggestion);
+            const { place } = extractLocationParts(suggestion);
+            const fullLabel = suggestion.display_name;
+            
             return (
               <div
-                key={`${suggestion.properties?.osm_id || index}`}
+                key={`${suggestion.place_id || index}`}
                 className="px-4 py-3 hover:bg-muted cursor-pointer text-sm border-b border-border last:border-0 flex items-start gap-3"
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -247,16 +234,14 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground truncate">{primary}</span>
+                    <span className="font-semibold text-foreground truncate">{place || suggestion.properties?.name || 'Unknown'}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold shrink-0 uppercase border border-primary/20">
                       {getPlaceType(suggestion)}
                     </span>
                   </div>
-                  {trail && (
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {trail}
-                    </p>
-                  )}
+                  <p className="text-xs text-muted-foreground mt-0.5 whitespace-normal line-clamp-2">
+                    {fullLabel}
+                  </p>
                 </div>
               </div>
             );
