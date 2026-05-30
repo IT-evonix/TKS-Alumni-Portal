@@ -9,7 +9,8 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { socket } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
-import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp } from "lucide-react";
+import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star } from "lucide-react";
+import { GamificationDrawer } from "@/components/GamificationDrawer";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -29,6 +30,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
   const [showMobileMenu, setShowMobileMenu] = React.useState(false);
   const [unreadMessageCount, setUnreadMessageCount] = React.useState(0);
   const [showScrollToTop, setShowScrollToTop] = React.useState(false);
+  const [showGamificationDrawer, setShowGamificationDrawer] = React.useState(false);
   const scrollableContainerRef = React.useRef<HTMLDivElement>(null);
 
   // Use unreadCount from context instead of separate state
@@ -264,6 +266,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     { id: 'job-portal', icon: Briefcase, label: 'Job Portal', path: '/job-portal', roles: ['alumni', 'student', 'faculty'] },
     { id: 'events', icon: Calendar, label: 'Events', path: '/events', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'connections', icon: Users, label: 'Connections', path: '/connections', roles: ['alumni', 'student', 'faculty'] },
+    { id: 'leaderboard', icon: Trophy, label: 'Leaderboard', path: '/leaderboard', roles: ['alumni'] },
     { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', roles: ['alumni', 'student', 'faculty', 'administrator'] },
   ];
 
@@ -412,13 +415,27 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               </div>
             </div>
             <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 lg:gap-3 flex-shrink-0">
+              {/* Gamification Trophy Button */}
+              {user && user.user_role === 'alumni' && (
+                <Button
+                  variant="ghost"
+                  className="relative flex items-center justify-center min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-all duration-300 bg-amber-50 hover:bg-amber-100 hover:scale-105 border border-amber-200 shadow-sm group mr-1 sm:mr-2"
+                  onClick={() => setShowGamificationDrawer(true)}
+                  aria-label="Rewards & Gamification"
+                >
+                  <Star className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 fill-amber-500 drop-shadow-sm animate-[spin_4s_linear_infinite]" strokeWidth={1.5} />
+                  {/* Notification dot */}
+                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white animate-bounce shadow-sm"></span>
+                </Button>
+              )}
+
               <div className="relative">
                 <Button
                   variant="ghost"
                   size="icon"
                   className={`relative min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-colors ${notificationCount > 0
-                      ? "text-[#008060] hover:bg-[#008060]/10 hover:text-[#006b51] ring-2 ring-[#008060]/30"
-                      : "text-gray-600 hover:text-[#008060] hover:bg-gray-100"
+                    ? "text-[#008060] hover:bg-[#008060]/10 hover:text-[#006b51] ring-2 ring-[#008060]/30"
+                    : "text-gray-600 hover:text-[#008060] hover:bg-gray-100"
                     }`}
                   onClick={() => setShowNotifications(!showNotifications)}
                   aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount} unread)` : ''}`}
@@ -481,6 +498,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
           <ArrowUp className="w-5 h-5" />
         </Button>
       )}
+
+      {/* Gamification Drawer */}
+      <GamificationDrawer
+        isOpen={showGamificationDrawer}
+        onClose={() => setShowGamificationDrawer(false)}
+      />
     </div>
   );
 };
