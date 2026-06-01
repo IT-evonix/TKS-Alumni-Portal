@@ -19,16 +19,17 @@ interface AlumniData {
   current_country?: string;
 }
 
-const MapWrapper = ({ data, view, viewVersion, onBoundsChange }: {
+const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
   data: AlumniData[],
   view: { center: [number, number], zoom: number, bounds?: [[number, number], [number, number]] },
   viewVersion: number,
-  onBoundsChange?: (bounds: { sw: { lng: number, lat: number }, ne: { lng: number, lat: number }, zoom: number }) => void
+  onBoundsChange?: (bounds: { sw: { lng: number, lat: number }, ne: { lng: number, lat: number }, zoom: number }) => void,
+  showHeatmap: boolean
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapInstanceRef = useRef<maplibregl.Map | null>(null);
   const prevViewVersionRef = useRef(0);
-  
+
   const dataRef = useRef<AlumniData[]>(data);
   useEffect(() => { dataRef.current = data; }, [data]);
 
@@ -129,11 +130,10 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange }: {
             ['linear'],
             ['heatmap-density'],
             0, 'rgba(0, 0, 0, 0)',
-            0.2, '#99f6e4', // teal-200
-            0.4, '#10b981', // emerald-500 (brand primary)
-            0.6, '#fbbf24', // amber-400
-            0.8, '#f97316', // orange-500
-            1, '#ef4444'    // red-500
+            0.25, '#10b981', // Low density (emerald-500)
+            0.5, '#fbbf24',  // Medium density (amber-400)
+            0.75, '#f97316', // High density (orange-500)
+            1, '#ef4444'     // Highest density (red-500)
           ],
 
           // Adjust the heatmap radius by zoom level
@@ -262,7 +262,7 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange }: {
 
         const currentZoom = map.getZoom();
         const clickedProp = e.features[0].properties;
-        
+
         if (currentZoom < 4) {
           // Clicked at World view -> Auto-fit to the Country
           const country = clickedProp?.country;
@@ -321,7 +321,7 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange }: {
 
         // Query all features at the clicked point
         const rawFeatures = map.queryRenderedFeatures(e.point, { layers: ['alumni-interactive'] });
-        
+
         // Filter out overlapping nearby cities by strictly matching the exact coordinates of the clicked pin
         const features = rawFeatures.filter(f => {
           const coords = (f.geometry as any).coordinates;
@@ -487,6 +487,34 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange }: {
     }
   }, [viewVersion]);
 
+  // Toggle Heatmap Layer Visibility
+  useEffect(() => {
+    const map = mapInstanceRef.current;
+    if (!map) return;
+
+    const layers = ['alumni-heat', 'alumni-city-area', 'alumni-point', 'alumni-interactive'];
+    
+    const updateVisibility = () => {
+      layers.forEach(layerId => {
+        if (map.getLayer(layerId)) {
+          map.setLayoutProperty(layerId, 'visibility', showHeatmap ? 'visible' : 'none');
+        }
+      });
+      if (!showHeatmap) {
+        const popups = document.getElementsByClassName('maplibregl-popup');
+        while (popups[0]) {
+          popups[0].remove();
+        }
+      }
+    };
+
+    if (map.isStyleLoaded()) {
+      updateVisibility();
+    } else {
+      map.once('load', updateVisibility);
+    }
+  }, [showHeatmap]);
+
   return <div ref={containerRef} className="w-full h-full rounded-2xl" />;
 };
 
@@ -494,6 +522,7 @@ export default function AlumniHeatMap() {
   const [alumniData, setAlumniData] = useState<AlumniData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [showHeatmap, setShowHeatmap] = useState(true);
 
   const [mapBounds, setMapBounds] = useState<{ sw: { lng: number, lat: number }, ne: { lng: number, lat: number }, zoom: number } | null>(null);
   const [mapView, setMapView] = useState<{ center: [number, number], zoom: number, bounds?: [[number, number], [number, number]] }>({ center: [0, 20], zoom: 1 });
@@ -508,7 +537,7 @@ export default function AlumniHeatMap() {
       const data = await res.json();
       const loadedAlumni = data.alumni || [];
       setAlumniData(loadedAlumni);
-      
+
       // Auto-fit to show all alumni on the globe on first load
       if (isInitial && loadedAlumni.length > 0) {
         let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
@@ -527,7 +556,7 @@ export default function AlumniHeatMap() {
           setViewVersion(v => v + 1);
         }
       }
-      
+
       hasLoadedOnce.current = true;
     } catch (err) {
       if (!hasLoadedOnce.current) setError('Error loading map');
@@ -724,24 +753,43 @@ export default function AlumniHeatMap() {
               view={mapView}
               viewVersion={viewVersion}
               onBoundsChange={setMapBounds}
+              showHeatmap={showHeatmap}
             />
-
-            {/* Legend - Compact dots on Mobile, Full on Desktop */}
-            <div className="absolute bottom-3 right-3 lg:bottom-8 lg:left-8 lg:right-auto z-10 bg-background/90 backdrop-blur-sm px-2.5 py-1.5 lg:p-5 rounded-full lg:rounded-2xl border border-border/50 shadow-md lg:shadow-xl">
-              <h4 className="text-[10px] font-black uppercase tracking-tighter text-muted-foreground mb-4 hidden lg:block">Heatmap Density</h4>
-              <div className="flex flex-row lg:flex-col gap-1.5 lg:gap-2 items-center lg:items-start">
-                {[
-                  { label: 'Highest Density', color: '#ef4444' },
-                  { label: 'High Density', color: '#f97316' },
-                  { label: 'Medium Density', color: '#fbbf24' },
-                  { label: 'Low Density', color: '#10b981' },
-                  { label: 'Lowest Density', color: '#99f6e4' }
-                ].map(row => (
-                  <div key={row.label} className="flex items-center gap-3 shrink-0">
-                    <div className="w-2.5 h-2.5 lg:w-3 lg:h-3 rounded-full shrink-0" style={{ background: row.color, boxShadow: `0 0 6px ${row.color}` }}></div>
-                    <span className="text-[11px] font-bold text-foreground whitespace-nowrap hidden lg:inline">{row.label}</span>
-                  </div>
-                ))}
+ 
+            {/* Legend - Sleek Gradient Bar */}
+            <div 
+              className={`absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 bg-background/95 backdrop-blur-md px-3 py-2 sm:px-4 sm:py-3 rounded-xl border border-border/50 shadow-lg w-[130px] sm:w-[220px] transition-all duration-300 ${!showHeatmap ? 'opacity-65' : ''}`}
+            >
+              <div 
+                className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 cursor-pointer select-none"
+                onClick={() => setShowHeatmap(!showHeatmap)}
+              >
+                <input 
+                  type="checkbox" 
+                  checked={showHeatmap} 
+                  onChange={() => {}} // Controlled by div click
+                  className="rounded border-border text-primary focus:ring-primary h-3 w-3 sm:h-3.5 sm:w-3.5 cursor-pointer accent-primary"
+                />
+                <h4 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+                  <span className="inline sm:hidden">Density</span>
+                  <span className="hidden sm:inline">Heatmap Density</span>
+                </h4>
+              </div>
+              <div className="space-y-1.5 sm:space-y-2">
+                {/* The gradient bar */}
+                <div 
+                  className="w-full h-1.5 sm:h-2 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] transition-all duration-300" 
+                  style={{ 
+                    background: 'linear-gradient(to right, #10b981, #fbbf24, #f97316, #ef4444)',
+                    filter: showHeatmap ? 'none' : 'grayscale(100%) opacity(30%)'
+                  }} 
+                />
+                {/* Labels beneath the bar */}
+                <div className="flex justify-between items-center text-[8px] sm:text-[10px] font-bold text-muted-foreground px-0.5">
+                  <span>Low</span>
+                  <span className="hidden sm:inline">Medium</span>
+                  <span>High</span>
+                </div>
               </div>
             </div>
           </div>
