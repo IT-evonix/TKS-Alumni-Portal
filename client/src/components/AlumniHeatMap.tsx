@@ -610,7 +610,7 @@ export default function AlumniHeatMap() {
         <CardContent className="p-0 flex flex-col-reverse lg:flex-row w-full h-[85vh] lg:h-[550px] min-h-[500px]">
 
           {/* Sidebar */}
-          <div className="w-full lg:w-[350px] xl:w-[380px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0">
+          <div className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0">
             <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between">
               <h3 className="font-bold text-lg flex items-center gap-2">
                 <Globe className="w-5 h-5 text-primary" /> Directory
