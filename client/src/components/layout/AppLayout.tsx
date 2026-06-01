@@ -9,7 +9,7 @@ import { useNotifications } from "@/contexts/NotificationContext";
 import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { socket } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
-import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star } from "lucide-react";
+import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles } from "lucide-react";
 import { GamificationDrawer } from "@/components/GamificationDrawer";
 
 interface AppLayoutProps {
@@ -423,7 +423,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
                   onClick={() => setShowGamificationDrawer(true)}
                   aria-label="Rewards & Gamification"
                 >
-                  <Star className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 fill-amber-500 drop-shadow-sm animate-[spin_4s_linear_infinite]" strokeWidth={1.5} />
+                  <div className="relative flex items-center justify-center">
+                    <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 fill-amber-500 drop-shadow-md group-hover:animate-[wiggle_1s_ease-in-out_infinite] transition-transform duration-300" strokeWidth={1.5} />
+                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400 absolute -top-1 -right-1 animate-pulse drop-shadow-sm" strokeWidth={2} />
+                  </div>
                   {/* Notification dot */}
                   <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white animate-bounce shadow-sm"></span>
                 </Button>

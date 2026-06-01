@@ -859,6 +859,7 @@ export const userScores = pgTable("user_scores", {
   threadScore: integer("thread_score").default(0),
   eventScore: integer("event_score").default(0),
   connectionScore: integer("connection_score").default(0),
+  jobScore: integer("job_score").default(0),
   currentStreakDays: integer("current_streak_days").default(0),
   highestStreak: integer("highest_streak").default(0),
   lastActiveDate: timestamp("last_active_date"),

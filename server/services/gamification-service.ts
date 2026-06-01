@@ -44,6 +44,8 @@ async function getPointRules(): Promise<Record<string, number>> {
     post_reply: pointRulesCache.post_reply ?? 2,
     feed_create: pointRulesCache.feed_create ?? 5,
     event_rsvp: pointRulesCache.event_rsvp ?? 15,
+    job_post: pointRulesCache.job_post ?? 20,
+
     ...pointRulesCache
   };
 }
@@ -167,6 +169,7 @@ export async function incrementScore(
       thread_score: "thread",
       event_score: "event",
       connection_score: "connection",
+      job_score: "job",
     };
     const seriesType = seriesTypeMap[field];
 
@@ -199,21 +202,24 @@ async function checkCompetitiveBadges(userId: string, seriesType: string, newVal
       return; 
     }
 
-    // Find the competitive badge for this series
-    const { data: competitiveBadge } = await supabase
+    // Find the single competitive badge for this series (the one without fixed tiers)
+    const { data: competitiveBadges } = await supabase
       .from("gamification_badges")
       .select("*")
       .eq("category", "competitive")
       .eq("series_type", seriesType)
       .eq("is_enabled", true)
-      .maybeSingle();
+      .or('required_score.eq.0,required_score.is.null')
+      .limit(1);
 
+    const competitiveBadge = competitiveBadges?.[0];
     if (!competitiveBadge) return;
 
     // Get current top scorers for this field
     const scoreField = seriesType === "thread" ? "thread_score" : 
                        seriesType === "event" ? "event_score" : 
-                       seriesType === "connection" ? "connection_score" : null;
+                       seriesType === "connection" ? "connection_score" : 
+                       seriesType === "job" ? "job_score" : null;
     
     if (!scoreField) return;
 
@@ -359,16 +365,21 @@ async function checkAndAwardSeriesBadges(
   currentScore: number  
 ) {
   try {
-    // Get all enabled series badges for this type, ordered by required_score
+    // Get all enabled series/tiered badges for this type, ordered by required_score
     const { data: badges } = await supabase
       .from("gamification_badges")
-      .select("id, required_score, name")
-      .eq("category", "series")
+      .select("id, required_score, name, category")
+      .in("category", ["series", "competitive", "common"])
       .eq("series_type", seriesType)
       .eq("is_enabled", true)
       .order("required_score", { ascending: true });
 
     if (!badges || badges.length === 0) return;
+
+    // Only process common badges (unconditional) OR badges with a valid required score
+    const validBadges = badges.filter(b => b.category === 'common' || (b.required_score && b.required_score > 0));
+
+    if (validBadges.length === 0) return;
 
     // Get user's already-earned badge IDs
     const badgeIds = badges.map((b) => b.id);
@@ -381,8 +392,12 @@ async function checkAndAwardSeriesBadges(
     const earnedSet = new Set((earnedBadges || []).map((e) => e.badge_id));
 
     // Award any badges that user meets the threshold for but hasn't earned
-    for (const badge of badges) {
-      if (currentScore >= (badge.required_score || 0) && !earnedSet.has(badge.id)) {
+    for (const badge of validBadges) {
+      // Common badges are awarded strictly because the action just occurred.
+      // Series/competitive badges require meeting the score threshold.
+      const meetsRequirement = badge.category === 'common' || currentScore >= (badge.required_score || 0);
+
+      if (meetsRequirement && !earnedSet.has(badge.id)) {
         await supabase.from("user_badges").insert({
           user_id: userId,
           badge_id: badge.id,
@@ -799,8 +814,60 @@ const defaultBadges = [
  * Checks if default badges exist in the database, and inserts them if they don't.
  * Safe to call on application startup against any environment.
  */
+/**
+ * Checks if default point rules exist in the database, and inserts any that are missing.
+ */
+export async function ensureDefaultPointRulesExist() {
+  try {
+    const { data: existing, error: checkErr } = await supabase
+      .from("gamification_point_rules")
+      .select("action_key");
+
+    if (checkErr) {
+      console.warn("[Gamification Auto-Seeder] Error checking existing point rules:", checkErr.message);
+      return;
+    }
+
+    const existingKeys = new Set((existing || []).map(r => r.action_key));
+
+    const defaultRules = [
+      { action_key: "network_connect", points: 5, description: "Points awarded for connecting with another alumni", category: "networking" },
+      { action_key: "thread_create", points: 10, description: "Points awarded for creating a new community thread", category: "community" },
+      { action_key: "post_reply", points: 2, description: "Points awarded for replying to a thread or post", category: "community" },
+      { action_key: "feed_create", points: 5, description: "Points awarded for creating a post on the main feed", category: "community" },
+      { action_key: "event_rsvp", points: 15, description: "Points awarded for RSVPing to an event", category: "events" },
+      { action_key: "job_post", points: 20, description: "Points awarded for posting a new job opportunity", category: "jobs" },
+      { action_key: "job_apply", points: 5, description: "Points awarded for applying to a job opportunity", category: "jobs" }
+    ];
+
+    const toInsert = defaultRules.filter(r => !existingKeys.has(r.action_key));
+    if (toInsert.length > 0) {
+      const { error: insertErr } = await supabase
+        .from("gamification_point_rules")
+        .insert(toInsert);
+
+      if (insertErr) {
+        console.error("[Gamification Auto-Seeder] Error seeding point rules:", insertErr.message);
+        return;
+      }
+      console.log(`[Gamification Auto-Seeder] Successfully seeded ${toInsert.length} default point rules.`);
+    }
+  } catch (err) {
+    console.error("[Gamification Auto-Seeder] Unexpected error in point rules seeder:", err);
+  }
+}
+
+/**
+ * Checks if default badges exist in the database, and inserts them if they don't.
+ * Safe to call on application startup against any environment.
+ */
 export async function ensureDefaultBadgesExist() {
   try {
+    // Seed point rules first
+    await ensureDefaultPointRulesExist().catch(err => 
+      console.error("[Gamification Auto-Seeder] Point rules seed failed:", err)
+    );
+
     const { data: existing, error: checkErr } = await supabase
       .from("gamification_badges")
       .select("id")

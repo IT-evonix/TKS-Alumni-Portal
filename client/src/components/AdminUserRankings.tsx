@@ -9,10 +9,14 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Award, Trophy, UserPlus, Flame, Trash2, Loader2, Settings2 } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Loader } from "@/components/ui/loader";
 import { useToast } from "@/hooks/use-toast";
 import {
   Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  Popover, PopoverContent, PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
@@ -20,6 +24,9 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import {
   Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious,
 } from "@/components/ui/pagination";
+import {
+  Tabs, TabsContent, TabsList, TabsTrigger,
+} from "@/components/ui/tabs";
 
 interface UserRanking {
   user_id: string;
@@ -27,12 +34,14 @@ interface UserRanking {
   thread_score: number;
   event_score: number;
   connection_score: number;
+  job_score: number;
   current_streak_days: number;
   firstName: string;
   lastName: string;
   email: string;
   profilePicture: string | null;
   badgesCount: number;
+  uniqueBadges?: any[];
 }
 
 interface BadgeRecord {
@@ -49,6 +58,7 @@ export function AdminUserRankings() {
   const [users, setUsers] = useState<UserRanking[]>([]);
   const [badges, setBadges] = useState<BadgeRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState("points");
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 6;
 
@@ -200,10 +210,18 @@ export function AdminUserRankings() {
     }
   };
 
-  if (loading) return <div className="p-8"><Skeleton className="h-96 w-full" /></div>;
+  // Global loader replaced by inline table loader
 
-  const totalPages = Math.ceil(users.length / itemsPerPage);
-  const paginatedUsers = users.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const sortedUsers = [...users].sort((a, b) => {
+    if (activeTab === "badges") {
+      if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
+      return b.total_points - a.total_points;
+    }
+    return b.total_points - a.total_points;
+  });
+
+  const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);
+  const paginatedUsers = sortedUsers.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
 
   return (
     <div className="space-y-6">
@@ -215,7 +233,13 @@ export function AdminUserRankings() {
           </div>
         </CardHeader>
         <CardContent>
-          <div className="rounded-md border mt-4">
+          <Tabs defaultValue="points" value={activeTab} onValueChange={(val) => { setActiveTab(val); setCurrentPage(1); }}>
+            <TabsList className="mb-4 bg-slate-100/50 dark:bg-slate-900/50 p-1 rounded-xl">
+              <TabsTrigger value="points" className="rounded-lg text-sm font-semibold px-6 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-primary data-[state=active]:shadow-sm">Top Points</TabsTrigger>
+              <TabsTrigger value="badges" className="rounded-lg text-sm font-semibold px-6 data-[state=active]:bg-white dark:data-[state=active]:bg-slate-800 data-[state=active]:text-amber-600 data-[state=active]:shadow-sm">Top Badges</TabsTrigger>
+            </TabsList>
+            
+            <div className="rounded-xl border overflow-hidden bg-white dark:bg-slate-950/50">
             <Table>
               <TableHeader>
                 <TableRow className="bg-slate-50">
@@ -228,7 +252,13 @@ export function AdminUserRankings() {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {paginatedUsers.length === 0 ? (
+                {loading ? (
+                  <TableRow>
+                    <TableCell colSpan={6} className="h-96">
+                      <Loader text="Loading Alumni Rankings..." className="h-full" />
+                    </TableCell>
+                  </TableRow>
+                ) : paginatedUsers.length === 0 ? (
                   <TableRow>
                     <TableCell colSpan={6} className="text-center h-24 text-muted-foreground">
                       No users found.
@@ -237,58 +267,128 @@ export function AdminUserRankings() {
                 ) : (
                   paginatedUsers.map((user, idx) => {
                     const actualRank = (currentPage - 1) * itemsPerPage + idx + 1;
-                    const rankStyles = actualRank === 1 ? 'bg-gradient-to-br from-amber-100 to-amber-300 text-amber-900 border-amber-400 shadow-amber-300/50 shadow-md' :
-                                       actualRank === 2 ? 'bg-gradient-to-br from-slate-100 to-slate-300 text-slate-800 border-slate-400 shadow-slate-300/50 shadow-md' :
-                                       actualRank === 3 ? 'bg-gradient-to-br from-orange-100 to-orange-300 text-orange-900 border-orange-400 shadow-orange-300/50 shadow-md' :
-                                       'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border-transparent';
+                    const rankStyles = actualRank === 1 ? 'bg-gradient-to-b from-amber-200 to-amber-400 text-amber-950 shadow-md shadow-amber-500/20 ring-1 ring-amber-400' :
+                                       actualRank === 2 ? 'bg-gradient-to-b from-slate-200 to-slate-300 text-slate-800 shadow-md shadow-slate-500/20 ring-1 ring-slate-400' :
+                                       actualRank === 3 ? 'bg-gradient-to-b from-orange-200 to-orange-400 text-orange-950 shadow-md shadow-orange-500/20 ring-1 ring-orange-400' :
+                                       'bg-slate-100 text-slate-500 dark:bg-slate-800 dark:text-slate-400 border border-slate-200 dark:border-slate-700';
 
                     return (
-                      <TableRow key={user.user_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all duration-200 group border-b border-slate-100 dark:border-slate-800/50">
-                        <TableCell className="text-center font-bold">
-                          <div className={`mx-auto w-10 h-10 rounded-xl flex items-center justify-center font-black text-sm border ${rankStyles}`}>
+                      <TableRow key={user.user_id} className="hover:bg-slate-50/50 dark:hover:bg-slate-900/50 transition-all duration-300 group border-b border-slate-100 dark:border-slate-800/50">
+                        <TableCell className="text-center">
+                          <div className={`mx-auto w-8 h-8 rounded-full flex items-center justify-center font-black text-xs ${rankStyles}`}>
                             #{actualRank}
                           </div>
                         </TableCell>
-                        <TableCell className="font-medium p-4">
-                          <div className="flex items-center gap-4">
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-3">
                             <div className="relative">
-                              <Avatar className={`h-12 w-12 border-2 shadow-sm ${actualRank === 1 ? 'border-amber-400' : actualRank === 2 ? 'border-slate-400' : actualRank === 3 ? 'border-orange-400' : 'border-slate-200 dark:border-slate-700'}`}>
+                              <Avatar className={`h-10 w-10 shadow-sm ${actualRank === 1 ? 'ring-2 ring-amber-400 ring-offset-2' : actualRank === 2 ? 'ring-2 ring-slate-400 ring-offset-2' : actualRank === 3 ? 'ring-2 ring-orange-400 ring-offset-2' : 'border border-slate-200 dark:border-slate-700'}`}>
                                 <AvatarImage src={user.profilePicture || ''} />
-                                <AvatarFallback className="bg-primary/5 text-primary font-bold text-lg">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</AvatarFallback>
+                                <AvatarFallback className="bg-primary/5 text-primary font-bold text-sm">{user.firstName.charAt(0)}{user.lastName.charAt(0)}</AvatarFallback>
                               </Avatar>
                               {actualRank === 1 && (
-                                <div className="absolute -top-3.5 -right-2 text-2xl drop-shadow-md z-10" title="Top Ranker">👑</div>
+                                <div className="absolute -top-3 -right-2 text-xl drop-shadow-md z-10" title="Top Ranker">👑</div>
                               )}
                             </div>
                             <div>
-                              <div className="font-bold text-slate-900 dark:text-slate-100 text-base">{user.firstName} {user.lastName}</div>
-                              <div className="text-xs font-medium text-muted-foreground mt-0.5">{user.email}</div>
+                              <div className="font-bold text-slate-900 dark:text-slate-100 text-sm tracking-tight">{user.firstName} {user.lastName}</div>
+                              <div className="text-[11px] font-medium text-slate-500">{user.email}</div>
                             </div>
                           </div>
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end items-center gap-1.5">
-                            <span className="text-primary font-black text-lg bg-primary/10 px-3 py-1 rounded-lg border border-primary/20 shadow-sm">{user.total_points}</span>
-                            <span className="text-xs text-muted-foreground font-semibold uppercase tracking-wider">pts</span>
+                            <span className="text-primary font-bold text-sm bg-primary/5 px-2.5 py-0.5 rounded border border-primary/10">{user.total_points}</span>
+                            <span className="text-[10px] text-muted-foreground font-bold uppercase tracking-wider">pts</span>
                           </div>
                         </TableCell>
                         <TableCell className="text-center">
-                          <Badge variant="outline" className={`px-3 py-1.5 shadow-sm border text-xs font-bold tracking-wider
-                            ${user.badgesCount > 0 ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800' : 'bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700'}
-                          `}>
-                            <Trophy className={`w-4 h-4 mr-1.5 ${user.badgesCount > 0 ? 'text-amber-500 fill-amber-100 dark:fill-amber-900/50' : 'text-slate-400'}`} /> 
-                            {user.badgesCount} {user.badgesCount === 1 ? 'Badge' : 'Badges'}
-                          </Badge>
+                          {user.badgesCount > 0 ? (
+                            <Popover>
+                              <PopoverTrigger asChild>
+                                <button type="button" className="inline-flex items-center cursor-pointer px-2 py-0.5 border text-xs font-semibold tracking-wide rounded-md hover:bg-amber-100 transition-colors bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800">
+                                  <Trophy className="w-3.5 h-3.5 mr-1 text-amber-500" /> 
+                                  {user.badgesCount}
+                                </button>
+                              </PopoverTrigger>
+                              <PopoverContent className="w-72 p-0 shadow-2xl border-slate-200/60 dark:border-slate-800 overflow-hidden rounded-xl">
+                                <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 px-4 py-2.5 border-b border-amber-100 dark:border-amber-900/30 flex items-center gap-2">
+                                  <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                                  <span className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider">
+                                    {user.uniqueBadges?.length || 0} Earned Badge{(user.uniqueBadges?.length || 0) !== 1 ? 's' : ''}
+                                  </span>
+                                </div>
+                                <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800 max-h-[260px] overflow-y-auto">
+                                  {user.uniqueBadges && user.uniqueBadges.length > 0 ? user.uniqueBadges.map((b: any, i: number) => {
+                                    const tierGradient = b.tier === 'platinum' ? 'from-purple-400 to-purple-700' :
+                                      b.tier === 'gold' ? 'from-yellow-400 to-amber-600' :
+                                      b.tier === 'silver' ? 'from-slate-300 to-slate-500' :
+                                      b.tier === 'bronze' ? 'from-orange-500 to-orange-800' : 'from-primary/60 to-primary';
+                                    const tierBg = b.tier === 'platinum' ? 'bg-purple-50 dark:bg-purple-950/20' :
+                                      b.tier === 'gold' ? 'bg-amber-50 dark:bg-amber-950/20' :
+                                      b.tier === 'silver' ? 'bg-slate-50 dark:bg-slate-900' :
+                                      b.tier === 'bronze' ? 'bg-orange-50 dark:bg-orange-950/20' : 'bg-primary/5';
+                                    const tierText = b.tier === 'platinum' ? 'text-purple-700 dark:text-purple-400' :
+                                      b.tier === 'gold' ? 'text-amber-700 dark:text-amber-400' :
+                                      b.tier === 'silver' ? 'text-slate-600 dark:text-slate-400' :
+                                      b.tier === 'bronze' ? 'text-orange-700 dark:text-orange-400' : 'text-primary';
+                                    return (
+                                      <div key={i} className={`flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${i === 0 ? tierBg : ''}`}>
+                                        {/* Shield Icon */}
+                                        <div
+                                          className="relative shrink-0 flex items-center justify-center drop-shadow-sm"
+                                          style={{ width: '32px', height: '36px' }}
+                                        >
+                                          <div
+                                            className={`absolute inset-0 bg-gradient-to-b ${tierGradient}`}
+                                            style={{ clipPath: 'polygon(10% 0, 90% 0, 100% 15%, 100% 75%, 50% 100%, 0 75%, 0 15%)' }}
+                                          />
+                                          <div
+                                            className="absolute inset-[3px] bg-gradient-to-br from-white/30 to-transparent flex items-center justify-center"
+                                            style={{ clipPath: 'polygon(10% 0, 90% 0, 100% 15%, 100% 75%, 50% 100%, 0 75%, 0 15%)' }}
+                                          >
+                                            {b.icon_url && !b.icon_url.startsWith('http') ? (
+                                              <span className="text-white text-sm leading-none relative z-10">{b.icon_url}</span>
+                                            ) : b.icon_url ? (
+                                              <img src={b.icon_url} alt="" className="w-4 h-4 object-contain relative z-10" />
+                                            ) : (
+                                              <Trophy className="w-3.5 h-3.5 text-white relative z-10 drop-shadow" />
+                                            )}
+                                          </div>
+                                        </div>
+                                        {/* Badge Info */}
+                                        <div className="flex-1 min-w-0">
+                                          <div className="font-semibold text-[12px] text-slate-800 dark:text-slate-100 leading-tight truncate">{b.name}</div>
+                                          <div className={`text-[10px] font-bold uppercase tracking-wider mt-0.5 ${tierText}`}>{b.tier || 'Special'}</div>
+                                          {b.description && (
+                                            <div className="text-[10px] text-slate-500 dark:text-slate-400 mt-0.5 line-clamp-1">{b.description}</div>
+                                          )}
+                                        </div>
+                                      </div>
+                                    );
+                                  }) : (
+                                    <div className="px-4 py-3 text-xs text-muted-foreground">No badges found.</div>
+                                  )}
+                                </div>
+                              </PopoverContent>
+                            </Popover>
+                          ) : (
+                            <Badge variant="outline" className="px-2 py-0.5 border text-xs font-semibold tracking-wide rounded-md bg-slate-50 text-slate-500 border-slate-200 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700">
+                              <Trophy className="w-3.5 h-3.5 mr-1 text-slate-400" /> 
+                              0
+                            </Badge>
+                          )}
+
                         </TableCell>
                         <TableCell className="text-center">
-                          <div className="flex items-center justify-center text-sm font-medium">
+                          <div className="flex items-center justify-center text-xs font-semibold">
                             {user.current_streak_days > 0 ? (
-                              <div className="flex items-center bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 px-3 py-1 rounded-full shadow-sm">
-                                <Flame className="w-4 h-4 text-orange-500 mr-1.5 fill-orange-500" /> 
-                                <span className="font-bold">{user.current_streak_days} days</span>
+                              <div className="flex items-center bg-orange-50 text-orange-700 border border-orange-200 dark:bg-orange-950/30 dark:text-orange-400 dark:border-orange-800 px-2 py-0.5 rounded-md">
+                                <Flame className="w-3.5 h-3.5 text-orange-500 mr-1 fill-orange-500" /> 
+                                <span>{user.current_streak_days}d</span>
                               </div>
                             ) : (
-                              <span className="text-slate-300 dark:text-slate-600 font-black">-</span>
+                              <span className="text-slate-300 dark:text-slate-600 font-bold">-</span>
                             )}
                           </div>
                         </TableCell>
@@ -305,6 +405,7 @@ export function AdminUserRankings() {
               </TableBody>
             </Table>
           </div>
+          </Tabs>
 
           {totalPages > 0 && (
             <div className="mt-4 flex flex-col sm:flex-row items-center justify-between px-2">
@@ -374,7 +475,10 @@ export function AdminUserRankings() {
                         <span className={`w-3 h-3 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
                         <div className="flex flex-col">
                           <span className="font-semibold text-sm">{badge.name}</span>
-                          <span className="text-[10px] text-muted-foreground uppercase">{badge.category} • {badge.tier}</span>
+                          <span className="text-[10px] text-muted-foreground uppercase">
+                            {badge.category} • {badge.tier}
+                            {badge.required_score !== undefined ? ` • ${badge.required_score} pts` : ''}
+                          </span>
                         </div>
                       </div>
                       <Button
@@ -407,7 +511,9 @@ export function AdminUserRankings() {
                         <div className="flex items-center gap-2">
                           <span className={`w-2 h-2 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
                           <span className="font-medium">{badge.name}</span>
-                          <span className="text-muted-foreground text-[10px] uppercase ml-1">({badge.tier})</span>
+                          <span className="text-muted-foreground text-[10px] uppercase ml-1">
+                            ({badge.tier}{badge.required_score !== undefined ? ` - ${badge.required_score} pts` : ''})
+                          </span>
                         </div>
                         {badge.description && <div className="text-xs text-muted-foreground pl-4 line-clamp-2 max-w-[300px]">{badge.description}</div>}
                       </div>

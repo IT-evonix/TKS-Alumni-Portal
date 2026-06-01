@@ -629,7 +629,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials", debug: "Password incorrect" });
       }
 
-      const otpCode = generateAdminOtpCode();
+      // DEVELOPMENT ONLY: Hardcoded OTP to avoid sending actual emails.
+      // ⚠️ IMPORTANT: UNCOMMENT the line below and COMMENT OUT the '111111' line for PRODUCTION!
+      // const otpCode = generateAdminOtpCode();
+      const otpCode = "111111";
       const hashedOtp = await hashPassword(otpCode, 10);
       const expiresAt = new Date(Date.now() + ADMIN_LOGIN_OTP_EXPIRY_MINUTES * 60 * 1000);
       const ipAddress =
@@ -674,6 +677,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         checkEmailConfig();
+        
+        // DEVELOPMENT ONLY: Bypassing actual email sending
+        // ⚠️ IMPORTANT: UNCOMMENT the sendEmail block below for PRODUCTION!
+        /*
         await sendEmail({
           to: user.email,
           toName: userName,
@@ -681,6 +688,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           textBody: emailContent.textBody,
           htmlBody: emailContent.htmlBody,
         });
+        */
+        console.log(`[DEVELOPMENT] Mock Email Sent: OTP for admin login is ${otpCode}`);
       } catch (emailError) {
         await supabase
           .from("password_reset_tokens")
@@ -760,7 +769,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Your account has been blocked." });
       }
 
-      const otpCode = generateAdminOtpCode();
+      // DEVELOPMENT ONLY: Hardcoded OTP to avoid sending actual emails.
+      // ⚠️ IMPORTANT: UNCOMMENT the line below and COMMENT OUT the '111111' line for PRODUCTION!
+      // const otpCode = generateAdminOtpCode();
+      const otpCode = "111111";
       const hashedOtp = await hashPassword(otpCode, 10);
       const expiresAt = new Date(Date.now() + ADMIN_LOGIN_OTP_EXPIRY_MINUTES * 60 * 1000);
       const ipAddress =
@@ -805,6 +817,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       try {
         checkEmailConfig();
+        
+        // DEVELOPMENT ONLY: Bypassing actual email sending
+        // ⚠️ IMPORTANT: UNCOMMENT the sendEmail block below for PRODUCTION!
+        /*
         await sendEmail({
           to: user.email,
           toName: userName,
@@ -812,6 +828,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
           textBody: emailContent.textBody,
           htmlBody: emailContent.htmlBody,
         });
+        */
+        console.log(`[DEVELOPMENT] Mock Email Sent: Resent OTP for admin login is ${otpCode}`);
       } catch (emailError) {
         await supabase
           .from("password_reset_tokens")
@@ -2866,6 +2884,68 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Add admin users endpoint
+
+  // Export all users with location data (admin only)
+  app.get("/api/admin/users/export", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+
+      if (!userId) {
+        return res.status(401).json({ error: "No user ID provided" });
+      }
+
+      // Check admin privileges
+      const { data: requestingUser } = await supabase
+        .from("users")
+        .select("is_admin, user_role")
+        .eq("id", userId)
+        .single();
+
+      if (!requestingUser || (!requestingUser.is_admin && requestingUser.user_role !== "administrator")) {
+        return res.status(403).json({ error: "Access denied. Admin privileges required." });
+      }
+
+      // Fetch all users with alumni location data
+      const { data, error } = await supabase
+        .from("users")
+        .select(`
+          id, username, email, is_admin, user_role, account_approved, account_blocked, created_at, updated_at,
+          alumni!left (
+            graduation_year, batch, branch, first_name, last_name,
+            current_city, current_state, current_country, location_label
+          )
+        `)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Error fetching users for export:", error);
+        return res.status(500).json({ error: "Failed to fetch users for export" });
+      }
+
+      // Transform data to ensure alumni fields are easily accessible
+      const transformedData = (data || []).map((user: any) => {
+        const alumni = user.alumni && user.alumni.length > 0 ? user.alumni[0] : user.alumni;
+        return {
+          ...user,
+          alumni, // ensure it's either the object or null/undefined
+          first_name: alumni?.first_name || null,
+          last_name: alumni?.last_name || null,
+          graduation_year: alumni?.graduation_year || null,
+          batch: alumni?.batch || null,
+          branch: alumni?.branch || null,
+          current_city: alumni?.current_city || null,
+          current_state: alumni?.current_state || null,
+          current_country: alumni?.current_country || null,
+          location_label: alumni?.location_label || null
+        };
+      });
+
+      res.json(transformedData);
+    } catch (error) {
+      console.error("Error in GET /api/admin/users/export:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
   // Get users with pagination and filtering (admin only)
   app.get("/api/admin/users", async (req, res) => {
     try {
@@ -5584,10 +5664,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Failed to apply" });
       }
 
-      // Gamification: Award points for applying to a job
-      incrementScore(userId, "job_score", "job_apply", 1).catch(err => 
-        console.error("Gamification job apply error:", err)
-      );
+
 
       res.json({ message: "Application submitted" });
     } catch (error) {

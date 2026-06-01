@@ -50,3 +50,40 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
         </Route>
     );
 };
+
+interface PublicRouteProps {
+    path: string;
+    component: React.ComponentType<any>;
+}
+
+export const PublicRoute: React.FC<PublicRouteProps> = ({
+    path,
+    component: Component
+}) => {
+    const { user, isAdministrator, isLoading } = useAuth();
+
+    return (
+        <Route path={path}>
+            {(params) => {
+                if (isLoading) {
+                    return (
+                        <div className="flex h-screen items-center justify-center">
+                            <Loader2 className="h-8 w-8 animate-spin text-primary" />
+                        </div>
+                    );
+                }
+
+                // If user is already logged in, they should stay in the portal
+                if (isAdministrator) {
+                    return <Redirect to="/admin/dashboard" />;
+                }
+                
+                if (user) {
+                    return <Redirect to="/feed" />;
+                }
+
+                return <Component {...params} />;
+            }}
+        </Route>
+    );
+};

@@ -9,6 +9,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Loader } from "@/components/ui/loader";
 import { useToast } from "@/hooks/use-toast";
 import { 
   Network, 
@@ -16,7 +17,8 @@ import {
   Rss, 
   Calendar, 
   Save, 
-  RefreshCw 
+  RefreshCw,
+  Briefcase 
 } from "lucide-react";
 
 interface PointRule {
@@ -99,9 +101,8 @@ export function AdminPointRules() {
 
   if (loading) {
     return (
-      <div className="space-y-4">
-        <Skeleton className="h-40 w-full rounded-xl" />
-        <Skeleton className="h-40 w-full rounded-xl" />
+      <div className="flex justify-center items-center h-64">
+        <Loader text="Loading Point Rules..." />
       </div>
     );
   }
@@ -110,6 +111,7 @@ export function AdminPointRules() {
   const networkRules = rules.filter(r => r.category === 'networking');
   const communityRules = rules.filter(r => r.category === 'community');
   const eventRules = rules.filter(r => r.category === 'events');
+  const jobRules = rules.filter(r => r.category === 'jobs');
 
   const getIcon = (key: string) => {
     switch (key) {
@@ -118,6 +120,8 @@ export function AdminPointRules() {
       case 'post_reply': return <MessageSquare className="w-5 h-5 text-blue-500" />;
       case 'feed_create': return <Rss className="w-5 h-5 text-orange-500" />;
       case 'event_rsvp': return <Calendar className="w-5 h-5 text-emerald-500" />;
+      case 'job_post': return <Briefcase className="w-5 h-5 text-teal-500" />;
+      case 'job_apply': return <Briefcase className="w-5 h-5 text-cyan-500" />;
       default: return <MessageSquare className="w-5 h-5 text-gray-500" />;
     }
   };
@@ -127,6 +131,7 @@ export function AdminPointRules() {
       case 'networking': return "from-indigo-50 to-white dark:from-indigo-950/20 dark:to-slate-950 border-indigo-100 dark:border-indigo-900/30";
       case 'community': return "from-amber-50 to-white dark:from-amber-950/20 dark:to-slate-950 border-amber-100 dark:border-amber-900/30";
       case 'events': return "from-emerald-50 to-white dark:from-emerald-950/20 dark:to-slate-950 border-emerald-100 dark:border-emerald-900/30";
+      case 'jobs': return "from-teal-50 to-white dark:from-teal-950/20 dark:to-slate-950 border-teal-100 dark:border-teal-900/30";
       default: return "";
     }
   };
@@ -222,6 +227,7 @@ export function AdminPointRules() {
       {renderRuleSection("Networking", networkRules, "networking")}
       {renderRuleSection("Community & Content", communityRules, "community")}
       {renderRuleSection("Events", eventRules, "events")}
+      {renderRuleSection("Jobs & Careers", jobRules, "jobs")}
 
     </div>
   );
