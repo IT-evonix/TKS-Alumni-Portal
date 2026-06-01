@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -105,6 +105,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       color: "text-green-600",
       bgColor: "bg-green-50"
     },
+    {
+      icon: MapPin,
+      label: "Location Export",
+      path: "/admin/location-export",
+      key: "location-export",
+      color: "text-indigo-600",
+      bgColor: "bg-indigo-50"
+    },
   ];
 
   const handleNavigation = (path: string) => {
@@ -144,7 +152,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       </div>
 
       {/* Navigation */}
-      <nav className="flex-1 p-4 space-y-2 overflow-y-auto">
+      <nav className="flex-1 px-3 py-8 space-y-2 overflow-y-auto">
         {navItems.map((item) => {
           const isActive = item.key === currentPage;
           const Icon = item.icon;
@@ -154,7 +162,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
               key={item.path}
               variant={isActive ? "default" : "ghost"}
               className={`
-                group w-full justify-start rounded-lg px-4 py-3 h-auto
+                group w-full justify-start rounded-md px-3 py-2 h-auto
                 font-medium transition-all duration-200
                 ${isActive
                   ? 'bg-[#008060] text-white hover:bg-[#006b51] shadow-md'
@@ -165,18 +173,18 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
             >
               {/* Icon container */}
               <div className={`
-                mr-3 flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center
+                mr-3 flex-shrink-0 w-7 h-7 rounded-md flex items-center justify-center
                 transition-all duration-200
                 ${isActive
                   ? 'bg-white/20 text-white'
                   : `${item.bgColor} ${item.color}`
                 }
               `}>
-                <Icon className="w-4 h-4 sm:w-5 sm:h-5" strokeWidth={2} />
+                <Icon className="w-4 h-4" strokeWidth={2} />
               </div>
 
               {/* Label */}
-              <span className="text-sm sm:text-base flex-1 text-left">
+              <span className="text-sm flex-1 text-left">
                 {item.label}
               </span>
 

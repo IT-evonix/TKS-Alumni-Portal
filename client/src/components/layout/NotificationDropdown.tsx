@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 import {
   Bell, MessageSquare, UserPlus, ThumbsUp, MessageCircle, Calendar, Briefcase,
-  CheckCircle, X, Check, Trash2, Search, Filter, FileText
+  CheckCircle, X, Check, Trash2, Search, Filter, FileText, Trophy, AlertTriangle, Star
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { Button } from "@/components/ui/button";
@@ -236,6 +236,12 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
         return <FileText className={`${iconClass} text-amber-500`} />;
       case 'post_rejected':
         return <X className={`${iconClass} text-red-500`} />;
+      case 'badge_earned':
+        return <Trophy className={`${iconClass} text-amber-500`} />;
+      case 'badge_lost':
+        return <AlertTriangle className={`${iconClass} text-red-500`} />;
+      case 'gamification_point':
+        return <Star className={`${iconClass} text-emerald-500`} />;
       default:
         return <Bell className={`${iconClass} text-gray-500`} />;
     }

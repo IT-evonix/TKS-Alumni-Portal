@@ -20,7 +20,9 @@ interface LeaderboardUser {
 }
 
 export function LeaderboardPage() {
-  const [leaderboard, setLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [pointsLeaderboard, setPointsLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [badgesLeaderboard, setBadgesLeaderboard] = useState<LeaderboardUser[]>([]);
+  const [activeTab, setActiveTab] = useState<"points" | "badges">("points");
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
 
@@ -37,11 +39,11 @@ export function LeaderboardPage() {
           Authorization: `Bearer ${token}`
         }
       });
-      if (res.ok) {
-        const data = await res.json();
-        // Since backend only returns top 5, we use what we get. If we want more, backend needs an update.
-        setLeaderboard(data.leaderboard || []);
-      }
+        if (res.ok) {
+          const data = await res.json();
+          setPointsLeaderboard(data.pointsLeaderboard || []);
+          setBadgesLeaderboard(data.badgesLeaderboard || []);
+        }
     } catch (err) {
       console.error("Failed to load leaderboard", err);
     } finally {
@@ -49,7 +51,9 @@ export function LeaderboardPage() {
     }
   };
 
-  const filteredLeaderboard = leaderboard.filter(u => 
+  const activeLeaderboard = activeTab === "points" ? pointsLeaderboard : badgesLeaderboard;
+
+  const filteredLeaderboard = activeLeaderboard.filter(u => 
     `${u.firstName} ${u.lastName}`.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
@@ -84,17 +88,20 @@ export function LeaderboardPage() {
             Hall of Fame
           </h1>
           <p className="text-slate-500 text-lg max-w-xl mx-auto">
-            Discover the most active and inspiring members of our alumni community. Earn points, unlock badges, and climb the ranks!
+            Discover the most active and inspiring members of our alumni community. Compete for the most points or collect the highest value badges!
           </p>
         </div>
 
         {/* Search and Filters */}
         <div className="flex flex-col md:flex-row gap-4 items-center justify-between bg-white p-2 rounded-2xl border border-slate-100 shadow-sm">
-          <Tabs defaultValue="all-time" className="w-full md:w-auto">
-            <TabsList className="bg-slate-100/50 p-1 rounded-xl w-full md:w-auto grid grid-cols-3">
-              <TabsTrigger value="weekly" className="rounded-lg font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm">Weekly</TabsTrigger>
-              <TabsTrigger value="monthly" className="rounded-lg font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm">Monthly</TabsTrigger>
-              <TabsTrigger value="all-time" className="rounded-lg font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm">All Time</TabsTrigger>
+          <Tabs value={activeTab} onValueChange={(val) => setActiveTab(val as "points" | "badges")} className="w-full md:w-auto">
+            <TabsList className="bg-slate-100/50 p-1 rounded-xl w-full md:w-auto grid grid-cols-2">
+              <TabsTrigger value="points" className="rounded-lg font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-emerald-600 data-[state=active]:shadow-sm">
+                <Flame className="w-4 h-4 mr-2" /> Top Earners (XP)
+              </TabsTrigger>
+              <TabsTrigger value="badges" className="rounded-lg font-medium text-slate-600 data-[state=active]:bg-white data-[state=active]:text-amber-600 data-[state=active]:shadow-sm">
+                <Trophy className="w-4 h-4 mr-2" /> Prestige Board (Badges)
+              </TabsTrigger>
             </TabsList>
           </Tabs>
 
@@ -122,7 +129,11 @@ export function LeaderboardPage() {
                 <div className="absolute -bottom-3 -right-3 bg-slate-100 border-2 border-white w-8 h-8 rounded-full flex items-center justify-center font-black text-slate-600 text-sm shadow-sm">2</div>
               </div>
               <h3 className="font-bold text-slate-700">{filteredLeaderboard[1]?.firstName}</h3>
-              <p className="text-sm font-semibold text-emerald-600">{filteredLeaderboard[1]?.total_points} XP</p>
+              {activeTab === "points" ? (
+                <p className="text-sm font-semibold text-emerald-600">{filteredLeaderboard[1]?.total_points} XP</p>
+              ) : (
+                <p className="text-sm font-semibold text-amber-600 flex items-center gap-1"><Trophy className="w-3.5 h-3.5"/> {(filteredLeaderboard[1] as any)?.badgeScore} Val</p>
+              )}
               <div className="w-24 h-32 bg-gradient-to-t from-slate-100 to-transparent mt-4 rounded-t-xl" />
             </div>
 
@@ -137,7 +148,11 @@ export function LeaderboardPage() {
                 <div className="absolute -bottom-4 -right-4 bg-gradient-to-br from-amber-300 to-amber-500 border-2 border-white w-10 h-10 rounded-full flex items-center justify-center font-black text-white shadow-md">1</div>
               </div>
               <h3 className="font-black text-lg text-slate-800">{filteredLeaderboard[0]?.firstName} {filteredLeaderboard[0]?.lastName}</h3>
-              <p className="text-base font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mt-2 border border-emerald-100 shadow-sm">{filteredLeaderboard[0]?.total_points} XP</p>
+              {activeTab === "points" ? (
+                <p className="text-base font-bold text-emerald-600 bg-emerald-50 px-3 py-1 rounded-full mt-2 border border-emerald-100 shadow-sm">{filteredLeaderboard[0]?.total_points} XP</p>
+              ) : (
+                <p className="text-base font-bold text-amber-600 bg-amber-50 px-3 py-1 rounded-full mt-2 border border-amber-100 shadow-sm flex items-center gap-1"><Trophy className="w-4 h-4"/> {(filteredLeaderboard[0] as any)?.badgeScore} Value</p>
+              )}
               <div className="w-32 h-40 bg-gradient-to-t from-amber-50 to-transparent mt-6 rounded-t-xl" />
             </div>
 
@@ -151,7 +166,11 @@ export function LeaderboardPage() {
                 <div className="absolute -bottom-3 -right-3 bg-orange-100 border-2 border-white w-8 h-8 rounded-full flex items-center justify-center font-black text-orange-600 text-sm shadow-sm">3</div>
               </div>
               <h3 className="font-bold text-slate-700">{filteredLeaderboard[2]?.firstName}</h3>
-              <p className="text-sm font-semibold text-emerald-600">{filteredLeaderboard[2]?.total_points} XP</p>
+              {activeTab === "points" ? (
+                <p className="text-sm font-semibold text-emerald-600">{filteredLeaderboard[2]?.total_points} XP</p>
+              ) : (
+                <p className="text-sm font-semibold text-amber-600 flex items-center gap-1"><Trophy className="w-3.5 h-3.5"/> {(filteredLeaderboard[2] as any)?.badgeScore} Val</p>
+              )}
               <div className="w-24 h-24 bg-gradient-to-t from-orange-50 to-transparent mt-4 rounded-t-xl" />
             </div>
           </div>
@@ -194,9 +213,15 @@ export function LeaderboardPage() {
                           {user.firstName} {user.lastName}
                         </h3>
                         <div className="flex items-center gap-3 mt-1 text-xs sm:text-sm text-slate-500">
-                          <span className="flex items-center gap-1 font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md">
-                            <Star className="w-3.5 h-3.5" /> {user.total_points} XP
-                          </span>
+                          {activeTab === "points" ? (
+                            <span className="flex items-center gap-1 font-medium bg-emerald-50 text-emerald-700 px-2 py-0.5 rounded-md">
+                              <Star className="w-3.5 h-3.5" /> {user.total_points} XP
+                            </span>
+                          ) : (
+                            <span className="flex items-center gap-1 font-medium bg-amber-50 text-amber-700 px-2 py-0.5 rounded-md border border-amber-100">
+                              <Trophy className="w-3.5 h-3.5" /> {(user as any).badgeScore} Value
+                            </span>
+                          )}
                           <span className="flex items-center gap-1">
                             <Flame className={`w-3.5 h-3.5 ${user.current_streak_days > 0 ? 'text-orange-500 fill-orange-500' : 'text-slate-300'}`} />
                             {user.current_streak_days} Day Streak

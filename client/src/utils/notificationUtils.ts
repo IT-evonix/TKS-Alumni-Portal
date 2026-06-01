@@ -93,8 +93,8 @@ export function bundleNotifications(notifications: EnhancedNotification[]): (Enh
   const groups = new Map<string, EnhancedNotification[]>();
 
   notifications.forEach(notification => {
-    // Don't bundle connection requests, messages, or signup approvals
-    if (['connection_request', 'message', 'signup_approved', 'post_approved', 'post_rejected', 'signup_request'].includes(notification.type)) {
+    // Don't bundle connection requests, messages, signup approvals, or gamification notifications
+    if (['connection_request', 'message', 'signup_approved', 'post_approved', 'post_rejected', 'signup_request', 'gamification_point', 'badge_earned', 'badge_lost'].includes(notification.type)) {
       bundled.push(notification);
       return;
     }
@@ -279,6 +279,8 @@ export function getNotificationTypeLabel(type: string): string {
     'post_approved': 'Posts',
     'post_rejected': 'Posts',
     'badge_earned': 'Gamification',
+    'badge_lost': 'Gamification',
+    'gamification_point': 'Gamification',
   };
 
   return labels[type] || 'Other';
@@ -305,6 +307,8 @@ export function getNotificationTypeColor(type: string): string {
     'post_approved': 'bg-green-100 text-green-700 border-green-200',
     'post_rejected': 'bg-red-100 text-red-700 border-red-200',
     'badge_earned': 'bg-amber-100 text-amber-700 border-amber-200',
+    'badge_lost': 'bg-red-100 text-red-700 border-red-200',
+    'gamification_point': 'bg-emerald-100 text-emerald-700 border-emerald-200',
   };
 
   return colors[type] || 'bg-gray-100 text-gray-700 border-gray-200';
@@ -332,6 +336,8 @@ export function getNotificationIconName(type: string): string {
     'post_approved': 'CheckCircle',
     'post_rejected': 'X',
     'badge_earned': 'Trophy',
+    'badge_lost': 'AlertTriangle',
+    'gamification_point': 'Star',
   };
   return iconMap[type] || 'Bell';
 }

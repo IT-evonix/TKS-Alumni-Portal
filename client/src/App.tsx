@@ -11,7 +11,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { GlobalSearchModal } from "@/components/search/GlobalSearchModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { io } from "socket.io-client";
-import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { clientConfig } from "@/lib/config";
 import { registerServiceWorker } from "@/utils/serviceWorker";
 
@@ -94,6 +94,7 @@ const AdminJobsPage = lazy(() => import("@/pages/AdminJobsPage").then(m => ({ de
 const AdminBulkEmailPage = lazy(() => import("./pages/AdminBulkEmailPage").then(m => ({ default: m.default })));
 const AdminInboxPage = lazy(() => import("@/pages/AdminInboxPage").then(m => ({ default: m.AdminInboxPage })));
 const AdminGamificationPage = lazy(() => import("@/pages/AdminGamificationPage").then(m => ({ default: m.AdminGamificationPage })));
+const AdminLocationExportPage = lazy(() => import("./pages/AdminLocationExportPage").then(m => ({ default: m.default })));
 
 // Other pages - lazy loaded
 const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ default: m.SharedPostPage })));
@@ -104,21 +105,22 @@ function Router() {
     <Suspense fallback={<PageLoader />}>
       <ErrorBoundary>
         <Switch>
-          {/* Public Routes */}
-          <Route path="/" component={LandingPage} />
-          <Route path="/login" component={LoginPage} />
-          <Route path="/signup" component={SignupPage} />
-          <Route path="/student-signup" component={StudentSignupPage} />
-          <Route path="/forgot-password" component={ForgotPasswordPage} />
-          <Route path="/reset-password" component={ResetPasswordPage} />
-          <Route path="/setup-password" component={SetupPasswordPage} />
-          <Route path="/contact" component={ContactUsPage} />
-          <Route path="/linkedin-welcome" component={LinkedInWelcomePage} />
+          {/* Public Routes - Authenticated users are redirected to portal */}
+          <PublicRoute path="/" component={LandingPage} />
+          <PublicRoute path="/login" component={LoginPage} />
+          <PublicRoute path="/signup" component={SignupPage} />
+          <PublicRoute path="/student-signup" component={StudentSignupPage} />
+          <PublicRoute path="/forgot-password" component={ForgotPasswordPage} />
+          <PublicRoute path="/reset-password" component={ResetPasswordPage} />
+          <PublicRoute path="/setup-password" component={SetupPasswordPage} />
+          <PublicRoute path="/contact" component={ContactUsPage} />
+          <PublicRoute path="/linkedin-welcome" component={LinkedInWelcomePage} />
+          <PublicRoute path="/admin/login" component={AdminLoginPage} />
+          <PublicRoute path="/alumni-map" component={AlumniMapPage} />
+          
           <Route path="/admin" component={() => <Redirect to="/admin/dashboard" />} />
-          <Route path="/admin/login" component={AdminLoginPage} />
           <ProtectedRoute path="/admin/signup-requests" component={AdminDashboard} adminOnly />
           <Route path="/post/:postId" component={SharedPostPage} />
-          <Route path="/alumni-map" component={AlumniMapPage} />
 
 
           {/* Protected User Routes */}
@@ -151,6 +153,7 @@ function Router() {
           <ProtectedRoute path="/admin/import" component={AdminImportPage} adminOnly />
           <ProtectedRoute path="/admin/inbox" component={AdminInboxPage} adminOnly />
           <ProtectedRoute path="/admin/gamification" component={AdminGamificationPage} adminOnly />
+          <ProtectedRoute path="/admin/location-export" component={AdminLocationExportPage} adminOnly />
 
           {/* Fallback to 404 */}
           <Route component={NotFound} />
