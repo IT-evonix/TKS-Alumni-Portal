@@ -61,6 +61,7 @@ export default function AdminLocationExportPage() {
   };
 
   // Derive unique locations freely (no strict dependencies)
+  // Derive unique locations dynamically based on active parent filters
   const { countries, states, cities } = useMemo(() => {
     const uniqueCountries = new Set<string>();
     const uniqueStates = new Set<string>();
@@ -71,9 +72,23 @@ export default function AdminLocationExportPage() {
       const state = user.current_state?.trim();
       const city = user.current_city?.trim();
 
-      if (country) uniqueCountries.add(country);
-      if (state) uniqueStates.add(state);
-      if (city) uniqueCities.add(city);
+      if (country) {
+        uniqueCountries.add(country);
+      }
+
+      // State is visible if no country filter is selected, or if user's country matches selectedCountry
+      if (state && (selectedCountry === "all" || country === selectedCountry)) {
+        uniqueStates.add(state);
+      }
+
+      // City is visible if:
+      // - no country/state filter is applied, OR
+      // - user's country matches selectedCountry (if filtered) AND user's state matches selectedState (if filtered)
+      const countryMatch = selectedCountry === "all" || country === selectedCountry;
+      const stateMatch = selectedState === "all" || state === selectedState;
+      if (city && countryMatch && stateMatch) {
+        uniqueCities.add(city);
+      }
     });
 
     return {
@@ -81,7 +96,7 @@ export default function AdminLocationExportPage() {
       states: Array.from(uniqueStates).sort(),
       cities: Array.from(uniqueCities).sort()
     };
-  }, [users]);
+  }, [users, selectedCountry, selectedState]);
 
   // Filter users based on selection
   const filteredUsers = useMemo(() => {
@@ -101,29 +116,17 @@ export default function AdminLocationExportPage() {
 
   const handleCountryChange = (value: string) => {
     setSelectedCountry(value);
+    setSelectedState("all");
+    setSelectedCity("all");
   };
 
   const handleStateChange = (value: string) => {
     setSelectedState(value);
-    if (value !== "all") {
-      // Auto-fill country
-      const matchedUser = users.find(u => u.current_state?.trim() === value);
-      if (matchedUser?.current_country) {
-        setSelectedCountry(matchedUser.current_country.trim());
-      }
-    }
+    setSelectedCity("all");
   };
 
   const handleCityChange = (value: string) => {
     setSelectedCity(value);
-    if (value !== "all") {
-      // Auto-fill state and country
-      const matchedUser = users.find(u => u.current_city?.trim() === value);
-      if (matchedUser) {
-        if (matchedUser.current_state) setSelectedState(matchedUser.current_state.trim());
-        if (matchedUser.current_country) setSelectedCountry(matchedUser.current_country.trim());
-      }
-    }
   };
 
   const exportToCSV = () => {
