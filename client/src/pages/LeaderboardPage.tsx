@@ -7,6 +7,7 @@ import { Trophy, Star, TrendingUp, Medal, Flame, Search } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 
 interface LeaderboardUser {
   user_id: string;
@@ -17,6 +18,42 @@ interface LeaderboardUser {
   badgesCount: number;
   current_streak_days: number;
   topBadges?: any[];
+  uniqueBadges?: any[];
+  badgeScore?: number;
+}
+
+// Small shield icon component  
+function ShieldIcon({ badge, size = 16 }: { badge: any; size?: number }) {
+  const tierGradient =
+    badge.tier === "platinum" ? "from-purple-400 to-purple-700" :
+    badge.tier === "gold"     ? "from-yellow-400 to-amber-600" :
+    badge.tier === "silver"   ? "from-slate-300 to-slate-500" :
+    badge.tier === "bronze"   ? "from-orange-500 to-orange-800" : "from-primary/60 to-primary";
+
+  return (
+    <div
+      className="relative shrink-0 flex items-center justify-center drop-shadow-sm"
+      style={{ width: size, height: size * 1.14 }}
+      title={`${badge.name} (${badge.tier})`}
+    >
+      <div
+        className={`absolute inset-0 bg-gradient-to-b ${tierGradient}`}
+        style={{ clipPath: "polygon(10% 0, 90% 0, 100% 15%, 100% 75%, 50% 100%, 0 75%, 0 15%)" }}
+      />
+      <div
+        className="absolute inset-[2px] flex items-center justify-center"
+        style={{ clipPath: "polygon(10% 0, 90% 0, 100% 15%, 100% 75%, 50% 100%, 0 75%, 0 15%)" }}
+      >
+        {badge.icon_url && !badge.icon_url.startsWith("http") ? (
+          <span className="text-white leading-none" style={{ fontSize: size * 0.45 }}>{badge.icon_url}</span>
+        ) : badge.icon_url ? (
+          <img src={badge.icon_url} alt="" style={{ width: size * 0.55, height: size * 0.55, objectFit: "contain" }} />
+        ) : (
+          <Trophy className="text-white" style={{ width: size * 0.5, height: size * 0.5 }} />
+        )}
+      </div>
+    </div>
+  );
 }
 
 export function LeaderboardPage() {
@@ -230,26 +267,69 @@ export function LeaderboardPage() {
                       </div>
                       
                       {/* Badges Preview */}
-                      <div className="hidden sm:flex items-center gap-1 border-l pl-4 border-slate-100">
-                        <div className="flex -space-x-2">
-                          {user.topBadges && user.topBadges.length > 0 ? user.topBadges.map((badge, i) => (
-                            <div key={i} className="w-8 h-8 rounded-full bg-slate-50 border-2 border-white flex items-center justify-center shadow-sm relative z-10 hover:z-20 hover:-translate-y-1 transition-transform" title={badge.name}>
-                              {badge.icon_url && badge.icon_url.startsWith('http') ? (
-                                <img src={badge.icon_url} alt="" className="w-4 h-4 object-contain" />
-                              ) : (
-                                <Star className="w-4 h-4 text-emerald-500" />
-                              )}
-                            </div>
-                          )) : (
-                            <div className="w-8 h-8 rounded-full bg-slate-50 border-2 border-white flex items-center justify-center shadow-sm">
-                              <Star className="w-4 h-4 text-slate-300" />
-                            </div>
-                          )}
-                        </div>
-                        <span className="text-xs font-bold text-slate-400 ml-2">
-                          {user.badgesCount} {user.badgesCount === 1 ? 'Badge' : 'Badges'}
-                        </span>
-                      </div>
+                      {(() => {
+                        const badges = user.uniqueBadges || user.topBadges || [];
+                        const previewBadges = badges.slice(0, 3);
+                        return badges.length > 0 ? (
+                          <Popover>
+                            <PopoverTrigger asChild>
+                              <button
+                                type="button"
+                                className="hidden sm:flex items-center gap-1 border-l pl-4 border-slate-100 hover:opacity-80 transition-opacity cursor-pointer text-left"
+                              >
+                                <div className="flex -space-x-1.5">
+                                  {previewBadges.map((badge: any, i: number) => (
+                                    <div key={i} className="relative z-10 hover:z-20 hover:-translate-y-0.5 transition-transform">
+                                      <ShieldIcon badge={badge} size={18} />
+                                    </div>
+                                  ))}
+                                  {badges.length > 3 && (
+                                    <div className="w-5 h-5.5 rounded-full bg-slate-100 border-2 border-white flex items-center justify-center shadow-sm relative z-10 text-[9px] font-bold text-slate-500">
+                                      +{badges.length - 3}
+                                    </div>
+                                  )}
+                                </div>
+                                <span className="text-xs font-bold text-slate-400 ml-2">
+                                  {badges.length} {badges.length === 1 ? 'Badge' : 'Badges'}
+                                </span>
+                              </button>
+                            </PopoverTrigger>
+                            <PopoverContent side="left" className="w-64 p-0 shadow-2xl border-slate-200/60 dark:border-slate-800 overflow-hidden rounded-xl z-50">
+                              <div className="bg-gradient-to-r from-amber-50 to-orange-50 dark:from-amber-950/30 dark:to-orange-950/20 px-3 py-2 border-b border-amber-100 dark:border-amber-900/30 flex items-center gap-2">
+                                <Trophy className="w-3.5 h-3.5 text-amber-600" />
+                                <span className="text-xs font-bold text-amber-800 dark:text-amber-400 uppercase tracking-wider">
+                                  {user.firstName}'s Badges ({badges.length})
+                                </span>
+                              </div>
+                              <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800 max-h-[200px] overflow-y-auto">
+                                {badges.map((b: any, i: number) => {
+                                  const tierText =
+                                    b.tier === "platinum" ? "text-purple-600 dark:text-purple-400" :
+                                    b.tier === "gold"     ? "text-amber-600 dark:text-amber-400" :
+                                    b.tier === "silver"   ? "text-slate-500 dark:text-slate-400" :
+                                    b.tier === "bronze"   ? "text-orange-600 dark:text-orange-400" : "text-primary";
+                                  return (
+                                    <div key={i} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
+                                      <ShieldIcon badge={b} size={24} />
+                                      <div className="flex-1 min-w-0">
+                                        <div className="font-semibold text-[12px] text-slate-800 dark:text-slate-100 leading-tight">{b.name}</div>
+                                        <div className={`text-[10px] font-bold uppercase tracking-wider ${tierText}`}>{b.tier || "Special"}</div>
+                                        {b.description && (
+                                          <div className="text-[10px] text-slate-400 mt-0.5 line-clamp-1">{b.description}</div>
+                                        )}
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </PopoverContent>
+                          </Popover>
+                        ) : (
+                          <div className="hidden sm:flex items-center gap-1 border-l pl-4 border-slate-100 text-slate-300">
+                            <span className="text-xs font-medium italic">No Badges</span>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
