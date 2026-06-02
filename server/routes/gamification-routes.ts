@@ -683,6 +683,58 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
 
     const { uniqueBadges } = processUserBadges(earnedBadges || []);
 
+    // Calculate global badge rank using the same logic as the leaderboard
+    let globalBadgeRank = 1;
+    const { data: allUserBadges } = await supabase
+      .from("user_badges")
+      .select("user_id, gamification_badges(tier, series_type, name)");
+
+    if (allUserBadges) {
+      const userBadgesMap = new Map<string, any[]>();
+      allUserBadges.forEach((ub: any) => {
+        if (!ub.user_id) return;
+        if (!userBadgesMap.has(ub.user_id)) {
+          userBadgesMap.set(ub.user_id, []);
+        }
+        userBadgesMap.get(ub.user_id)?.push(ub);
+      });
+
+      const userBadgeScores: Record<string, number> = {};
+      userBadgesMap.forEach((badgesList, uid) => {
+        const tierWeight: any = { platinum: 4, gold: 3, silver: 2, bronze: 1 };
+        const deduplicated = new Map();
+        badgesList.forEach(b => {
+          const badge = b.gamification_badges;
+          if (!badge) return;
+          const key = badge.series_type || badge.name;
+          const existing = deduplicated.get(key);
+          if (!existing || (tierWeight[badge.tier || ''] || 0) > (tierWeight[existing.gamification_badges?.tier || ''] || 0)) {
+            deduplicated.set(key, b);
+          }
+        });
+
+        const getBadgeScoreValue = (tier: string | null | undefined) => {
+          if (tier === 'platinum') return 100;
+          if (tier === 'gold') return 50;
+          if (tier === 'silver') return 20;
+          if (tier === 'bronze') return 5;
+          return 1;
+        };
+
+        const score = Array.from(deduplicated.values()).reduce((acc, b: any) => acc + getBadgeScoreValue(b.gamification_badges?.tier), 0);
+        userBadgeScores[uid] = score;
+      });
+
+      const targetScore = userBadgeScores[userId] || 0;
+      let higherCount = 0;
+      Object.entries(userBadgeScores).forEach(([uid, score]) => {
+        if (uid !== userId && score > targetScore) {
+          higherCount++;
+        }
+      });
+      globalBadgeRank = higherCount + 1;
+    }
+
     res.json({
       scores: scores || {
         thread_score: 0,
@@ -695,7 +747,8 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
       },
       earnedBadges: earnedBadges || [],
       progress, // Next badges to unlock with how far away they are
-      globalRank
+      globalRank,
+      globalBadgeRank
     });
   } catch (err) {
     console.error("[Gamification] User profile route error:", err);

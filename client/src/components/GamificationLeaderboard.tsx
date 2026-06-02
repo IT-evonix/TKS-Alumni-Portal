@@ -214,7 +214,7 @@ export function GamificationLeaderboard() {
                     {user.firstName}'s Badges ({badges.length})
                   </span>
                 </div>
-                <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800 max-h-[220px] overflow-y-auto">
+                <div className="flex flex-col divide-y divide-slate-100 dark:divide-slate-800 max-h-[200px] overflow-y-auto">
                   {badges.map((b: any, i: number) => {
                     const tierText =
                       b.tier === "platinum" ? "text-purple-600 dark:text-purple-400" :

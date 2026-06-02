@@ -96,6 +96,7 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
   const [progress, setProgress] = useState<ProgressRecord[]>([]);
   const [scores, setScores] = useState<any>({});
   const [globalRank, setGlobalRank] = useState<number>(0);
+  const [globalBadgeRank, setGlobalBadgeRank] = useState<number>(0);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -119,6 +120,7 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
         setProgress(data.progress || []);
         setScores(data.scores || {});
         setGlobalRank(data.globalRank || 0);
+        setGlobalBadgeRank(data.globalBadgeRank || 0);
       } catch (err) {
         setError(err instanceof Error ? err.message : "Error loading badges");
       } finally {
@@ -234,13 +236,20 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Level {level} Explorer</h2>
                   <div className="flex items-center gap-3 mt-1.5">
-                    {/* <Badge variant="secondary" className="bg-emerald-50 text-emerald-700 hover:bg-emerald-100 font-bold border border-emerald-200">
-                      {scores.total_points || 0} XP
-                    </Badge> */}
+                    <span className="text-sm font-semibold text-emerald-700 flex items-center gap-1 bg-emerald-50 px-2 py-0.5 rounded-md border border-emerald-100">
+                      <Trophy className="w-3.5 h-3.5 text-emerald-600" />
+                      {scores.total_points || 0} Points
+                    </span>
                     {globalRank > 0 && (
-                      <span className="text-sm font-semibold text-slate-500 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100">
+                      <span className="text-sm font-semibold text-slate-500 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100" title="Points Rank">
                         <Star className="w-3.5 h-3.5 fill-slate-400 text-slate-400" />
-                        Rank #{globalRank}
+                        Points Rank #{globalRank}
+                      </span>
+                    )}
+                    {globalBadgeRank > 0 && (
+                      <span className="text-sm font-semibold text-slate-500 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-md border border-slate-100" title="Badge Rank">
+                        <Trophy className="w-3.5 h-3.5 text-amber-500" />
+                        Badge Rank #{globalBadgeRank}
                       </span>
                     )}
                   </div>
@@ -272,12 +281,12 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
             </div>
 
             {/* <div className="space-y-1.5 mt-6 max-w-md">
-            <div className="flex justify-between text-xs font-bold text-slate-500">
-              <span>Progress to Level {level + 1}</span>
-              <span className="text-emerald-600">{currentLevelXP} / 500 XP</span>
-            </div>
-            <Progress value={levelProgress} className="h-2.5 bg-slate-100 [&>div]:bg-emerald-500 shadow-inner" />
-          </div> */}
+              <div className="flex justify-between text-xs font-bold text-slate-500">
+                <span>Progress to Level {level + 1}</span>
+                <span className="text-emerald-600">{currentLevelXP} / 500 XP</span>
+              </div>
+              <Progress value={levelProgress} className="h-2.5 bg-slate-100 [&>div]:bg-emerald-500 shadow-inner" />
+            </div> */}
           </div>
 
           {/* Badges Content */}
@@ -395,8 +404,8 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                             <p className="font-bold text-sm text-slate-700 mb-1 break-all">{item.badge.name}</p>
                             <p className="text-xs text-slate-600 leading-relaxed mb-2">{item.badge.description}</p>
                             <div className="text-[10px] bg-slate-50 p-1.5 rounded text-slate-500 font-medium">
-                              {item.badge.category === 'common' || item.requiredScore === 0 
-                                ? "Complete the required action to unlock this badge!" 
+                              {item.badge.category === 'common' || item.requiredScore === 0
+                                ? "Complete the required action to unlock this badge!"
                                 : `Need ${item.remaining} more to unlock this badge!`
                               }
                             </div>

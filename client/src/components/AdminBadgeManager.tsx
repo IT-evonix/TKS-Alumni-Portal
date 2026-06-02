@@ -236,7 +236,7 @@ export function AdminBadgeManager() {
   const handleCreate = () => {
     setTierScores({ bronze: '', silver: '', gold: '', platinum: '' });
     setEditingBadge({
-      name: "", description: "", category: "series", series_type: "thread", required_score: 0, tier: "bronze", is_enabled: true
+      name: "", description: "", category: "common", series_type: "thread", required_score: 0, tier: "bronze", is_enabled: true
     });
     setIsDialogOpen(true);
   };
@@ -564,13 +564,13 @@ export function AdminBadgeManager() {
                 <div className="grid gap-2">
                   <Label>Category</Label>
                   <Select
-                    value={editingBadge?.category || 'series'}
+                    value={editingBadge?.category || 'common'}
                     onValueChange={v => setEditingBadge(prev => ({ ...prev, category: v }) as any)}
                   >
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="series">Series (Rank-based/Auto)</SelectItem>
                       <SelectItem value="common">Common (Single-Activity)</SelectItem>
+                      <SelectItem value="series">Series (Rank-based/Auto)</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
