@@ -25,7 +25,7 @@ import adminDigestRoutes from "./routes/admin-digest-routes";
 import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
 import { aggregateAdminDashboardMetrics } from "./services/admin-metrics-service";
 import gamificationRoutes from "./routes/gamification-routes";
-import { ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
+import { ensureDefaultPointRulesExist, ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
 import {
   createAndEmitNotification,
   NotificationType,
@@ -175,9 +175,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/admin/digest", requireAdmin, adminDigestRoutes);
   app.use("/api/resume", requireAuth, resumeRoutes);
   app.use("/api/gamification", gamificationRoutes);
+  ensureDefaultPointRulesExist().catch(err =>
+    console.error("[Gamification] Point rules auto-seed failed:", err)
+  );
   // Auto-seed default badges on startup (skips if badges already exist)
   ensureDefaultBadgesExist().catch(err =>
-    console.error("[Gamification] Badge auto-seed failed:", err)
+    console.error("[Gamification] Default badges auto-seed failed:", err)
   );
   // Excel import endpoints (admin only)
   app.post("/api/admin/import-preview", requireAdmin, uploadExcel.single("file"), handleMulterError, previewExcelData);

@@ -1,6 +1,8 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
-import { MapPin, X, Loader2, Building2 } from "lucide-react";
+import { MapPin, X, Loader2, Building2, Locate } from "lucide-react";
+
+const PHOTON_API_URL = (import.meta.env.VITE_PHOTON_API_URL || 'https://photon.komoot.io').replace(/\/$/, '');
 
 interface CityAutocompleteProps {
   city: string;
@@ -14,6 +16,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
   const [suggestions, setSuggestions] = useState<any[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
+  const [isLocating, setIsLocating] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -66,7 +69,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
       });
 
       const res = await fetch(
-        `https://photon.komoot.io/api/?${params.toString()}`,
+        `${PHOTON_API_URL}/api/?${params.toString()}`,
         { signal: abortRef.current.signal }
       );
 
@@ -86,13 +89,21 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
           
           // Construct a highly detailed hierarchical name from Photon properties
           const parts = [];
-          if (props.name) parts.push(props.name);
-          
-          // Sometimes name is same as city/town, avoid duplicates
           const localName = props.village || props.town || props.city || props.locality || props.hamlet;
-          if (localName && localName !== props.name) parts.push(localName);
+          const isGeographic = ['city', 'town', 'village', 'hamlet', 'locality', 'district'].includes(props.type);
+
+          if (isGeographic && props.name) {
+            parts.push(props.name);
+          } else if (localName) {
+            parts.push(localName);
+          } else if (props.name) {
+            parts.push(props.name);
+          }
+
+          const baseName = parts[0] || '';
+          if (localName && localName !== baseName) parts.push(localName);
           
-          if (props.county && props.county !== localName) parts.push(props.county);
+          if (props.county && props.county !== baseName && props.county !== localName) parts.push(props.county);
           if (props.state && props.state !== props.county) parts.push(props.state);
           if (props.country) parts.push(props.country);
 
@@ -136,8 +147,11 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
   const extractLocationParts = (item: any) => {
     const props = item.properties || {};
     
-    // Attempt to extract the most specific local name first
-    const place = props.name || props.village || props.hamlet || props.town || props.city || props.locality || '';
+    // Prioritize clean geographic divisions over building/POI names
+    const localName = props.village || props.town || props.city || props.locality || props.hamlet;
+    const isGeographic = ['city', 'town', 'village', 'hamlet', 'locality', 'district'].includes(props.type);
+    
+    const place = (isGeographic && props.name) ? props.name : (localName || props.name || '');
     const state = props.state || '';
     const country = props.country || '';
 
@@ -168,6 +182,69 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
     onLocationSelect('', '', '');
     setSuggestions([]);
     setShowSuggestions(false);
+  };
+
+  const handleLocateUser = () => {
+    if (!navigator.geolocation) {
+      alert("Geolocation is not supported by your browser");
+      return;
+    }
+
+    setIsLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      async (position) => {
+        const { latitude, longitude } = position.coords;
+        try {
+          const res = await fetch(`${PHOTON_API_URL}/reverse?lat=${latitude}&lon=${longitude}&lang=en`);
+          if (!res.ok) throw new Error("Reverse geocoding failed");
+          
+          const data = await res.json();
+          if (data.features && data.features.length > 0) {
+            const feature = data.features[0];
+            
+            const props = feature.properties || {};
+            const parts = [];
+            const localName = props.village || props.town || props.city || props.locality || props.hamlet;
+            const isGeographic = ['city', 'town', 'village', 'hamlet', 'locality', 'district'].includes(props.type);
+
+            if (isGeographic && props.name) {
+              parts.push(props.name);
+            } else if (localName) {
+              parts.push(localName);
+            } else if (props.name) {
+              parts.push(props.name);
+            }
+
+            const baseName = parts[0] || '';
+            if (localName && localName !== baseName) parts.push(localName);
+            
+            if (props.county && props.county !== baseName && props.county !== localName) parts.push(props.county);
+            if (props.state && props.state !== props.county) parts.push(props.state);
+            if (props.country) parts.push(props.country);
+
+            const fullDisplayName = parts.join(', ');
+            feature.display_name = fullDisplayName;
+
+            const { place, state, country, full } = extractLocationParts(feature);
+            
+            setQuery(full || place);
+            onCityChange(place);
+            onLocationSelect(place, state, country, latitude, longitude, full || place);
+          } else {
+            console.error("No location found for coordinates");
+          }
+        } catch (err) {
+          console.error("Error reverse geocoding user location:", err);
+        } finally {
+          setIsLocating(false);
+        }
+      },
+      (error) => {
+        console.error("Error getting geolocation:", error);
+        setIsLocating(false);
+      },
+      { enableHighAccuracy: true, timeout: 10000 }
+    );
   };
 
   const getPlaceType = (item: any): string => {
@@ -203,7 +280,20 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
         {isSearching && (
           <Loader2 className="absolute right-3 top-3.5 h-4 w-4 text-muted-foreground animate-spin" />
         )}
-        {query && !disabled && !isSearching && (
+        {isLocating && (
+          <Loader2 className="absolute right-3 top-3.5 h-4 w-4 text-primary animate-spin" />
+        )}
+        {!query && !disabled && !isSearching && !isLocating && (
+          <button
+            type="button"
+            onClick={handleLocateUser}
+            className="absolute right-3 top-3.5 text-muted-foreground hover:text-primary transition-colors"
+            title="Use current location"
+          >
+            <Locate className="h-4 w-4" />
+          </button>
+        )}
+        {query && !disabled && !isSearching && !isLocating && (
           <button
             type="button"
             onClick={clearInput}

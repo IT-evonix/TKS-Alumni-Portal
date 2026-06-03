@@ -659,157 +659,6 @@ export async function revokeBadge(userId: string, badgeId: string) {
 
 // ==================== AUTO-SEEDING ====================
 
-const defaultBadges = [
-  // Common badges (one-time milestones)
-  {
-    name: "First Steps",
-    description: "Logged in for the first time. Welcome to the alumni community!",
-    category: "common",
-    series_type: "login",
-    required_score: 0,
-    tier: "bronze",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 1,
-  },
-  {
-    name: "Profile Pro",
-    description: "Completed your alumni profile with all key details.",
-    category: "common",
-    series_type: "profile",
-    required_score: 0,
-    tier: "bronze",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 2,
-  },
-  // Thread series badges
-  {
-    name: "Conversation Starter",
-    description: "Made your first post or comment in the community feed.",
-    category: "series",
-    series_type: "thread",
-    required_score: 1,
-    tier: "bronze",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 10,
-  },
-  {
-    name: "Active Contributor",
-    description: "Contributed 5 posts or comments in the community.",
-    category: "series",
-    series_type: "thread",
-    required_score: 5,
-    tier: "silver",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 11,
-  },
-  {
-    name: "Community Voice",
-    description: "Reached 15 posts or comments. Your voice matters!",
-    category: "series",
-    series_type: "thread",
-    required_score: 15,
-    tier: "gold",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 12,
-  },
-  // Event series badges
-  {
-    name: "Event Explorer",
-    description: "Attended your first alumni event. Great to see you!",
-    category: "series",
-    series_type: "event",
-    required_score: 1,
-    tier: "bronze",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 20,
-  },
-  {
-    name: "Event Enthusiast",
-    description: "Attended 5 alumni events. You're a regular!",
-    category: "series",
-    series_type: "event",
-    required_score: 5,
-    tier: "silver",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 21,
-  },
-  {
-    name: "Event Champion",
-    description: "Attended 15 events. A true community pillar!",
-    category: "series",
-    series_type: "event",
-    required_score: 15,
-    tier: "gold",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 22,
-  },
-  // Connection series badges
-  {
-    name: "Networker",
-    description: "Made your first alumni connection.",
-    category: "series",
-    series_type: "connection",
-    required_score: 1,
-    tier: "bronze",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 30,
-  },
-  {
-    name: "Well Connected",
-    description: "Built a network of 5 alumni connections.",
-    category: "series",
-    series_type: "connection",
-    required_score: 5,
-    tier: "silver",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 31,
-  },
-  {
-    name: "Super Connector",
-    description: "An impressive network of 15+ alumni connections!",
-    category: "series",
-    series_type: "connection",
-    required_score: 15,
-    tier: "gold",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 32,
-  },
-  // Competitive Badges
-  {
-    name: "Event Master",
-    description: "Highest event participation! Held by the #1 Event Explorer.",
-    category: "competitive",
-    series_type: "event",
-    required_score: 0,
-    tier: "platinum",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 100,
-  },
-  {
-    name: "Top Contributor",
-    description: "Highest comments and replies! The reigning Community Voice.",
-    category: "competitive",
-    series_type: "thread",
-    required_score: 0,
-    tier: "platinum",
-    icon_url: null,
-    is_enabled: true,
-    display_order: 101,
-  },
-];
-
 /**
  * Checks if default badges exist in the database, and inserts them if they don't.
  * Safe to call on application startup against any environment.
@@ -858,45 +707,62 @@ export async function ensureDefaultPointRulesExist() {
 }
 
 /**
- * Checks if default badges exist in the database, and inserts them if they don't.
- * Safe to call on application startup against any environment.
+ * Checks if default badges (First Step & Profile Done) exist in the database, and inserts them if they don't.
  */
 export async function ensureDefaultBadgesExist() {
   try {
-    // Seed point rules first
-    await ensureDefaultPointRulesExist().catch(err => 
-      console.error("[Gamification Auto-Seeder] Point rules seed failed:", err)
-    );
-
     const { data: existing, error: checkErr } = await supabase
       .from("gamification_badges")
-      .select("id")
-      .limit(1);
+      .select("series_type")
+      .in("series_type", ["login", "profile"]);
 
     if (checkErr) {
       console.warn("[Gamification Auto-Seeder] Error checking existing badges:", checkErr.message);
       return;
     }
 
-    if (existing && existing.length > 0) {
-      console.log("[Gamification Auto-Seeder] Badges already exist. Skipping seed.");
-      return;
+    const existingTypes = new Set((existing || []).map(b => b.series_type));
+
+    const defaultBadges = [
+      {
+        name: "First Step",
+        description: "Awarded for your very first login to the TKS Alumni Portal.",
+        category: "common",
+        series_type: "login",
+        required_score: 0,
+        tier: "platinum",
+        icon_url: "🎯",
+        is_enabled: true,
+        display_order: 1
+      },
+      {
+        name: "Profile 100 % Done ",
+        description: "Awarded for completing 100% of your alumni profile.",
+        category: "common",
+        series_type: "profile",
+        required_score: 0,
+        tier: "platinum",
+        icon_url: "⭐",
+        is_enabled: true,
+        display_order: 2
+      }
+    ];
+
+    const toInsert = defaultBadges.filter(b => !existingTypes.has(b.series_type));
+    if (toInsert.length > 0) {
+      const { error: insertErr } = await supabase
+        .from("gamification_badges")
+        .insert(toInsert);
+
+      if (insertErr) {
+        console.error("[Gamification Auto-Seeder] Error seeding default badges:", insertErr.message);
+        return;
+      }
+      console.log(`[Gamification Auto-Seeder] Successfully seeded ${toInsert.length} default badges.`);
     }
-
-    console.log("[Gamification Auto-Seeder] No badges found. Inserting 5 core series (default badges)...");
-    
-    const { data, error } = await supabase
-      .from("gamification_badges")
-      .insert(defaultBadges)
-      .select("id, name, category, series_type, tier");
-
-    if (error) {
-      console.error("[Gamification Auto-Seeder] Error seeding badges:", error.message);
-      return;
-    }
-
-    console.log(`[Gamification Auto-Seeder] Successfully seeded ${data?.length} default badges.`);
   } catch (err) {
-    console.error("[Gamification Auto-Seeder] Unexpected error:", err);
+    console.error("[Gamification Auto-Seeder] Unexpected error in badges seeder:", err);
   }
 }
+
+

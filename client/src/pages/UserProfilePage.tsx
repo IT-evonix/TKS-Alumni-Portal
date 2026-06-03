@@ -1034,73 +1034,59 @@ export const UserProfilePage = (): JSX.Element => {
       // Professional fields (weight: 2) - Important for networking
       { value: profile.linkedinUrl, weight: 2, name: 'LinkedIn', section: 'professional' },
 
-      // Experience section (weight: 2.5 per experience, max 2 experiences = 5 points)
+      // Experience section (total weight: 5 points, complete if >= 1)
       {
-        value: profileData.experiences.length,
-        weight: 2.5,
+        weight: 5,
         name: 'Work Experience',
         section: 'experience',
-        maxCount: 2,
         checkFunction: () => profileData.experiences.length >= 1
       },
 
-      // Education section (weight: 2 per education, max 2 = 4 points)
+      // Education section (total weight: 4 points, complete if >= 1)
       {
-        value: profileData.education.length,
-        weight: 2,
+        weight: 4,
         name: 'Education',
         section: 'education',
-        maxCount: 2,
         checkFunction: () => profileData.education.length >= 1
       },
 
-      // Skills section (weight: 0.5 per skill, max 9 skills = 4.5 points)
+      // Skills section (total weight: 4.5 points, complete if >= 1)
       {
-        value: profileData.skills.length,
-        weight: 0.5,
+        weight: 4.5,
         name: 'Skills',
         section: 'skills',
-        maxCount: 9,
-        checkFunction: () => profileData.skills.length >= 3
+        checkFunction: () => profileData.skills.length >= 1
       },
 
-      // Projects section (weight: 1.5 per project, max 2 = 3 points)
+      // Projects section (total weight: 3 points, complete if >= 1)
       {
-        value: profileData.projects.length,
-        weight: 1.5,
+        weight: 3,
         name: 'Projects',
         section: 'projects',
-        maxCount: 2,
         checkFunction: () => profileData.projects.length >= 1
       },
 
-      // Certifications section (weight: 1 per certification, max 3 = 3 points)
+      // Certifications section (total weight: 3 points, complete if >= 1)
       {
-        value: profileData.certifications.length,
-        weight: 1,
+        weight: 3,
         name: 'Certifications',
         section: 'certifications',
-        maxCount: 3,
         checkFunction: () => profileData.certifications.length >= 1
       },
 
-      // Languages section (weight: 1 per language, max 3 = 3 points)
+      // Languages section (total weight: 3 points, complete if >= 1)
       {
-        value: profileData.languages.length,
-        weight: 1,
+        weight: 3,
         name: 'Languages',
         section: 'languages',
-        maxCount: 3,
         checkFunction: () => profileData.languages.length >= 1
       },
 
-      // Achievements section (weight: 1 per achievement, max 3 = 3 points)
+      // Achievements section (total weight: 3 points, complete if >= 1)
       {
-        value: profileData.achievements.length,
-        weight: 1,
+        weight: 3,
         name: 'Achievements',
         section: 'achievements',
-        maxCount: 3,
         checkFunction: () => profileData.achievements.length >= 1
       },
     ];
@@ -1109,23 +1095,14 @@ export const UserProfilePage = (): JSX.Element => {
     let totalWeight = 0;
 
     fields.forEach(field => {
-      if (field.checkFunction && field.maxCount) {
-        // For sections with checkFunction and maxCount, calculate based on actual data
-        // Each item in the section has a weight, up to maxCount items
-        const count = field.value as number || 0;
-        const maxCount = field.maxCount;
-        const effectiveCount = Math.min(count, maxCount);
-
-        // Total possible weight for this section = weight per item * maxCount
-        const sectionTotalWeight = field.weight * maxCount;
-        // Completed weight = weight per item * actual count (capped at maxCount)
-        const sectionCompletedWeight = field.weight * effectiveCount;
-
-        totalWeight += sectionTotalWeight;
-        completedWeight += sectionCompletedWeight;
+      totalWeight += field.weight;
+      if (field.checkFunction) {
+        // Section fields with checkFunction
+        if (field.checkFunction()) {
+          completedWeight += field.weight;
+        }
       } else {
-        // For regular fields
-        totalWeight += field.weight;
+        // Regular text/image fields
         if (field.value && String(field.value).trim() !== '' && String(field.value) !== '[]') {
           completedWeight += field.weight;
         }
@@ -1184,7 +1161,7 @@ export const UserProfilePage = (): JSX.Element => {
         ref: skillsRef,
         label: 'Skills',
         // At least 3 skills recommended
-        isComplete: () => profileData.skills.length >= 3,
+        isComplete: () => profileData.skills.length >= 1,
         priority: 4
       },
       {

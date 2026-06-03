@@ -28,7 +28,7 @@ function ShieldIcon({ badge, size = 16 }: { badge: any; size?: number }) {
     badge.tier === "platinum" ? "from-purple-400 to-purple-700" :
     badge.tier === "gold"     ? "from-yellow-400 to-amber-600" :
     badge.tier === "silver"   ? "from-slate-300 to-slate-500" :
-    badge.tier === "bronze"   ? "from-orange-500 to-orange-800" : "from-primary/60 to-primary";
+    badge.tier === "bronze"   ? "from-orange-500 to-orange-800" : "from-cyan-400 to-teal-500";
 
   return (
     <div
@@ -66,7 +66,7 @@ export function GamificationLeaderboard() {
     const fetchLeaderboard = async () => {
       try {
         const token = localStorage.getItem("auth_token");
-        const res = await fetch("/api/gamification/leaderboard", {
+        const res = await fetch(`/api/gamification/leaderboard?t=${Date.now()}`, {
           headers: { Authorization: `Bearer ${token}` }
         });
         if (res.ok) {
@@ -84,9 +84,20 @@ export function GamificationLeaderboard() {
 
     let timeoutId: NodeJS.Timeout;
     const debouncedFetch = () => {
+      console.log("[GamificationLeaderboard] Socket triggered!");
       clearTimeout(timeoutId);
       timeoutId = setTimeout(fetchLeaderboard, 500);
     };
+
+    const handleNewNotification = ((event: CustomEvent) => {
+      const notification = event.detail;
+      if (notification && notification.type && notification.type.startsWith('gamification')) {
+        console.log("[GamificationLeaderboard] Received gamification notification via Socket.IO, refreshing...");
+        debouncedFetch();
+      }
+    }) as EventListener;
+
+    window.addEventListener('new-notification', handleNewNotification);
 
     const channel = supabase
       .channel("gamification-leaderboard-changes")
@@ -95,6 +106,7 @@ export function GamificationLeaderboard() {
       .subscribe();
 
     return () => {
+      window.removeEventListener('new-notification', handleNewNotification);
       clearTimeout(timeoutId);
       supabase.removeChannel(channel);
     };
@@ -220,7 +232,7 @@ export function GamificationLeaderboard() {
                       b.tier === "platinum" ? "text-purple-600 dark:text-purple-400" :
                       b.tier === "gold"     ? "text-amber-600 dark:text-amber-400" :
                       b.tier === "silver"   ? "text-slate-500 dark:text-slate-400" :
-                      b.tier === "bronze"   ? "text-orange-600 dark:text-orange-400" : "text-primary";
+                      b.tier === "bronze"   ? "text-orange-600 dark:text-orange-400" : "text-cyan-600 dark:text-cyan-400";
                     return (
                       <div key={i} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
                         <ShieldIcon badge={b} size={28} />

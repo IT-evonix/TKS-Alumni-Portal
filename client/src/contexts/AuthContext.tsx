@@ -131,6 +131,20 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       }
     }
 
+    // Verify sessions against DB on mount
+    if (storedUser) {
+      try {
+        const userData = JSON.parse(storedUser);
+        fetchCurrentUser(userData.id, false);
+      } catch (e) { }
+    }
+    if (storedAdminUser) {
+      try {
+        const adminData = JSON.parse(storedAdminUser);
+        fetchCurrentUser(adminData.id, true);
+      } catch (e) { }
+    }
+
     setIsLoading(false);
 
     // Initialize BroadcastChannel
@@ -254,17 +268,21 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       });
 
       if (!response.ok) {
-        // Only logout on 401 (unauthorized), not on other errors
-        if (response.status === 401) {
-          console.warn('Session expired or invalid, logging out');
+        // Clear session on 401 (unauthorized) or 404 (user deleted from database)
+        if (response.status === 401 || response.status === 404) {
+          console.warn('Session expired, invalid, or user not found, logging out');
           if (isAdmin) {
             localStorage.removeItem('adminUser');
             setAdminUser(null);
+            window.location.href = '/admin/login';
           } else {
             localStorage.removeItem('user');
             localStorage.removeItem('alumni');
+            localStorage.removeItem('userId');
+            localStorage.removeItem('auth_token');
             setUser(null);
             setAlumni(null);
+            window.location.href = '/login';
           }
         } else {
           // For other errors (500, 503, etc.), keep the session
@@ -294,7 +312,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   };
 
   const login = async (email: string, password: string): Promise<boolean> => {
-    setIsLoading(true);
     setError(null);
 
     try {
@@ -370,8 +387,6 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       console.error('Login error:', error);
       setError(error.message || 'Network error');
       throw error;
-    } finally {
-      setIsLoading(false);
     }
   };
 
