@@ -10,8 +10,9 @@ import { useState } from "react";
 import { AdminBadgeManager } from "@/components/AdminBadgeManager";
 import { AdminUserRankings } from "@/components/AdminUserRankings";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Trophy, Users, Sliders } from "lucide-react";
+import { Trophy, Users, Sliders, Search } from "lucide-react";
 import { AdminPointRules } from "@/components/AdminPointRules";
+import { Input } from "@/components/ui/input";
 
 export const AdminGamificationPage = () => {
     const [, setLocation] = useLocation();
@@ -19,6 +20,7 @@ export const AdminGamificationPage = () => {
     const { unreadCount } = useNotifications();
     const [showNotifications, setShowNotifications] = useState(false);
     const [showMobileMenu, setShowMobileMenu] = useState(false);
+    const [searchQuery, setSearchQuery] = useState("");
 
     return (
         <div className="flex min-h-screen bg-white">
@@ -31,7 +33,7 @@ export const AdminGamificationPage = () => {
                 {/* Header */}
                 <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-8 py-4 sticky top-0 z-40 shadow-sm transition-all duration-300">
                     <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-3 shrink-0">
                             <Button
                                 variant="ghost"
                                 size="icon"
@@ -40,7 +42,17 @@ export const AdminGamificationPage = () => {
                             >
                                 <ArrowLeft className="h-5 w-5 text-gray-700" />
                             </Button>
-                            <h2 className="text-xl font-semibold text-gray-900">Gamification Engine</h2>
+                            <h2 className="text-xl font-semibold text-gray-900 hidden lg:block">Gamification Engine</h2>
+                        </div>
+                        
+                        <div className="flex-1 max-w-md mx-4 relative group hidden sm:block">
+                            <Search className="w-4 h-4 text-gray-400 absolute left-3 top-1/2 -translate-y-1/2 group-hover:text-primary transition-colors" />
+                            <Input
+                                placeholder="Search badges, rules, alumni..."
+                                value={searchQuery}
+                                onChange={(e) => setSearchQuery(e.target.value)}
+                                className="pl-9 bg-gray-50/50 border-gray-200 focus-visible:ring-primary/20 rounded-full h-10"
+                            />
                         </div>
                         <div className="flex items-center gap-4">
                             <div className="relative z-[70]">
@@ -96,13 +108,13 @@ export const AdminGamificationPage = () => {
                             </TabsTrigger>
                         </TabsList>
                         <TabsContent value="points" className="mt-0 outline-none">
-                            <AdminPointRules />
+                            <AdminPointRules searchQuery={searchQuery} />
                         </TabsContent>
                         <TabsContent value="rules" className="mt-0 outline-none">
-                            <AdminBadgeManager />
+                            <AdminBadgeManager searchQuery={searchQuery} />
                         </TabsContent>
                         <TabsContent value="users" className="mt-0 outline-none">
-                            <AdminUserRankings />
+                            <AdminUserRankings searchQuery={searchQuery} />
                         </TabsContent>
                     </Tabs>
                 </div>

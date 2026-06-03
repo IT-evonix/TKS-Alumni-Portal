@@ -24,8 +24,8 @@ ALTER TABLE public.user_scores ADD COLUMN IF NOT EXISTS job_score INTEGER NOT NU
 -- 3. Seed point rules for job postings and job applications if they don't exist
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
 VALUES 
-  ('job_post', 20, 'Points awarded for posting a new job opportunity', 'jobs'),
-  ('job_apply', 5, 'Points awarded for applying to a job opportunity', 'jobs')
+  ('job_post', 0, 'Points awarded for posting a new job opportunity', 'jobs'),
+  ('job_apply', 0, 'Points awarded for applying to a job opportunity', 'jobs')
 ON CONFLICT (action_key) DO NOTHING;
 
 -- =======================================================================
