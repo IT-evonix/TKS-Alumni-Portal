@@ -96,10 +96,20 @@ module.exports = {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "pulse-scale": {
+          "0%, 100%": { transform: "scale(1)" },
+          "50%": { transform: "scale(1.15)" },
+        },
+        wiggle: {
+          "0%, 100%": { transform: "rotate(-5deg)" },
+          "50%": { transform: "rotate(5deg)" },
+        }
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "pulse-scale": "pulse-scale 1.5s ease-in-out infinite",
+        "wiggle": "wiggle 1s ease-in-out infinite",
       },
     },
     container: { center: true, padding: "2rem", screens: { "2xl": "1400px" } },

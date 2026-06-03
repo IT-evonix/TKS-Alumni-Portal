@@ -526,19 +526,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`relative min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-colors ${scores?.total_points > 0
-                    ? "text-amber-600 hover:bg-amber-100/50 hover:text-amber-700 ring-2 ring-amber-500/30 bg-amber-50"
-                    : "text-gray-600 hover:text-amber-600 hover:bg-gray-100"
-                    } mr-1 sm:mr-3`}
+                  className="relative min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-colors text-amber-600 bg-amber-50 hover:bg-amber-100/80 hover:text-amber-700 ring-2 ring-amber-500/30 mr-1 sm:mr-3"
                   onClick={() => setShowGamificationDrawer(true)}
                   aria-label="Rewards & Gamification"
                 >
-                  <Trophy className={`w-5 h-5 sm:w-6 sm:h-6 ${scores?.total_points > 0 ? "fill-amber-500/20" : ""}`} strokeWidth={1.5} />
-                  {(scores?.total_points || 0) > 0 && (
-                    <span className="absolute -top-1.5 -right-2 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm shadow-amber-500/30">
-                      {scores.total_points > 999 ? `${(scores.total_points / 1000).toFixed(1).replace('.0', '')}k` : scores.total_points}
-                    </span>
-                  )}
+                  <Trophy className="w-5 h-5 sm:w-6 sm:h-6 fill-amber-500/20" strokeWidth={1.5} />
+                  <span className="absolute -top-1.5 -right-2 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm shadow-amber-500/30 animate-pulse-scale">
+                    {(scores?.total_points || 0) > 999 ? `${((scores?.total_points || 0) / 1000).toFixed(1).replace('.0', '')}k` : (scores?.total_points || 0)}
+                  </span>
                 </Button>
               )}
 
