@@ -148,31 +148,31 @@ WHERE NOT EXISTS (SELECT 1 FROM public.gamification_badges WHERE series_type = '
 
 -- Insert default point rules
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'network_connect', 5, 'Points awarded for connecting with another alumni', 'networking'
+SELECT 'network_connect', 0, 'Points awarded for connecting with another alumni', 'networking'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'network_connect');
 
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'thread_create', 10, 'Points awarded for creating a new community thread', 'community'
+SELECT 'thread_create', 0, 'Points awarded for creating a new community thread', 'community'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'thread_create');
 
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'post_reply', 2, 'Points awarded for replying to a thread or post', 'community'
+SELECT 'post_reply', 0, 'Points awarded for replying to a thread or post', 'community'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'post_reply');
 
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'feed_create', 5, 'Points awarded for creating a post on the main feed', 'community'
+SELECT 'feed_create', 0, 'Points awarded for creating a post on the main feed', 'community'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'feed_create');
 
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'event_rsvp', 15, 'Points awarded for RSVPing to an event', 'events'
+SELECT 'event_rsvp', 0, 'Points awarded for RSVPing to an event', 'events'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'event_rsvp');
 
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'job_post', 20, 'Points awarded for posting a new job opportunity', 'jobs'
+SELECT 'job_post', 0, 'Points awarded for posting a new job opportunity', 'jobs'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'job_post');
 
 INSERT INTO public.gamification_point_rules (action_key, points, description, category)
-SELECT 'job_apply', 5, 'Points awarded for applying to a job opportunity', 'jobs'
+SELECT 'job_apply', 0, 'Points awarded for applying to a job opportunity', 'jobs'
 WHERE NOT EXISTS (SELECT 1 FROM public.gamification_point_rules WHERE action_key = 'job_apply');
 
 -- ==============================================================================

@@ -29,7 +29,11 @@ interface PointRule {
   category: string;
 }
 
-export function AdminPointRules() {
+interface AdminPointRulesProps {
+  searchQuery?: string;
+}
+
+export function AdminPointRules({ searchQuery = "" }: AdminPointRulesProps) {
   const [rules, setRules] = useState<PointRule[]>([]);
   const [loading, setLoading] = useState(true);
   const [savingKey, setSavingKey] = useState<string | null>(null);
@@ -107,11 +111,17 @@ export function AdminPointRules() {
     );
   }
 
-  // Categorize rules
-  const networkRules = rules.filter(r => r.category === 'networking');
-  const communityRules = rules.filter(r => r.category === 'community');
-  const eventRules = rules.filter(r => r.category === 'events');
-  const jobRules = rules.filter(r => r.category === 'jobs');
+  // Filter and categorize rules
+  const filteredRules = rules.filter(r => 
+    r.action_key.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    (r.description && r.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    r.category.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const networkRules = filteredRules.filter(r => r.category === 'networking');
+  const communityRules = filteredRules.filter(r => r.category === 'community');
+  const eventRules = filteredRules.filter(r => r.category === 'events');
+  const jobRules = filteredRules.filter(r => r.category === 'jobs');
 
   const getIcon = (key: string) => {
     switch (key) {

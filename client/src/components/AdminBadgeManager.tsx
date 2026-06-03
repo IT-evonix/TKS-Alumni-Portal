@@ -44,7 +44,11 @@ interface BadgeRecord {
   tiers?: Record<string, any>;
 }
 
-export function AdminBadgeManager() {
+interface AdminBadgeManagerProps {
+  searchQuery?: string;
+}
+
+export function AdminBadgeManager({ searchQuery = "" }: AdminBadgeManagerProps) {
   const [badges, setBadges] = useState<BadgeRecord[]>([]);
   const [analytics, setAnalytics] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -258,8 +262,15 @@ export function AdminBadgeManager() {
     setIsDialogOpen(true);
   };
 
+  const filteredBadges = badges.filter(b => 
+    b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    (b.description && b.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
+    b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    b.series_type?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const groupedBadges = Object.values(
-    badges.reduce((acc, badge) => {
+    filteredBadges.reduce((acc, badge) => {
       if (badge.category === 'deleted') return acc;
       if (['series'].includes(badge.category)) {
         const key = `${badge.name}-${badge.category}`;

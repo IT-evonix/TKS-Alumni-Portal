@@ -54,7 +54,11 @@ interface BadgeRecord {
   required_score?: number;
 }
 
-export function AdminUserRankings() {
+interface AdminUserRankingsProps {
+  searchQuery?: string;
+}
+
+export function AdminUserRankings({ searchQuery = "" }: AdminUserRankingsProps) {
   const [users, setUsers] = useState<UserRanking[]>([]);
   const [badges, setBadges] = useState<BadgeRecord[]>([]);
   const [loading, setLoading] = useState(true);
@@ -212,7 +216,13 @@ export function AdminUserRankings() {
 
   // Global loader replaced by inline table loader
 
-  const sortedUsers = [...users].sort((a, b) => {
+  const filteredUsers = users.filter(u => 
+    u.firstName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.lastName.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    u.email.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
+  const sortedUsers = [...filteredUsers].sort((a, b) => {
     if (activeTab === "badges") {
       if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
       return b.total_points - a.total_points;

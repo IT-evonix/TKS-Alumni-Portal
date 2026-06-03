@@ -558,10 +558,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
     <div
       ref={dropdownRef}
       data-notification-dropdown="true"
-      className="absolute right-0 top-full mt-2 w-[320px] sm:w-80 md:w-96 lg:w-[420px] xl:w-[480px] max-w-[95vw] sm:max-w-md bg-white border border-gray-200 rounded-lg shadow-2xl z-[9999] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 min-h-[150px] sm:min-h-[200px]"
+      className="fixed left-2 right-2 top-[72px] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 md:w-96 lg:w-[420px] xl:w-[480px] max-w-none sm:max-w-md bg-white border border-gray-200 rounded-xl sm:rounded-lg shadow-2xl z-[9999] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 min-h-[150px] sm:min-h-[200px]"
       style={{
-        maxHeight: isMobile ? 'calc(100vh - 5rem)' : '80vh',
-        minWidth: isMobile ? 'calc(100vw - 2rem)' : '320px',
+        maxHeight: isMobile ? 'calc(100vh - 80px)' : '80vh',
       }}
     >
       {/* Header */}

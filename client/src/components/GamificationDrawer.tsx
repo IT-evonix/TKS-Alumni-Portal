@@ -235,13 +235,14 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
             {/* Glow effect for unlocked */}
             <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity ${eb.gamification_badges.tier ? 'bg-emerald-500/5' : 'bg-cyan-500/5'}`} />
 
-            <div className="flex flex-col items-center w-full flex-1">
-              {eb.gamification_badges.series_type === 'login' && (
-                <div className="mb-3 px-3 py-1 bg-orange-100 border-2 border-orange-300 rounded-full flex items-center justify-center gap-1 shadow-sm z-20 w-full relative">
-                  <Flame className="w-4 h-4 text-orange-500 fill-orange-500 animate-pulse" />
-                  <span className="text-[10px] font-black text-orange-700 tracking-wider uppercase">{streak || 0} Day Streak!</span>
-                </div>
-              )}
+            {eb.gamification_badges.series_type === 'login' && (
+              <div className="absolute top-3 right-3 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 z-20 group-hover:border-slate-200 transition-colors" title="Current Streak">
+                <Flame className="w-3 h-3 text-orange-500 fill-orange-500" />
+                <span className="text-[10px] font-bold text-slate-600">{streak || 0} Streak</span>
+              </div>
+            )}
+
+            <div className="flex flex-col items-center w-full flex-1 pt-2">
 
               {eb.gamification_badges.tier ? (
                 <div className="mb-3 relative z-10 shrink-0">
@@ -397,14 +398,15 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                       {filteredProgress.map((item, idx) => (
                         <Tooltip key={idx}>
                           <TooltipTrigger asChild>
-                            <div className="bg-white border border-slate-100 border-dashed rounded-xl p-5 flex flex-col items-center text-center shadow-sm hover:border-slate-300 transition-colors cursor-help overflow-hidden h-full justify-between">
-                              <div className="flex flex-col items-center w-full flex-1">
+                            <div className="relative group bg-white border border-slate-100 border-dashed rounded-xl p-5 flex flex-col items-center text-center shadow-sm hover:border-slate-300 transition-colors cursor-help overflow-hidden h-full justify-between">
                                 {item.badge.series_type === 'login' && (
-                                  <div className="mb-3 px-3 py-1 bg-slate-100 border-2 border-slate-300 rounded-full flex items-center justify-center gap-1 shadow-sm z-20 w-full relative">
-                                    <Flame className="w-4 h-4 text-slate-400 fill-slate-400" />
-                                    <span className="text-[10px] font-black text-slate-500 tracking-wider uppercase">{streak || 0} Day Streak!</span>
+                                  <div className="absolute top-3 right-3 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 z-20 group-hover:border-slate-200 transition-colors" title="Current Streak">
+                                    <Flame className="w-3 h-3 text-slate-400 fill-slate-400" />
+                                    <span className="text-[10px] font-bold text-slate-500">{streak || 0} Streak</span>
                                   </div>
                                 )}
+
+                              <div className="flex flex-col items-center w-full flex-1 pt-2">
 
                                 {item.badge.tier ? (
                                   <div className="mb-3 relative z-10 grayscale-[0.8] opacity-60 shrink-0">
