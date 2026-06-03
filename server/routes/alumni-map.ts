@@ -4,6 +4,8 @@ import axios from 'axios';
 
 const router = express.Router();
 
+const NOMINATIM_API_URL = (process.env.NOMINATIM_API_URL || 'https://nominatim.openstreetmap.org').replace(/\/$/, '');
+
 const GEO_CACHE: { [key: string]: { lat: number; lng: number } } = {};
 
 const COORDINATES: { [key: string]: { lat: number; lng: number; direction?: string; offset?: [number, number] } } = {
@@ -79,7 +81,7 @@ const getCoordinates = async (name: string, context?: string) => {
 
   const searchQuery = context ? `${normalized}, ${context}` : normalized;
   try {
-    const response = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+    const response = await axios.get(`${NOMINATIM_API_URL}/search`, {
       params: { q: searchQuery, format: 'json', limit: 1, addressdetails: 1 },
       headers: { 'User-Agent': 'TKS-Alumni-Portal/1.0' }
     });
@@ -90,7 +92,7 @@ const getCoordinates = async (name: string, context?: string) => {
       return coords;
     }
     if (context) {
-      const fallbackResponse = await axios.get(`https://nominatim.openstreetmap.org/search`, {
+      const fallbackResponse = await axios.get(`${NOMINATIM_API_URL}/search`, {
         params: { q: normalized, format: 'json', limit: 1 },
         headers: { 'User-Agent': 'TKS-Alumni-Portal/1.0' }
       });

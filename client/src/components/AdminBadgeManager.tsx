@@ -146,7 +146,7 @@ export function AdminBadgeManager() {
 
       const isUpdate = !!editingBadge.id || (editingBadge.groupedIds && editingBadge.groupedIds.length > 0);
 
-      if (['series', 'competitive'].includes(editingBadge.category || '')) {
+      if (['series'].includes(editingBadge.category || '')) {
         const promises = [];
         for (const tier of ['bronze', 'silver', 'gold', 'platinum']) {
           const scoreStr = tierScores[tier];
@@ -242,7 +242,7 @@ export function AdminBadgeManager() {
   };
 
   const handleEdit = (badge: any) => {
-    if (['series', 'competitive'].includes(badge.category) && badge.groupedIds) {
+    if (['series'].includes(badge.category) && badge.groupedIds) {
       const newScores = { bronze: '', silver: '', gold: '', platinum: '' };
       for (const t of ['bronze', 'silver', 'gold', 'platinum']) {
         if (badge.tiers && badge.tiers[t]) {
@@ -261,7 +261,7 @@ export function AdminBadgeManager() {
   const groupedBadges = Object.values(
     badges.reduce((acc, badge) => {
       if (badge.category === 'deleted') return acc;
-      if (['series', 'competitive'].includes(badge.category)) {
+      if (['series'].includes(badge.category)) {
         const key = `${badge.name}-${badge.category}`;
         if (!acc[key]) {
           acc[key] = { ...badge, groupedIds: [badge.id], tiers: { [badge.tier]: badge } };
@@ -441,8 +441,7 @@ export function AdminBadgeManager() {
                         </TableCell>
                         <TableCell>
                           <Badge variant="outline" className={`capitalize border shadow-sm px-2.5 py-0.5 text-[10px] font-bold tracking-wider
-                          ${badge.category === 'competitive' ? 'bg-amber-50 text-amber-700 border-amber-200 dark:bg-amber-950/30 dark:text-amber-400 dark:border-amber-800' :
-                              badge.category === 'series' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800' :
+                          ${badge.category === 'series' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800' :
                                 'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}
                         `}>
                             {badge.category}
@@ -591,7 +590,7 @@ export function AdminBadgeManager() {
                 </div>
               </div>
 
-              {['series', 'competitive', 'common'].includes(editingBadge?.category || '') && (
+              {['series', 'common'].includes(editingBadge?.category || '') && (
                 !editingBadge?.id && editingBadge?.category === 'series' ? (
                   <div className="grid gap-2 border-t pt-4 mt-2">
                     <Label>Required Points per Tier (Leave empty to skip tier)</Label>
@@ -656,7 +655,7 @@ export function AdminBadgeManager() {
                         />
                       </div>
                     )}
-                    <div className={`grid gap-2 ${editingBadge?.category === 'competitive' ? 'col-span-2' : ''}`}>
+                    <div className="grid gap-2">
                       <Label>Tier</Label>
                       <Select
                         value={editingBadge?.tier || 'bronze'}
@@ -667,7 +666,7 @@ export function AdminBadgeManager() {
                           <SelectItem value="bronze">Bronze</SelectItem>
                           <SelectItem value="silver">Silver</SelectItem>
                           <SelectItem value="gold">Gold</SelectItem>
-                          <SelectItem value="platinum">Platinum (Best for Competitive)</SelectItem>
+                          <SelectItem value="platinum">Platinum</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>

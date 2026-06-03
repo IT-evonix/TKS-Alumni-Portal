@@ -8,6 +8,7 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { AuthProvider } from "@/contexts/AuthContext";
 import { SearchProvider } from "@/contexts/SearchContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
+import { GamificationProvider } from "@/contexts/GamificationContext";
 import { GlobalSearchModal } from "@/components/search/GlobalSearchModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { io } from "socket.io-client";
@@ -74,7 +75,6 @@ const NotificationHistoryPage = lazy(() => import("@/pages/NotificationHistoryPa
 const UserProfilePage = lazy(() => import("@/pages/UserProfilePage").then(m => ({ default: m.UserProfilePage })));
 const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage").then(m => ({ default: m.PublicProfilePage })));
 const MentorshipPage = lazy(() => import("@/pages/MentorshipPage").then(m => ({ default: m.MentorshipPage })));
-const LeaderboardPage = lazy(() => import("@/pages/LeaderboardPage").then(m => ({ default: m.LeaderboardPage })));
 
 // Forum pages - lazy loaded
 const ForumsPage = lazy(() => import("@/pages/ForumsPage").then(m => ({ default: m.ForumsPage })));
@@ -134,7 +134,6 @@ function Router() {
           <ProtectedRoute path="/profile" component={UserProfilePage} />
           <ProtectedRoute path="/profile/:userId" component={PublicProfilePage} />
           <ProtectedRoute path="/mentorship" component={MentorshipPage} />
-          <ProtectedRoute path="/leaderboard" component={LeaderboardPage} />
           <ProtectedRoute path="/forums" component={ForumsPage} />
           <ProtectedRoute path="/forums/new" component={ForumNewThreadPage} />
           <ProtectedRoute path="/forums/thread/:id" component={ForumThreadPage} />
@@ -259,11 +258,13 @@ function App() {
           <AuthProvider>
             <SearchProvider>
               <NotificationProvider>
-                <TooltipProvider>
-                  <Router />
-                  <GlobalSearchModal />
-                  <Toaster />
-                </TooltipProvider>
+                <GamificationProvider>
+                  <TooltipProvider>
+                    <Router />
+                    <GlobalSearchModal />
+                    <Toaster />
+                  </TooltipProvider>
+                </GamificationProvider>
               </NotificationProvider>
             </SearchProvider>
           </AuthProvider>

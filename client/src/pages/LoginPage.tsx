@@ -117,6 +117,13 @@ export const LoginPage = (): JSX.Element => {
     }
   };
 
+  const handleKeyPress = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      handleSignIn();
+    }
+  };
+
   const handleFormSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     handleSignIn();
@@ -175,7 +182,7 @@ export const LoginPage = (): JSX.Element => {
             )}
 
             {/* Login Form */}
-            <form onSubmit={handleFormSubmit} className="space-y-6" noValidate>
+            <div className="space-y-6">
               <div className="space-y-4">
                 {/* Email */}
                 <div className="space-y-2 group">
@@ -190,6 +197,7 @@ export const LoginPage = (): JSX.Element => {
                       placeholder="e.g. your.name@example.com"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
+                      onKeyDown={handleKeyPress}
                       className="peer w-full pl-4 pr-4 py-6 border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-green-1/10 focus:border-primary-green-1 transition-all bg-white font-medium"
                       disabled={isLoading}
                       aria-required="true"
@@ -220,6 +228,7 @@ export const LoginPage = (): JSX.Element => {
                       placeholder="Enter your password"
                       value={password}
                       onChange={(e) => setPassword(e.target.value)}
+                      onKeyDown={handleKeyPress}
                       className="w-full pl-4 pr-12 py-6 border-gray-200 rounded-xl focus:ring-4 focus:ring-primary-green-1/10 focus:border-primary-green-1 transition-all bg-white font-medium"
                       disabled={isLoading}
                       aria-required="true"
@@ -249,7 +258,8 @@ export const LoginPage = (): JSX.Element => {
 
               <div className="space-y-4">
                 <Button
-                  type="submit"
+                  type="button"
+                  onClick={handleSignIn}
                   className="w-full bg-primary-green-1 hover:bg-primary-green-2 text-white py-6 rounded-xl font-bold text-lg shadow-lg shadow-green-900/10 hover:shadow-xl hover:shadow-green-900/20 active:scale-[0.98] transition-all group"
                   disabled={isLoading}
                   aria-label="Sign in to portal"
@@ -287,7 +297,7 @@ export const LoginPage = (): JSX.Element => {
                 >
                   <span className="flex items-center gap-2">
                     <svg className="w-5 h-5 shrink-0" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z"/>
+                      <path d="M20.447 20.452h-3.554v-5.569c0-1.328-.027-3.037-1.852-3.037-1.853 0-2.136 1.445-2.136 2.939v5.667H9.351V9h3.414v1.561h.046c.477-.9 1.637-1.85 3.37-1.85 3.601 0 4.267 2.37 4.267 5.455v6.286zM5.337 7.433a2.062 2.062 0 01-2.063-2.065 2.064 2.064 0 112.063 2.065zm1.782 13.019H3.555V9h3.564v11.452zM22.225 0H1.771C.792 0 0 .774 0 1.729v20.542C0 23.227.792 24 1.771 24h20.451C23.2 24 24 23.227 24 22.271V1.729C24 .774 23.2 0 22.222 0h.003z" />
                     </svg>
                     Continue with LinkedIn
                   </span>
@@ -315,7 +325,7 @@ export const LoginPage = (): JSX.Element => {
                   </Button>
                 </Link>
               </div>
-            </form>
+            </div>
 
             {/* Footer */}
             <p className="text-center text-xs text-gray-400 mt-8">

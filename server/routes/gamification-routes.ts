@@ -18,9 +18,10 @@ const processUserBadges = (userBadges: any[]) => {
     const badge = b.gamification_badges;
     if (!badge) return;
     
-    // Use series_type if available, otherwise fallback to badge name. 
-    // This ensures both official series and custom tiered competitive badges are deduplicated correctly.
-    const deduplicationKey = badge.series_type || badge.name;
+    // Only deduplicate badges of 'series' category that have a tier.
+    // We group by series_type AND name so different series badges don't overwrite each other.
+    const isTiered = badge.tier && badge.category === 'series';
+    const deduplicationKey = isTiered ? `${badge.series_type}_${badge.name}` : badge.id;
     const existing = deduplicated.get(deduplicationKey);
     
     if (!existing || (tierWeight[badge.tier || ''] || 0) > (tierWeight[existing.gamification_badges?.tier || ''] || 0)) {
@@ -41,24 +42,20 @@ const processUserBadges = (userBadges: any[]) => {
 
   const badgeScore = uniqueBadges.reduce((acc, b: any) => acc + getBadgeScore(b.gamification_badges?.tier), 0);
 
-  // Extract up to 3 most important badges to display
-  // Prioritize competitive -> platinum -> gold -> silver -> bronze
-  const topBadges = uniqueBadges
+  // Extract and sort badges by platinum -> gold -> silver -> bronze -> common/display_order
+  const sortedBadges = uniqueBadges
     .map(b => b.gamification_badges)
     .filter(Boolean)
     .sort((a: any, b: any) => {
-      if (a.category === 'competitive' && b.category !== 'competitive') return -1;
-      if (b.category === 'competitive' && a.category !== 'competitive') return 1;
-      const aWeight = tierWeight[a.tier] || 0;
-      const bWeight = tierWeight[b.tier] || 0;
-      return bWeight - aWeight;
-    })
-    .slice(0, 3);
+      const aWeight = tierWeight[a.tier || ''] || 0;
+      const bWeight = tierWeight[b.tier || ''] || 0;
+      if (bWeight !== aWeight) return bWeight - aWeight;
+      
+      return (a.display_order || 0) - (b.display_order || 0);
+    });
 
-  // Extract all unique badge objects (already de-duplicated by series)
-  const uniqueBadgeObjects = uniqueBadges
-    .map((b: any) => b.gamification_badges)
-    .filter(Boolean);
+  const topBadges = sortedBadges.slice(0, 3);
+  const uniqueBadgeObjects = sortedBadges;
 
   return { badgesCount, badgeScore, topBadges, uniqueBadges: uniqueBadgeObjects };
 };
@@ -584,9 +581,7 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
     const competitiveSeriesTypes = new Set<string>();
     
     for (const badge of allBadges || []) {
-      if (badge.category === "competitive" && badge.series_type && !earnedBadgeIds.has(badge.id)) {
-        competitiveSeriesTypes.add(badge.series_type);
-      }
+      // Logic for calculating competitive top scores removed as feature is no longer used
     }
 
     const topScorePromises = Array.from(competitiveSeriesTypes).map(async (seriesType) => {
@@ -615,7 +610,7 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
       if (!earnedBadgeIds.has(badge.id)) {
         const currentScore = userScores[badge.series_type] || 0;
         
-        if (badge.category === "series" || badge.category === "common" || (badge.category === "competitive" && badge.required_score > 0)) {
+        if (badge.category === "series" || badge.category === "common") {
           const required = badge.required_score || 0;
           
           // Auto-award missed badge if requirements are met
@@ -646,18 +641,6 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
             requiredScore: required,
             remaining: Math.max(0, required - currentScore),
             percentComplete: Math.min(100, required > 0 ? Math.round((currentScore / required) * 100) : 100),
-          });
-        } else if (badge.category === "competitive") {
-          // Required score to steal a single competitive badge is Top Score + 1
-          const topScore = topScores[badge.series_type] || 0;
-          const required = topScore + 1;
-          
-          progress.push({
-            badge,
-            currentScore,
-            requiredScore: required,
-            remaining: required - currentScore,
-            percentComplete: Math.round((currentScore / required) * 100),
           });
         }
       }
@@ -706,8 +689,13 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
         badgesList.forEach(b => {
           const badge = b.gamification_badges;
           if (!badge) return;
-          const key = badge.series_type || badge.name;
+          
+          // Only deduplicate badges of 'series' category that have a tier.
+          // We group by series_type AND name so different series badges don't overwrite each other.
+          const isTiered = badge.tier && badge.category === 'series';
+          const key = isTiered ? `${badge.series_type}_${badge.name}` : badge.id;
           const existing = deduplicated.get(key);
+          
           if (!existing || (tierWeight[badge.tier || ''] || 0) > (tierWeight[existing.gamification_badges?.tier || ''] || 0)) {
             deduplicated.set(key, b);
           }

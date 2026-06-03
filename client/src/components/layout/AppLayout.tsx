@@ -6,11 +6,14 @@ import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { useAuth } from "@/contexts/AuthContext";
 import { useSearch } from "@/contexts/SearchContext";
 import { useNotifications } from "@/contexts/NotificationContext";
+import { useGamification } from "@/contexts/GamificationContext";
 import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { socket } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
-import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles } from "lucide-react";
+import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles, MapPin, Locate, Loader2 } from "lucide-react";
 import { GamificationDrawer } from "@/components/GamificationDrawer";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 
 interface AppLayoutProps {
   children: React.ReactNode;
@@ -22,7 +25,9 @@ type UserRole = 'alumni' | 'student' | 'faculty' | 'administrator';
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'feed' }) => {
   const [location, setLocation] = useLocation();
-  const { user, alumni, faculty, student, admin, logout } = useAuth(); // Assuming these properties exist in useAuth
+  const { user, alumni, faculty, student, admin, logout, refreshAlumni } = useAuth(); // Assuming these properties exist in useAuth
+  const alumniAny = alumni as any;
+  const { scores } = useGamification();
   const { setShowSearchModal } = useSearch();
   const { toast } = useToast();
   const { unreadCount, fetchNotifications } = useNotifications(); // Use NotificationContext as single source of truth
@@ -32,6 +37,109 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
   const [showScrollToTop, setShowScrollToTop] = React.useState(false);
   const [showGamificationDrawer, setShowGamificationDrawer] = React.useState(false);
   const scrollableContainerRef = React.useRef<HTMLDivElement>(null);
+
+  // Daily Location Prompt States
+  const [showDailyLocationPrompt, setShowDailyLocationPrompt] = React.useState(false);
+  const [localLocation, setLocalLocation] = React.useState({
+    city: '',
+    state: '',
+    country: '',
+    lat: null as number | null,
+    lng: null as number | null,
+    label: ''
+  });
+  const [isSubmittingLocation, setIsSubmittingLocation] = React.useState(false);
+  const [locationSubmitError, setLocationSubmitError] = React.useState<string | null>(null);
+
+  // Daily Location Check-in trigger logic
+  React.useEffect(() => {
+    // Only prompt alumni users, only on the Feed page
+    if (user?.user_role !== 'alumni' || currentPage !== 'feed' || !user?.id) {
+      return;
+    }
+
+    const lastPromptKey = `location_prompt_last_shown_${user.id}`;
+    const lastPromptTime = localStorage.getItem(lastPromptKey);
+    const now = Date.now();
+    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+
+    const hasLocationData = alumniAny && (alumniAny.current_city || alumniAny.location_label) && alumniAny.latitude && alumniAny.longitude;
+    const timeToPrompt = !lastPromptTime || (now - parseInt(lastPromptTime) > ONE_DAY_MS);
+
+    if (timeToPrompt || !hasLocationData) {
+      if (alumniAny) {
+        setLocalLocation({
+          city: alumniAny.current_city || '',
+          state: alumniAny.current_state || '',
+          country: alumniAny.current_country || '',
+          lat: alumniAny.latitude ? Number(alumniAny.latitude) : null,
+          lng: alumniAny.longitude ? Number(alumniAny.longitude) : null,
+          label: alumniAny.location_label || ''
+        });
+      }
+      setShowDailyLocationPrompt(true);
+    }
+  }, [user?.id, user?.user_role, currentPage, alumni]);
+
+  // Submit daily location to endpoint
+  const handleSubmitLocation = async () => {
+    if (!localLocation.city || !localLocation.country) {
+      setLocationSubmitError("Please search and select a valid location.");
+      return;
+    }
+
+    setIsSubmittingLocation(true);
+    setLocationSubmitError(null);
+
+    try {
+      const response = await fetch('/api/profile/update', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'user-id': user?.id || '',
+          'Authorization': `Bearer ${localStorage.getItem('auth_token') || ''}`
+        },
+        body: JSON.stringify({
+          firstName: alumni?.first_name || user?.username || '',
+          lastName: alumni?.last_name || '',
+          email: user?.email || '',
+          phone: alumni?.phone || '',
+          batch: alumni?.batch || '',
+          gender: alumni?.gender || 'prefer_not_to_say',
+          currentCity: localLocation.city,
+          currentState: localLocation.state,
+          currentCountry: localLocation.country,
+          latitude: localLocation.lat,
+          longitude: localLocation.lng,
+          locationLabel: localLocation.label,
+          location: [localLocation.city, localLocation.state, localLocation.country].filter(Boolean).join(', ') || localLocation.label,
+        })
+      });
+
+      if (response.ok) {
+        await refreshAlumni();
+
+        const lastPromptKey = `location_prompt_last_shown_${user?.id}`;
+        localStorage.setItem(lastPromptKey, Date.now().toString());
+
+        setShowDailyLocationPrompt(false);
+        toast({
+          title: "Location Updated!",
+          description: "Thank you for checking in your current location today.",
+          variant: "default",
+        });
+      } else {
+        const errorData = await response.json();
+        throw new Error(errorData.error || "Failed to update location");
+      }
+    } catch (err: any) {
+      console.error("Error updating check-in location:", err);
+      setLocationSubmitError(err.message || "An unexpected error occurred. Please try again.");
+    } finally {
+      setIsSubmittingLocation(false);
+    }
+  };
+
 
   // Use unreadCount from context instead of separate state
   const notificationCount = unreadCount;
@@ -259,14 +367,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     setLocation("/login");
   };
 
-  // Define navigation items with their required roles
   const navItems = [
     { id: 'feed', icon: Home, label: 'Feed', path: '/feed', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'forums', icon: MessagesSquare, label: 'Forums', path: '/forums', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'job-portal', icon: Briefcase, label: 'Job Portal', path: '/job-portal', roles: ['alumni', 'student', 'faculty'] },
     { id: 'events', icon: Calendar, label: 'Events', path: '/events', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'connections', icon: Users, label: 'Connections', path: '/connections', roles: ['alumni', 'student', 'faculty'] },
-    { id: 'leaderboard', icon: Trophy, label: 'Leaderboard', path: '/leaderboard', roles: ['alumni'] },
     { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', roles: ['alumni', 'student', 'faculty', 'administrator'] },
   ];
 
@@ -419,16 +525,20 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               {user && user.user_role === 'alumni' && (
                 <Button
                   variant="ghost"
-                  className="relative flex items-center justify-center min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-all duration-300 bg-amber-50 hover:bg-amber-100 hover:scale-105 border border-amber-200 shadow-sm group mr-1 sm:mr-2"
+                  size="icon"
+                  className={`relative min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-colors ${scores?.total_points > 0
+                    ? "text-amber-600 hover:bg-amber-100/50 hover:text-amber-700 ring-2 ring-amber-500/30 bg-amber-50"
+                    : "text-gray-600 hover:text-amber-600 hover:bg-gray-100"
+                    } mr-1 sm:mr-3`}
                   onClick={() => setShowGamificationDrawer(true)}
                   aria-label="Rewards & Gamification"
                 >
-                  <div className="relative flex items-center justify-center">
-                    <Trophy className="w-5 h-5 sm:w-6 sm:h-6 text-amber-500 fill-amber-500 drop-shadow-md group-hover:animate-[wiggle_1s_ease-in-out_infinite] transition-transform duration-300" strokeWidth={1.5} />
-                    <Sparkles className="w-3 h-3 sm:w-4 sm:h-4 text-amber-400 absolute -top-1 -right-1 animate-pulse drop-shadow-sm" strokeWidth={2} />
-                  </div>
-                  {/* Notification dot */}
-                  <span className="absolute -top-1 -right-1 w-3.5 h-3.5 bg-red-500 rounded-full border-2 border-white animate-bounce shadow-sm"></span>
+                  <Trophy className={`w-5 h-5 sm:w-6 sm:h-6 ${scores?.total_points > 0 ? "fill-amber-500/20" : ""}`} strokeWidth={1.5} />
+                  {(scores?.total_points || 0) > 0 && (
+                    <span className="absolute -top-1.5 -right-2 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm shadow-amber-500/30">
+                      {scores.total_points > 999 ? `${(scores.total_points / 1000).toFixed(1).replace('.0', '')}k` : scores.total_points}
+                    </span>
+                  )}
                 </Button>
               )}
 
@@ -507,6 +617,89 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
         isOpen={showGamificationDrawer}
         onClose={() => setShowGamificationDrawer(false)}
       />
+
+      {/* Daily Location Check-in Popup */}
+      <Dialog
+        open={showDailyLocationPrompt}
+        onOpenChange={() => { }}
+      >
+        <DialogContent
+          className="max-w-md w-[90%] p-6 sm:p-8 rounded-2xl border-0 shadow-2xl bg-gradient-to-b from-white to-slate-50/55 [&>button]:hidden z-[250]"
+          onPointerDownOutside={(e) => e.preventDefault()}
+          onEscapeKeyDown={(e) => e.preventDefault()}
+        >
+          <DialogHeader className="space-y-3 text-center">
+            <div className="mx-auto w-12 h-12 bg-primary/10 rounded-full flex items-center justify-center text-primary mb-2">
+              <MapPin className="w-6 h-6 animate-bounce text-[#008060]" />
+            </div>
+            <DialogTitle className="text-2xl font-bold tracking-tight text-slate-800">
+              Daily Location Tracking            </DialogTitle>
+            <DialogDescription className="text-sm text-slate-500">
+              Help keep our global alumni heatmap up to date. Let us know where you're logging in from today            </DialogDescription>
+          </DialogHeader>
+
+          <div className="mt-6 space-y-6">
+            {/* City Autocomplete Field */}
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-600 uppercase tracking-wider">
+                Select Your Location
+              </label>
+              <CityAutocomplete
+                city={localLocation.label || localLocation.city}
+                onCityChange={(val) => setLocalLocation(prev => ({ ...prev, label: val }))}
+                onLocationSelect={(city, state, country, lat, lng, label) => {
+                  setLocalLocation({
+                    city,
+                    state,
+                    country,
+                    lat: lat || null,
+                    lng: lng || null,
+                    label: label || ''
+                  });
+                  setLocationSubmitError(null);
+                }}
+              />
+            </div>
+
+            {/* Selected Location Details */}
+            {localLocation.city && (
+              <div className="p-4 rounded-xl border border-slate-100 bg-white/80 shadow-inner space-y-1 animate-in fade-in slide-in-from-top-2 duration-300">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Current selection</span>
+                <p className="font-semibold text-slate-800 text-sm">{localLocation.label || `${localLocation.city}, ${localLocation.country}`}</p>
+                {localLocation.lat && (
+                  <p className="text-[10px] text-slate-400">Coordinates: {localLocation.lat.toFixed(4)}, {localLocation.lng?.toFixed(4)}</p>
+                )}
+              </div>
+            )}
+
+            {locationSubmitError && (
+              <div className="text-xs font-medium text-red-500 bg-red-50 border border-red-100 rounded-xl p-3 flex items-start gap-2">
+                <span>⚠️</span>
+                <span>{locationSubmitError}</span>
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex flex-col sm:flex-row gap-3 pt-2">
+              <button
+                type="button"
+                disabled={isSubmittingLocation || !localLocation.city}
+                onClick={handleSubmitLocation}
+                className="w-full py-3 px-4 bg-[#008060] hover:bg-[#006b51] text-white font-bold rounded-xl transition-all active:scale-95 duration-200 shadow-md hover:shadow-lg disabled:opacity-50 disabled:scale-100 text-sm flex items-center justify-center gap-2"
+              >
+                {isSubmittingLocation ? (
+                  <>
+                    <Loader2 className="w-4 h-4 animate-spin" />
+                    <span>Saving...</span>
+                  </>
+                ) : (
+                  <span>Save Location</span>
+                )}
+              </button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 };

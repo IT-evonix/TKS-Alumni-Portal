@@ -1,15 +1,15 @@
-import React, { useEffect, useState } from "react";
+import React from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
-import { Award, Star, Lock, Trophy, MessageSquare, Users, User, Calendar, LogIn, Flame, X } from "lucide-react";
+import { useGamification } from "@/contexts/GamificationContext";
+import { Award, Star, Lock, Trophy, MessageSquare, Users, User, Calendar, LogIn, Flame, X, Sparkles, Unlock } from "lucide-react";
 import { Loader } from "@/components/ui/loader";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { supabase } from "@/lib/supabase";
 import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 
-const getBadgeIcon = (seriesType: string, className: string) => {
+export const getBadgeIcon = (seriesType: string, className: string) => {
   switch (seriesType) {
     case 'login': return <LogIn className={className} />;
     case 'profile': return <User className={className} />;
@@ -19,6 +19,32 @@ const getBadgeIcon = (seriesType: string, className: string) => {
     default: return <Trophy className={className} />;
   }
 };
+
+interface BadgeRecord {
+  id: string;
+  name: string;
+  description: string;
+  category: string;
+  series_type: string;
+  required_score: number;
+  tier: string;
+  icon_url: string;
+}
+
+interface EarnedBadge {
+  id: string;
+  earned_at: string;
+  is_featured: boolean;
+  gamification_badges: BadgeRecord;
+}
+
+interface ProgressRecord {
+  badge: BadgeRecord;
+  currentScore: number;
+  requiredScore: number;
+  remaining: number;
+  percentComplete: number;
+}
 
 const renderShieldIcon = (badge: BadgeRecord) => {
   if (!badge.tier) return null;
@@ -57,108 +83,21 @@ const renderShieldIcon = (badge: BadgeRecord) => {
   );
 };
 
-interface BadgeRecord {
-  id: string;
-  name: string;
-  description: string;
-  category: string;
-  series_type: string;
-  required_score: number;
-  tier: string;
-  icon_url: string;
-}
-
-interface EarnedBadge {
-  id: string;
-  earned_at: string;
-  is_featured: boolean;
-  gamification_badges: BadgeRecord;
-}
-
-interface ProgressRecord {
-  badge: BadgeRecord;
-  currentScore: number;
-  requiredScore: number;
-  remaining: number;
-  percentComplete: number;
-}
-
 interface GamificationDrawerProps {
   isOpen: boolean;
   onClose: () => void;
 }
 
 export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps) {
-  const { user } = useAuth();
-  const userId = user?.id;
-
-  const [earnedBadges, setEarnedBadges] = useState<EarnedBadge[]>([]);
-  const [progress, setProgress] = useState<ProgressRecord[]>([]);
-  const [scores, setScores] = useState<any>({});
-  const [globalRank, setGlobalRank] = useState<number>(0);
-  const [globalBadgeRank, setGlobalBadgeRank] = useState<number>(0);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-
-  useEffect(() => {
-    const fetchGamificationProfile = async () => {
-      if (!userId) return;
-      try {
-        setLoading(true);
-        const token = localStorage.getItem("auth_token");
-        const res = await fetch(`/api/gamification/users/${userId}/profile`, {
-          headers: {
-            Authorization: `Bearer ${token}`,
-            "user-id": userId
-          }
-        });
-
-        if (!res.ok) throw new Error("Failed to load badges");
-
-        const data = await res.json();
-        setEarnedBadges(data.earnedBadges || []);
-        setProgress(data.progress || []);
-        setScores(data.scores || {});
-        setGlobalRank(data.globalRank || 0);
-        setGlobalBadgeRank(data.globalBadgeRank || 0);
-      } catch (err) {
-        setError(err instanceof Error ? err.message : "Error loading badges");
-      } finally {
-        setLoading(false);
-      }
-    };
-
-    if (isOpen && userId) {
-      fetchGamificationProfile();
-
-      let timeoutId: NodeJS.Timeout;
-      const debouncedFetch = () => {
-        clearTimeout(timeoutId);
-        timeoutId = setTimeout(() => {
-          fetchGamificationProfile();
-        }, 500);
-      };
-
-      const channel = supabase
-        .channel(`gamification-profile-drawer-${userId}`)
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'user_badges', filter: `user_id=eq.${userId}` },
-          () => { debouncedFetch(); }
-        )
-        .on(
-          'postgres_changes',
-          { event: '*', schema: 'public', table: 'user_scores', filter: `user_id=eq.${userId}` },
-          () => { debouncedFetch(); }
-        )
-        .subscribe();
-
-      return () => {
-        clearTimeout(timeoutId);
-        supabase.removeChannel(channel);
-      };
-    }
-  }, [userId, isOpen]);
+  const {
+    earnedBadges,
+    progress,
+    scores,
+    globalRank,
+    globalBadgeRank,
+    loading,
+    error
+  } = useGamification();
 
   const level = Math.floor((scores.total_points || 0) / 500) + 1;
   const currentLevelXP = (scores.total_points || 0) % 500;
@@ -169,46 +108,173 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
 
   // Process progress to only show the next available tier for each series
   const filteredProgress = React.useMemo(() => {
+    // 1. Find the highest required score of the earned badges for each series_type
+    const highestEarnedScoreMap = new Map<string, number>();
+    earnedBadges.forEach(eb => {
+      const badge = eb.gamification_badges;
+      if (!badge) return;
+      if (badge.category === 'series') {
+        const key = `${badge.series_type}_${badge.name}`;
+        const existingScore = highestEarnedScoreMap.get(key) || 0;
+        if (badge.required_score > existingScore) {
+          highestEarnedScoreMap.set(key, badge.required_score);
+        }
+      }
+    });
+
     const seriesMap = new Map<string, ProgressRecord>();
     const otherProgress: ProgressRecord[] = [];
 
     progress.forEach(p => {
       if (!p.badge) return;
-      if (p.badge.category === 'series' || p.badge.category === 'competitive') {
-        const existing = seriesMap.get(p.badge.series_type);
+      if (p.badge.category === 'series') {
+        const key = `${p.badge.series_type}_${p.badge.name}`;
+        // Only consider locked badges that are ABOVE the user's highest earned badge in this series
+        const highestEarnedScore = highestEarnedScoreMap.get(key) || 0;
+        if (p.badge.required_score <= highestEarnedScore) {
+          return; // Skip this lower tier locked badge (user already surpassed it or has a higher one)
+        }
+
+        const existing = seriesMap.get(key);
+        // We want the NEXT available tier, which is the one with the SMALLEST required score among the remaining locked badges
         if (!existing || p.badge.required_score < existing.badge.required_score) {
-          seriesMap.set(p.badge.series_type, p);
+          seriesMap.set(key, p);
         }
       } else {
         otherProgress.push(p);
       }
     });
 
-    return [...Array.from(seriesMap.values()), ...otherProgress].sort((a, b) => b.percentComplete - a.percentComplete);
-  }, [progress]);
+    const tierWeight: Record<string, number> = {
+      platinum: 4,
+      gold: 3,
+      silver: 2,
+      bronze: 1
+    };
+
+    return [...Array.from(seriesMap.values()), ...otherProgress].sort((a, b) => {
+      const aWeight = tierWeight[a.badge?.tier?.toLowerCase() || ''] || 0;
+      const bWeight = tierWeight[b.badge?.tier?.toLowerCase() || ''] || 0;
+      if (bWeight !== aWeight) {
+        return bWeight - aWeight; // Platinum > Gold > Silver > Bronze
+      }
+      return b.percentComplete - a.percentComplete;
+    });
+  }, [progress, earnedBadges]);
 
   // Process earned badges to only show the highest unlocked tier for series and competitive
   const filteredEarnedBadges = React.useMemo(() => {
     const seriesMap = new Map<string, EarnedBadge>();
-    const otherBadges: EarnedBadge[] = [];
+    const otherMap = new Map<string, EarnedBadge>();
 
-    earnedBadges.forEach(eb => {
-      const badge = eb.gamification_badges;
+    (earnedBadges || []).forEach(eb => {
+      const badge = eb?.gamification_badges;
       if (!badge) return;
-      if (badge.category === 'series' || badge.category === 'competitive') {
-        const existing = seriesMap.get(badge.series_type);
-        if (!existing || (existing.gamification_badges.required_score || 0) < (badge.required_score || 0)) {
-          seriesMap.set(badge.series_type, eb);
+
+      const cat = (badge.category || '').toLowerCase().trim();
+      if (cat === 'series') {
+        const key = `${badge.series_type}_${badge.name}`;
+        const existing = seriesMap.get(key);
+        if (!existing || (existing.gamification_badges?.required_score || 0) < (badge.required_score || 0)) {
+          seriesMap.set(key, eb);
         }
       } else {
-        otherBadges.push(eb);
+        // Deduplicate common badges by badge ID
+        if (!otherMap.has(badge.id)) {
+          otherMap.set(badge.id, eb);
+        }
       }
     });
 
-    return [...Array.from(seriesMap.values()), ...otherBadges].sort(
-      (a, b) => new Date(b.earned_at).getTime() - new Date(a.earned_at).getTime()
-    );
+    const tierWeight: Record<string, number> = {
+      platinum: 4,
+      gold: 3,
+      silver: 2,
+      bronze: 1
+    };
+
+    return [...Array.from(seriesMap.values()), ...Array.from(otherMap.values())].sort((a, b) => {
+      const aWeight = tierWeight[a.gamification_badges?.tier?.toLowerCase() || ''] || 0;
+      const bWeight = tierWeight[b.gamification_badges?.tier?.toLowerCase() || ''] || 0;
+      if (bWeight !== aWeight) {
+        return bWeight - aWeight; // Platinum > Gold > Silver > Bronze
+      }
+      const aTime = a.earned_at ? new Date(a.earned_at).getTime() : 0;
+      const bTime = b.earned_at ? new Date(b.earned_at).getTime() : 0;
+      return bTime - aTime;
+    });
   }, [earnedBadges]);
+
+  // Split earned badges into series/rank-based and common/one-off ones
+  const rankBasedBadges = React.useMemo(() => {
+    const res = filteredEarnedBadges.filter(eb => {
+      const cat = (eb.gamification_badges?.category || '').toLowerCase().trim();
+      return cat === 'series';
+    });
+    console.log('[GamificationDrawer] rankBasedBadges:', res);
+    return res;
+  }, [filteredEarnedBadges]);
+
+  const commonBadges = React.useMemo(() => {
+    const res = filteredEarnedBadges.filter(eb => {
+      const cat = (eb.gamification_badges?.category || '').toLowerCase().trim();
+      return cat === 'common' || !eb.gamification_badges?.category;
+    });
+    console.log('[GamificationDrawer] commonBadges:', res);
+    return res;
+  }, [filteredEarnedBadges]);
+
+  console.log('[GamificationDrawer] filteredEarnedBadges:', filteredEarnedBadges);
+
+  const renderBadgeCard = (eb: EarnedBadge) => {
+    console.log('[GamificationDrawer] renderBadgeCard:', eb.gamification_badges.name, 'series_type:', eb.gamification_badges.series_type, 'streak:', streak);
+    return (
+      <Tooltip key={eb.id}>
+        <TooltipTrigger asChild>
+          <div className={`relative group bg-white border rounded-xl p-5 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden cursor-help h-full justify-between ${eb.gamification_badges.tier ? 'border-emerald-100 hover:border-emerald-300' : 'border-cyan-100 hover:border-cyan-300'}`}>
+            {/* Glow effect for unlocked */}
+            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity ${eb.gamification_badges.tier ? 'bg-emerald-500/5' : 'bg-cyan-500/5'}`} />
+
+            <div className="flex flex-col items-center w-full flex-1">
+              {eb.gamification_badges.series_type === 'login' && (
+                <div className="mb-3 px-3 py-1 bg-orange-100 border-2 border-orange-300 rounded-full flex items-center justify-center gap-1 shadow-sm z-20 w-full relative">
+                  <Flame className="w-4 h-4 text-orange-500 fill-orange-500 animate-pulse" />
+                  <span className="text-[10px] font-black text-orange-700 tracking-wider uppercase">{streak || 0} Day Streak!</span>
+                </div>
+              )}
+
+              {eb.gamification_badges.tier ? (
+                <div className="mb-3 relative z-10 shrink-0">
+                  {renderShieldIcon(eb.gamification_badges)}
+                </div>
+              ) : (
+                <div className="w-14 h-14 rounded-full bg-cyan-50 flex items-center justify-center border-2 border-cyan-200 shadow-[0_0_15px_rgba(6,182,212,0.15)] mb-3 relative z-10 group-hover:scale-110 transition-transform duration-300 shrink-0">
+                  {eb.gamification_badges.icon_url && eb.gamification_badges.icon_url.startsWith('http') ? (
+                    <img src={eb.gamification_badges.icon_url} alt="icon" className="w-7 h-7 object-contain drop-shadow-md" />
+                  ) : (
+                    getBadgeIcon(eb.gamification_badges.series_type, `w-7 h-7 text-cyan-600 drop-shadow-sm`)
+                  )}
+                </div>
+              )}
+
+              <h4 className="font-bold text-slate-800 text-sm mb-1.5 relative z-10 line-clamp-2 leading-tight min-h-[36px] flex items-center justify-center w-full px-1 capitalize">
+                <span>{eb.gamification_badges.name} {eb.gamification_badges.tier && <span className="capitalize text-slate-500 font-semibold">({eb.gamification_badges.tier})</span>}</span>
+              </h4>
+              <p className="text-xs text-slate-500 line-clamp-2 relative z-10 leading-snug px-1 break-words w-full mb-4">{eb.gamification_badges.description}</p>
+            </div>
+
+            <div className="w-full mt-auto pt-2 flex justify-center shrink-0">
+              <Badge variant="secondary" className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md ${eb.gamification_badges.tier ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-100'}`}>Unlocked</Badge>
+            </div>
+          </div>
+        </TooltipTrigger>
+        <TooltipContent side="top" className={`max-w-[250px] p-3 shadow-xl bg-white text-slate-800 break-words z-[400] ${eb.gamification_badges.tier ? 'border-emerald-100' : 'border-cyan-100'}`}>
+          <p className={`font-bold text-sm mb-1 break-all ${eb.gamification_badges.tier ? 'text-emerald-700' : 'text-cyan-700'}`}>{eb.gamification_badges.name}</p>
+          <p className="text-xs text-slate-600 leading-relaxed">{eb.gamification_badges.description}</p>
+        </TooltipContent>
+      </Tooltip>
+    );
+  };
 
   return (
     <TooltipProvider>
@@ -230,8 +296,9 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
 
               {/* Level & XP Info */}
               <div className="flex items-center gap-4">
-                <div className="h-16 w-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0 shadow-sm">
-                  <Star className="h-8 w-8 text-amber-500 fill-amber-500 drop-shadow-sm animate-[spin_4s_linear_infinite]" />
+                <div className="h-16 w-16 rounded-2xl bg-amber-50 border border-amber-100 flex items-center justify-center flex-shrink-0 shadow-sm relative group cursor-default hover:scale-105 transition-all duration-300">
+                  <Trophy className="h-8 w-8 text-amber-500 fill-amber-500 drop-shadow-sm group-hover:animate-[wiggle_1s_ease-in-out_infinite] transition-transform duration-300" strokeWidth={1.5} />
+                  <Sparkles className="w-4 h-4 text-amber-400 absolute -top-1 -right-1 animate-pulse drop-shadow-sm" strokeWidth={2} />
                 </div>
                 <div>
                   <h2 className="text-2xl font-bold text-slate-800 tracking-tight">Level {level} Explorer</h2>
@@ -303,7 +370,7 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                 {/* Earned Badges Section */}
                 <div>
                   <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                    <Star className="w-5 h-5 text-amber-500 fill-amber-500" />
+                    <Unlock className="w-5 h-5 text-amber-500" />
                     Unlocked Achievements
                   </h3>
 
@@ -313,42 +380,9 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                       <p className="text-slate-500 font-medium">No badges yet. Start participating to earn rewards!</p>
                     </div>
                   ) : (
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {filteredEarnedBadges.map(eb => (
-                        <Tooltip key={eb.id}>
-                          <TooltipTrigger asChild>
-                            <div className="relative group bg-white border border-emerald-100 rounded-xl p-4 flex flex-col items-center text-center shadow-sm hover:shadow-md hover:border-emerald-300 transition-all duration-300 overflow-hidden cursor-help">
-                              {/* Glow effect for unlocked */}
-                              <div className="absolute inset-0 bg-emerald-500/5 opacity-0 group-hover:opacity-100 transition-opacity" />
-
-                              {eb.gamification_badges.tier ? (
-                                <div className="mb-3 relative z-10">
-                                  {renderShieldIcon(eb.gamification_badges)}
-                                </div>
-                              ) : (
-                                <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center border-2 border-emerald-200 shadow-[0_0_15px_rgba(16,185,129,0.15)] mb-3 relative z-10 group-hover:scale-110 transition-transform duration-300">
-                                  {eb.gamification_badges.icon_url && eb.gamification_badges.icon_url.startsWith('http') ? (
-                                    <img src={eb.gamification_badges.icon_url} alt="icon" className="w-7 h-7 object-contain drop-shadow-md" />
-                                  ) : (
-                                    getBadgeIcon(eb.gamification_badges.series_type, `w-7 h-7 ${eb.gamification_badges.tier === 'gold' ? 'text-amber-500' : eb.gamification_badges.tier === 'silver' ? 'text-slate-500' : 'text-emerald-600'} drop-shadow-sm`)
-                                  )}
-                                </div>
-                              )}
-
-                              <h4 className="font-bold text-slate-800 text-sm mb-1 relative z-10 line-clamp-2 leading-tight min-h-[36px] flex items-center justify-center w-full px-1">
-                                <span>{eb.gamification_badges.name} {eb.gamification_badges.tier && <span className="capitalize text-slate-500">({eb.gamification_badges.tier})</span>}</span>
-                              </h4>
-                              <Badge variant="secondary" className="text-[9px] uppercase tracking-wider bg-emerald-100 text-emerald-700 hover:bg-emerald-100 font-bold mb-2 shrink-0">Unlocked</Badge>
-                              <p className="text-xs text-slate-500 line-clamp-2 relative z-10 leading-snug px-1 break-words w-full">{eb.gamification_badges.description}</p>
-                            </div>
-                          </TooltipTrigger>
-                          <TooltipContent side="top" className="max-w-[250px] p-3 shadow-xl bg-white text-slate-800 border-emerald-100 break-words z-[400]">
-                            <p className="font-bold text-sm text-emerald-700 mb-1 break-all">{eb.gamification_badges.name}</p>
-                            <p className="text-xs text-slate-600 leading-relaxed">{eb.gamification_badges.description}</p>
-                          </TooltipContent>
-                        </Tooltip>
-                      ))}
-                    </div>
+                      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
+                        {filteredEarnedBadges.map(eb => renderBadgeCard(eb))}
+                      </div>
                   )}
                 </div>
 
@@ -363,40 +397,53 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                       {filteredProgress.map((item, idx) => (
                         <Tooltip key={idx}>
                           <TooltipTrigger asChild>
-                            <div className="bg-white border border-slate-100 border-dashed rounded-xl p-4 flex flex-col items-center text-center shadow-sm hover:border-slate-300 transition-colors cursor-help overflow-hidden">
-                              {item.badge.tier ? (
-                                <div className="mb-3 relative z-10 grayscale-[0.8] opacity-60">
-                                  {renderShieldIcon(item.badge)}
-                                </div>
-                              ) : (
-                                <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center border-2 border-slate-100 shadow-[0_0_15px_rgba(0,0,0,0.03)] mb-3 relative z-10 grayscale">
-                                  {item.badge.icon_url && item.badge.icon_url.startsWith('http') ? (
-                                    <img src={item.badge.icon_url} alt="icon" className="w-7 h-7 object-contain opacity-40 drop-shadow-sm" />
-                                  ) : (
-                                    getBadgeIcon(item.badge.series_type, "w-7 h-7 text-slate-300 drop-shadow-sm")
-                                  )}
-                                </div>
-                              )}
+                            <div className="bg-white border border-slate-100 border-dashed rounded-xl p-5 flex flex-col items-center text-center shadow-sm hover:border-slate-300 transition-colors cursor-help overflow-hidden h-full justify-between">
+                              <div className="flex flex-col items-center w-full flex-1">
+                                {item.badge.series_type === 'login' && (
+                                  <div className="mb-3 px-3 py-1 bg-slate-100 border-2 border-slate-300 rounded-full flex items-center justify-center gap-1 shadow-sm z-20 w-full relative">
+                                    <Flame className="w-4 h-4 text-slate-400 fill-slate-400" />
+                                    <span className="text-[10px] font-black text-slate-500 tracking-wider uppercase">{streak || 0} Day Streak!</span>
+                                  </div>
+                                )}
 
-                              <h4 className="font-bold text-slate-600 text-sm mb-1 relative z-10 line-clamp-2 leading-tight min-h-[36px] flex items-center justify-center w-full px-1">
-                                <span>{item.badge.name} {item.badge.tier && <span className="capitalize text-slate-400">({item.badge.tier})</span>}</span>
-                              </h4>
-                              <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-slate-500 border-slate-200 font-bold mb-2 shrink-0">Locked</Badge>
-
-                              <div className="w-full mt-auto pt-2">
-                                {item.badge.category === 'common' || item.requiredScore === 0 ? (
-                                  <div className="text-[10px] text-slate-500 font-medium text-center italic mt-3">
-                                    Action Required
+                                {item.badge.tier ? (
+                                  <div className="mb-3 relative z-10 grayscale-[0.8] opacity-60 shrink-0">
+                                    {renderShieldIcon(item.badge)}
                                   </div>
                                 ) : (
-                                  <>
-                                    <div className="flex justify-between text-[10px] font-medium text-slate-500 mb-1.5">
-                                      <span>{item.percentComplete}%</span>
-                                      <span>{item.currentScore}/{item.requiredScore}</span>
-                                    </div>
-                                    <Progress value={item.percentComplete} className="h-1.5 bg-slate-100 [&>div]:bg-slate-400" />
-                                  </>
+                                  <div className="w-14 h-14 rounded-full bg-slate-50 flex items-center justify-center border-2 border-slate-100 shadow-[0_0_15px_rgba(0,0,0,0.03)] mb-3 relative z-10 grayscale shrink-0">
+                                    {item.badge.icon_url && item.badge.icon_url.startsWith('http') ? (
+                                      <img src={item.badge.icon_url} alt="icon" className="w-7 h-7 object-contain opacity-40 drop-shadow-sm" />
+                                    ) : (
+                                      getBadgeIcon(item.badge.series_type, "w-7 h-7 text-slate-300 drop-shadow-sm")
+                                    )}
+                                  </div>
                                 )}
+
+                                <h4 className="font-bold text-slate-600 text-sm mb-1.5 relative z-10 line-clamp-2 leading-tight min-h-[36px] flex items-center justify-center w-full px-1 capitalize">
+                                  <span>{item.badge.name} {item.badge.tier && <span className="capitalize text-slate-400 font-semibold">({item.badge.tier})</span>}</span>
+                                </h4>
+                                <p className="text-xs text-slate-400 line-clamp-2 relative z-10 leading-snug px-1 break-words w-full mb-4">{item.badge.description}</p>
+                              </div>
+
+                              <div className="w-full mt-auto pt-2 flex flex-col items-center shrink-0">
+                                <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-slate-400 border-slate-200 font-bold px-2 py-0.5 rounded-md mb-2">Locked</Badge>
+
+                                <div className="w-full min-h-[22px] flex items-center justify-center">
+                                  {item.badge.category === 'common' || item.requiredScore === 0 ? (
+                                    <div className="text-[9px] text-slate-400 font-semibold italic">
+                                      Action Required
+                                    </div>
+                                  ) : (
+                                    <div className="w-full">
+                                      <div className="flex justify-between text-[9px] font-bold text-slate-500 mb-1">
+                                        <span>{item.percentComplete}%</span>
+                                        <span>{item.currentScore}/{item.requiredScore}</span>
+                                      </div>
+                                      <Progress value={item.percentComplete} className="h-1 bg-slate-100 [&>div]:bg-slate-400" />
+                                    </div>
+                                  )}
+                                </div>
                               </div>
                             </div>
                           </TooltipTrigger>

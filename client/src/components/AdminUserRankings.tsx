@@ -323,15 +323,15 @@ export function AdminUserRankings() {
                                     const tierGradient = b.tier === 'platinum' ? 'from-purple-400 to-purple-700' :
                                       b.tier === 'gold' ? 'from-yellow-400 to-amber-600' :
                                       b.tier === 'silver' ? 'from-slate-300 to-slate-500' :
-                                      b.tier === 'bronze' ? 'from-orange-500 to-orange-800' : 'from-primary/60 to-primary';
+                                      b.tier === 'bronze' ? 'from-orange-500 to-orange-800' : 'from-cyan-400 to-teal-500';
                                     const tierBg = b.tier === 'platinum' ? 'bg-purple-50 dark:bg-purple-950/20' :
                                       b.tier === 'gold' ? 'bg-amber-50 dark:bg-amber-950/20' :
                                       b.tier === 'silver' ? 'bg-slate-50 dark:bg-slate-900' :
-                                      b.tier === 'bronze' ? 'bg-orange-50 dark:bg-orange-950/20' : 'bg-primary/5';
+                                      b.tier === 'bronze' ? 'bg-orange-50 dark:bg-orange-950/20' : 'bg-cyan-50 dark:bg-cyan-950/20';
                                     const tierText = b.tier === 'platinum' ? 'text-purple-700 dark:text-purple-400' :
                                       b.tier === 'gold' ? 'text-amber-700 dark:text-amber-400' :
                                       b.tier === 'silver' ? 'text-slate-600 dark:text-slate-400' :
-                                      b.tier === 'bronze' ? 'text-orange-700 dark:text-orange-400' : 'text-primary';
+                                      b.tier === 'bronze' ? 'text-orange-700 dark:text-orange-400' : 'text-cyan-600 dark:text-cyan-400';
                                     return (
                                       <div key={i} className={`flex items-center gap-3 px-3 py-2.5 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors ${i === 0 ? tierBg : ''}`}>
                                         {/* Shield Icon */}
@@ -472,7 +472,7 @@ export function AdminUserRankings() {
                   userOwnedBadges.map(badge => (
                     <div key={badge.id} className="flex items-center justify-between p-2 bg-white border rounded shadow-sm">
                       <div className="flex items-center gap-2">
-                        <span className={`w-3 h-3 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
+                        <span className={`w-3 h-3 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-cyan-500'}`}></span>
                         <div className="flex flex-col">
                           <span className="font-semibold text-sm">{badge.name}</span>
                           <span className="text-[10px] text-muted-foreground uppercase">
@@ -509,7 +509,7 @@ export function AdminUserRankings() {
                     <SelectItem key={badge.id} value={badge.id} className="cursor-pointer">
                       <div className="flex flex-col gap-0.5 py-1">
                         <div className="flex items-center gap-2">
-                          <span className={`w-2 h-2 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-primary'}`}></span>
+                          <span className={`w-2 h-2 shrink-0 rounded-full ${badge.tier === 'platinum' ? 'bg-cyan-400' : badge.tier === 'gold' ? 'bg-amber-400' : badge.tier === 'silver' ? 'bg-slate-400' : badge.tier === 'bronze' ? 'bg-orange-500' : 'bg-cyan-500'}`}></span>
                           <span className="font-medium">{badge.name}</span>
                           <span className="text-muted-foreground text-[10px] uppercase ml-1">
                             ({badge.tier}{badge.required_score !== undefined ? ` - ${badge.required_score} pts` : ''})
