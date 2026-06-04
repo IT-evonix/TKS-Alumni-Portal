@@ -440,7 +440,11 @@ export async function updateStreak(userId: string) {
       ? new Date(scores.last_active_date).toISOString().split("T")[0]
       : null;
 
-    if (lastActive === today) return; // Already counted today
+    if (lastActive === today) {
+      // Still check for badges in case admin added new ones or it was missed
+      await checkAndAwardSeriesBadges(userId, "login", scores.current_streak_days || 1);
+      return; // Already counted today
+    }
 
     let newStreak = 1;
     if (lastActive) {
@@ -469,6 +473,9 @@ export async function updateStreak(userId: string) {
         updated_at: now.toISOString(),
       })
       .eq("user_id", userId);
+
+    // Check if the user unlocked any new login/streak series badges
+    await checkAndAwardSeriesBadges(userId, "login", newStreak);
   } catch (err) {
     console.error("[Gamification] updateStreak error:", err);
   }
@@ -680,13 +687,13 @@ export async function ensureDefaultPointRulesExist() {
     const existingKeys = new Set((existing || []).map(r => r.action_key));
 
     const defaultRules = [
-      { action_key: "network_connect", points: 5, description: "Points awarded for connecting with another alumni", category: "networking" },
-      { action_key: "thread_create", points: 10, description: "Points awarded for creating a new community thread", category: "community" },
-      { action_key: "post_reply", points: 2, description: "Points awarded for replying to a thread or post", category: "community" },
-      { action_key: "feed_create", points: 5, description: "Points awarded for creating a post on the main feed", category: "community" },
-      { action_key: "event_rsvp", points: 15, description: "Points awarded for RSVPing to an event", category: "events" },
-      { action_key: "job_post", points: 20, description: "Points awarded for posting a new job opportunity", category: "jobs" },
-      { action_key: "job_apply", points: 5, description: "Points awarded for applying to a job opportunity", category: "jobs" }
+      { action_key: "network_connect", points: 1, description: "Points awarded for connecting with another alumni", category: "networking" },
+      { action_key: "thread_create", points: 1, description: "Points awarded for creating a new community thread", category: "community" },
+      { action_key: "post_reply", points: 1, description: "Points awarded for replying to a thread or post", category: "community" },
+      { action_key: "feed_create", points: 1, description: "Points awarded for creating a post on the main feed", category: "community" },
+      { action_key: "event_rsvp", points: 1, description: "Points awarded for RSVPing to an event", category: "events" },
+      { action_key: "job_post", points: 1, description: "Points awarded for posting a new job opportunity", category: "jobs" },
+      { action_key: "job_apply", points: 1, description: "Points awarded for applying to a job opportunity", category: "jobs" }
     ];
 
     const toInsert = defaultRules.filter(r => !existingKeys.has(r.action_key));
@@ -713,7 +720,8 @@ export async function ensureDefaultBadgesExist() {
   try {
     const { data: existing, error: checkErr } = await supabase
       .from("gamification_badges")
-      .select("series_type")
+      .select("name, tier")
+      .neq("category", "deleted")
       .in("series_type", ["login", "profile"]);
 
     if (checkErr) {
@@ -721,19 +729,52 @@ export async function ensureDefaultBadgesExist() {
       return;
     }
 
-    const existingTypes = new Set((existing || []).map(b => b.series_type));
+    const existingKeys = new Set((existing || []).map(b => `${b.name}-${b.tier}`));
 
     const defaultBadges = [
       {
-        name: "First Step",
-        description: "Awarded for your very first login to the TKS Alumni Portal.",
-        category: "common",
+        name: "Login Streak",
+        description: "Maintained a consecutive daily login streak.",
+        category: "series",
         series_type: "login",
-        required_score: 0,
-        tier: "platinum",
+        required_score: 1,
+        tier: "bronze",
         icon_url: "🎯",
         is_enabled: true,
         display_order: 1
+      },
+      {
+        name: "Login Streak",
+        description: "Maintained a consecutive daily login streak.",
+        category: "series",
+        series_type: "login",
+        required_score: 7,
+        tier: "silver",
+        icon_url: "🔥",
+        is_enabled: true,
+        display_order: 2
+      },
+      {
+        name: "Login Streak",
+        description: "Maintained a consecutive daily login streak.",
+        category: "series",
+        series_type: "login",
+        required_score: 30,
+        tier: "gold",
+        icon_url: "🔥",
+        is_enabled: true,
+        display_order: 3
+      },
+      {
+        name: "Login Streak",
+        description: "Maintained a consecutive daily login streak.",
+        category: "series",
+        series_type: "login",
+        required_score: 100,
+        tier: "platinum",
+        icon_url: "👑",
+        is_enabled: true,
+        display_order: 4
       },
       {
         name: "Profile 100 % Done ",
@@ -744,11 +785,11 @@ export async function ensureDefaultBadgesExist() {
         tier: "platinum",
         icon_url: "⭐",
         is_enabled: true,
-        display_order: 2
+        display_order: 5
       }
     ];
 
-    const toInsert = defaultBadges.filter(b => !existingTypes.has(b.series_type));
+    const toInsert = defaultBadges.filter(b => !existingKeys.has(`${b.name}-${b.tier}`));
     if (toInsert.length > 0) {
       const { error: insertErr } = await supabase
         .from("gamification_badges")
