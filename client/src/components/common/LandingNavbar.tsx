@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from "framer-motion";
 
 export const LandingNavbar = (): JSX.Element => {
     const [location, setLocation] = useLocation();
-    const { user, logout } = useAuth();
+    const { user, adminUser, isAdministrator, logout } = useAuth();
     const { unreadCount } = useNotifications();
     const [mobileMenuOpen, setMobileMenuOpen] = React.useState(false);
     const [scrolled, setScrolled] = React.useState(false);
@@ -31,8 +31,12 @@ export const LandingNavbar = (): JSX.Element => {
         return () => window.removeEventListener('scroll', handleScroll);
     }, []);
 
+    const handleDashboardClick = () => {
+        if (isAdministrator) { setLocation("/admin/dashboard"); } else { setLocation("/feed"); }
+    };
+
     const handleAuthAction = () => {
-        if (user) { logout(); } else { setLocation("/login"); }
+        if (user || adminUser) { handleDashboardClick(); } else { setLocation("/login"); }
     };
 
     const handleNavClick = (link: NavLinkConfig) => {
@@ -119,38 +123,13 @@ export const LandingNavbar = (): JSX.Element => {
 
                             {user ? (
                                 <div className="flex items-center gap-2 sm:gap-3">
-                                    <div className="relative">
-                                        <Button
-                                            variant="ghost"
-                                            size="icon"
-                                            className={`relative min-w-[40px] min-h-[40px] w-[40px] h-[40px] rounded-full transition-colors ${unreadCount > 0
-                                                ? 'text-[#008060] bg-[#008060]/10 hover:bg-[#008060]/20'
-                                                : 'text-gray-600 hover:text-gray-900 hover:bg-gray-100'
-                                                }`}
-                                            onClick={() => setShowNotifications(!showNotifications)}
-                                            aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ''}`}
-                                        >
-                                            <Bell className="w-5 h-5" />
-                                            {unreadCount > 0 && (
-                                                <span className="absolute -top-1 -right-1 bg-red-500 text-white text-[10px] font-bold px-1.5 min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-white">
-                                                    {unreadCount > 99 ? "99+" : unreadCount > 9 ? "9+" : unreadCount}
-                                                </span>
-                                            )}
-                                        </Button>
 
-                                        {/* Dropdown Container */}
-                                        {showNotifications && (
-                                            <div className="absolute right-0 top-full mt-2">
-                                                <NotificationDropdown onClose={() => setShowNotifications(false)} />
-                                            </div>
-                                        )}
-                                    </div>
                                     <Button
-                                        className="bg-gray-900 hover:bg-gray-800 text-white text-xs sm:text-sm font-medium px-4 sm:px-5 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-300"
-                                        onClick={handleAuthAction}
-                                        aria-label="Log out"
+                                        className="bg-emerald-600 hover:bg-emerald-700 text-white text-xs sm:text-sm font-semibold px-4 sm:px-6 py-2 rounded-lg shadow-sm hover:shadow-md transition-all duration-300"
+                                        onClick={handleDashboardClick}
+                                        aria-label="Go to Dashboard"
                                     >
-                                        Log Out
+                                        Dashboard
                                     </Button>
                                 </div>
                             ) : (
@@ -208,8 +187,8 @@ export const LandingNavbar = (): JSX.Element => {
                                 ))}
                             </nav>
                             <div className="p-6 border-t border-gray-100 space-y-3">
-                                {user ? (
-                                    <Button className="w-full bg-gray-900 hover:bg-gray-800 py-3 rounded-lg font-semibold text-white" onClick={handleAuthAction}>Log Out</Button>
+                                {user || adminUser ? (
+                                    <Button className="w-full bg-emerald-600 hover:bg-emerald-700 py-3 rounded-lg font-semibold text-white" onClick={() => { setMobileMenuOpen(false); handleDashboardClick(); }}>Dashboard</Button>
                                 ) : (
                                     <>
                                         <Button variant="outline" className="w-full py-3 rounded-lg font-medium border border-gray-300 text-gray-700 hover:bg-gray-50" onClick={() => { setMobileMenuOpen(false); setLocation("/login"); }}>Login</Button>
