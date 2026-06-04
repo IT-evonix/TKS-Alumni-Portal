@@ -330,7 +330,7 @@ router.get("/admin/users", async (req: Request, res: Response) => {
 
     const { data: earnedBadges } = await supabase
       .from("user_badges")
-      .select("user_id, gamification_badges(id, name, tier, series_type, category, icon_url, description)");
+      .select("user_id, gamification_badges(id, name, tier, series_type, category, icon_url, description, is_enabled)");
 
     const enriched = (validRoleUsers || []).map(u => {
       const alumni = alumniUsers?.find(a => a.user_id === u.id);
@@ -670,7 +670,7 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
     let globalBadgeRank = 1;
     const { data: allUserBadges } = await supabase
       .from("user_badges")
-      .select("user_id, gamification_badges(tier, series_type, name)");
+      .select("user_id, gamification_badges(tier, series_type, name, is_enabled)");
 
     if (allUserBadges) {
       const userBadgesMap = new Map<string, any[]>();
@@ -771,7 +771,7 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
 
     const { data: allUserBadges } = await supabase
       .from("user_badges")
-      .select("user_id, badge_id, gamification_badges(id, name, tier, icon_url, series_type, category, description)");
+      .select("user_id, badge_id, gamification_badges(id, name, tier, icon_url, series_type, category, description, is_enabled)");
 
     const enriched = (validRoleUsers || []).map(u => {
       const alumni = alumniUsers?.find(a => a.user_id === u.id);
