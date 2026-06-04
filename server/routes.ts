@@ -937,10 +937,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .update({ updated_at: new Date().toISOString() })
         .eq("id", user.id);
 
-      // Trigger gamification login events (Streak + First Login Badge)
+      // Trigger gamification login events (Streak)
       try {
-        await updateStreak(user.id);
-        await awardCommonBadge(user.id, "login");
+        // Delay by 3 seconds so the frontend websocket has time to connect and show the popup
+        setTimeout(async () => {
+          try {
+            await updateStreak(user.id);
+          } catch (e) {
+            console.error("[Gamification] Admin login delayed streak error:", e);
+          }
+        }, 3000);
       } catch (err) {
         console.error("[Gamification] Admin login gamification error:", err);
       }
@@ -1025,10 +1031,16 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .update({ updated_at: new Date().toISOString() })
         .eq("id", user.id);
 
-      // Trigger gamification login events (Streak + First Login Badge)
+      // Trigger gamification login events (Streak)
       try {
-        await updateStreak(user.id);
-        await awardCommonBadge(user.id, "login");
+        // Delay by 3 seconds so the frontend websocket has time to connect and show the popup
+        setTimeout(async () => {
+          try {
+            await updateStreak(user.id);
+          } catch (e) {
+            console.error("[Gamification] User login delayed streak error:", e);
+          }
+        }, 3000);
       } catch (err) {
         console.error("[Gamification] User login gamification error:", err);
       }

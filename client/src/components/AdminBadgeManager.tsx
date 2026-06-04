@@ -596,13 +596,15 @@ export function AdminBadgeManager({ searchQuery = "" }: AdminBadgeManagerProps) 
                       <SelectItem value="event">Event RSVPs</SelectItem>
                       <SelectItem value="connection">Network Connections</SelectItem>
                       <SelectItem value="job">Job Postings</SelectItem>
+                      <SelectItem value="login">Login Streak</SelectItem>
+                      <SelectItem value="profile">Profile Completion</SelectItem>
                     </SelectContent>
                   </Select>
                 </div>
               </div>
 
               {['series', 'common'].includes(editingBadge?.category || '') && (
-                !editingBadge?.id && editingBadge?.category === 'series' ? (
+                (!editingBadge?.id || editingBadge?.groupedIds) && editingBadge?.category === 'series' ? (
                   <div className="grid gap-2 border-t pt-4 mt-2">
                     <Label>Required Points per Tier (Leave empty to skip tier)</Label>
 
