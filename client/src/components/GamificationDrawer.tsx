@@ -29,6 +29,7 @@ interface BadgeRecord {
   required_score: number;
   tier: string;
   icon_url: string;
+  is_enabled?: boolean;
 }
 
 interface EarnedBadge {
@@ -235,15 +236,30 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
 
   const renderBadgeCard = (eb: EarnedBadge) => {
     console.log('[GamificationDrawer] renderBadgeCard:', eb.gamification_badges.name, 'series_type:', eb.gamification_badges.series_type, 'streak:', streak);
+    const isLegacy = eb.gamification_badges.is_enabled === false;
     return (
       <Tooltip key={eb.id}>
         <TooltipTrigger asChild>
-          <div className={`relative group bg-white border rounded-xl p-5 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden cursor-help h-full justify-between ${eb.gamification_badges.tier ? 'border-emerald-100 hover:border-emerald-300' : 'border-cyan-100 hover:border-cyan-300'}`}>
+          <div className={`relative group bg-white border rounded-xl p-5 flex flex-col items-center text-center shadow-sm hover:shadow-md transition-all duration-300 overflow-hidden cursor-help h-full justify-between ${
+            isLegacy 
+              ? 'border-amber-200 hover:border-amber-400 bg-gradient-to-br from-amber-50/30 to-white' 
+              : eb.gamification_badges.tier 
+                ? 'border-emerald-100 hover:border-emerald-300' 
+                : 'border-cyan-100 hover:border-cyan-300'
+          }`}>
             {/* Glow effect for unlocked */}
-            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity ${eb.gamification_badges.tier ? 'bg-emerald-500/5' : 'bg-cyan-500/5'}`} />
+            <div className={`absolute inset-0 opacity-0 group-hover:opacity-100 transition-opacity ${isLegacy ? 'bg-amber-500/5' : eb.gamification_badges.tier ? 'bg-emerald-500/5' : 'bg-cyan-500/5'}`} />
+
+            {/* Legacy Tag */}
+            {isLegacy && (
+              <div className="absolute top-3 right-3 flex items-center gap-1 bg-amber-50 px-2 py-0.5 rounded-full border border-amber-200 z-20 group-hover:border-amber-300 transition-colors shadow-sm" title="This badge is rare and no longer obtainable">
+                <Star className="w-3 h-3 text-amber-500 fill-amber-500" />
+                <span className="text-[10px] font-bold text-amber-700">Legacy</span>
+              </div>
+            )}
 
             {eb.gamification_badges.series_type === 'login' && (
-              <div className="absolute top-3 right-3 flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 z-20 group-hover:border-slate-200 transition-colors" title="Current Streak">
+              <div className={`absolute top-3 ${isLegacy ? 'left-3' : 'right-3'} flex items-center gap-1 bg-slate-50 px-2 py-0.5 rounded-full border border-slate-100 z-20 group-hover:border-slate-200 transition-colors`} title="Current Streak">
                 <Flame className="w-3 h-3 text-orange-500 fill-orange-500" />
                 <span className="text-[10px] font-bold text-slate-600">{streak || 0} Streak</span>
               </div>
