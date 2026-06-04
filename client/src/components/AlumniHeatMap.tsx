@@ -9,6 +9,7 @@ import { supabase } from '@/lib/supabase';
 
 interface AlumniData {
   id: string;
+  user_id: string;
   first_name: string;
   last_name: string;
   latitude: number;
@@ -328,30 +329,48 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
           return coords[0] === coordinates[0] && coords[1] === coordinates[1];
         });
 
-        const labelCounts = new Map<string, number>();
-        let totalCount = 0;
+        let totalCount = features.length;
 
-        features.forEach(f => {
-          const label = f.properties?.label || 'Unknown Location';
-          labelCounts.set(label, (labelCounts.get(label) || 0) + 1);
-          totalCount++;
-        });
-
-        const sortedLabels = Array.from(labelCounts.entries()).sort((a, b) => b[1] - a[1]);
-        const labelsHtml = sortedLabels.map(([name, count]) => `
-          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; gap: 16px; align-items: center; padding: 8px 10px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0;">
-            <span style="font-weight: 600; color: #334155; word-break: break-word; font-size: 13px;">${name}</span>
-            <span style="background: #f59e0b; color: #ffffff; padding: 2px 8px; border-radius: 9999px; font-weight: 700; font-size: 11px; box-shadow: 0 2px 4px rgba(245,158,11,0.2);">${count}</span>
+        const alumniListHtml = features.map(f => {
+          const props = f.properties as any;
+          const name = `${props.first_name || ''} ${props.last_name || ''}`.trim() || 'Alumnus';
+          return `
+          <div style="display: flex; justify-content: space-between; margin-bottom: 8px; gap: 12px; align-items: center; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; transition: all 0.2s ease;">
+            <div style="display: flex; flex-direction: column; min-width: 0;">
+              <span style="font-weight: 600; color: #0f172a; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>
+              <span style="font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${props.label}</span>
+            </div>
+            <div style="display: flex; gap: 6px; flex-shrink: 0;">
+              <a href="/profile/${props.id}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #ecfdf5; color: #10b981; border-radius: 50%; text-decoration: none; border: 1px solid #d1fae5;" title="View Profile / Connect" onmouseover="this.style.background='#d1fae5'" onmouseout="this.style.background='#ecfdf5'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+              </a>
+              <a href="/inbox?user=${props.id}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #eff6ff; color: #3b82f6; border-radius: 50%; text-decoration: none; border: 1px solid #dbeafe;" title="Send Message" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+              </a>
+            </div>
           </div>
-        `).join('');
+          `;
+        }).join('');
 
         const html = `
           <style>
+            .custom-click-popup {
+              max-width: 90vw !important;
+            }
             .custom-click-popup .maplibregl-popup-content {
               border-radius: 16px !important;
               padding: 16px !important;
               box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
               border: 1px solid #e2e8f0;
+              box-sizing: border-box;
+            }
+            @media (max-width: 640px) {
+              .custom-click-popup .maplibregl-popup-content {
+                padding: 12px !important;
+              }
+              .custom-click-popup {
+                max-width: 85vw !important;
+              }
             }
             .custom-click-popup .maplibregl-popup-close-button {
               font-size: 20px !important;
@@ -372,8 +391,22 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
               background-color: #f1f5f9 !important;
               color: #0f172a !important;
             }
+            .custom-scrollbar::-webkit-scrollbar {
+              width: 6px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-track {
+              background: #f1f5f9;
+              border-radius: 4px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb {
+              background: #cbd5e1;
+              border-radius: 4px;
+            }
+            .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+              background: #94a3b8;
+            }
           </style>
-          <div style="color: #0f172a; padding: 4px; min-width: 250px; max-width: 300px; font-family: inherit;">
+          <div style="color: #0f172a; padding: 0px; width: 100%; min-width: 200px; font-family: inherit; box-sizing: border-box;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; padding-right: 24px;">
               <div style="background: #fffbeb; color: #d97706; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 1px solid #fef3c7;">
                 📍
@@ -383,8 +416,8 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
                 <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; margin-top: 2px;">${totalCount} ${totalCount === 1 ? 'Alumnus' : 'Alumni'} located here</p>
               </div>
             </div>
-            <div style="max-height: 240px; overflow-y: auto; padding-right: 6px;" class="custom-scrollbar">
-              ${labelsHtml}
+            <div style="max-height: 160px; overflow-y: auto; padding-right: 6px;" class="custom-scrollbar">
+              ${alumniListHtml}
             </div>
           </div>
         `;
@@ -442,7 +475,9 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
           coordinates: [alumnus.longitude, alumnus.latitude] // MapLibre takes [lng, lat] for GeoJSON
         },
         properties: {
-          id: alumnus.id,
+          id: alumnus.user_id || alumnus.id,
+          first_name: alumnus.first_name,
+          last_name: alumnus.last_name,
           label: alumnus.location_label || 'Unknown Location',
           city: alumnus.current_city || '',
           state: alumnus.current_state || '',
@@ -625,18 +660,41 @@ export default function AlumniHeatMap() {
   }, [alumniData, mapBounds]);
 
   if (loading) return (
-    <div className="flex flex-col items-center justify-center h-[600px] space-y-4">
-      <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
-      <p className="text-muted-foreground animate-pulse">Loading Map...</p>
+    <div className="p-0 space-y-6 w-full max-w-5xl mx-auto animate-pulse">
+      {/* Search Header Skeleton */}
+      <div className="w-full h-12 bg-slate-200 rounded-xl max-w-md"></div>
+      
+      {/* Main Card Skeleton */}
+      <div className="overflow-hidden border border-slate-200 shadow-sm rounded-xl">
+        <div className="grid grid-cols-1 md:grid-cols-4 md:h-[600px]">
+          {/* Sidebar Skeleton */}
+          <div className="col-span-1 bg-white border-b md:border-b-0 md:border-r border-slate-100 p-5 flex flex-col gap-4 h-[300px] md:h-full">
+            <div className="w-1/2 h-6 bg-slate-200 rounded"></div>
+            <div className="w-full h-8 bg-slate-100 rounded"></div>
+            <div className="space-y-3 mt-4">
+              <div className="w-full h-16 bg-slate-100 rounded-lg"></div>
+              <div className="w-full h-16 bg-slate-100 rounded-lg"></div>
+              <div className="w-full h-16 bg-slate-100 rounded-lg"></div>
+            </div>
+          </div>
+          {/* Map Area Skeleton */}
+          <div className="col-span-3 h-[400px] md:h-full relative bg-slate-100 flex items-center justify-center">
+            <div className="flex flex-col items-center justify-center space-y-4">
+              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
+              <p className="text-slate-500 font-medium text-sm">Loading global network...</p>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
   );
 
   if (error) return <Card className="p-6 text-center text-destructive m-4">Error: {error}</Card>;
 
   return (
-    <div className="p-2 md:p-4 space-y-6 w-full max-w-6xl mx-auto">
-      <Card className="border-none shadow-2xl overflow-hidden rounded-2xl bg-card">
-        <CardContent className="p-0 flex flex-col-reverse lg:flex-row w-full h-[85vh] lg:h-[550px] min-h-[500px]">
+    <div className="p-0 space-y-6 w-full max-w-5xl mx-auto">
+      <Card className="border shadow-sm overflow-hidden rounded-2xl bg-card border-gray-200">
+        <CardContent className="p-0 flex flex-col-reverse lg:flex-row w-full h-[600px] min-h-[500px]">
 
           {/* Sidebar */}
           <div className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0">
