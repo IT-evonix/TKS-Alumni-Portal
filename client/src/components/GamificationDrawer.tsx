@@ -96,8 +96,15 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
     globalRank,
     globalBadgeRank,
     loading,
-    error
+    error,
+    refreshGamification
   } = useGamification();
+
+  React.useEffect(() => {
+    if (isOpen) {
+      refreshGamification();
+    }
+  }, [isOpen, refreshGamification]);
 
   const level = Math.floor((scores.total_points || 0) / 500) + 1;
   const currentLevelXP = (scores.total_points || 0) % 500;

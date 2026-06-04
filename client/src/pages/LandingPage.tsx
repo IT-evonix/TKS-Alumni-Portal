@@ -113,10 +113,7 @@ export const LandingPage = (): JSX.Element => {
     document.title = "Welcome - TKS Alumni Portal";
   }, []);
 
-  React.useEffect(() => {
-    if (user) setLocation("/feed");
-    else if (adminUser) setLocation("/admin/dashboard");
-  }, [user, adminUser, setLocation]);
+
 
   React.useEffect(() => {
     document.documentElement.style.scrollBehavior = 'smooth';

@@ -123,7 +123,8 @@ export async function incrementScore(
     // Determine actual amount to add based on dynamic rules
     const rules = await getPointRules();
     const baseAmount = rules[actionKey] !== undefined ? rules[actionKey] : 1;
-    const actualAmount = baseAmount * multiplier;
+    const rawAmount = baseAmount * multiplier;
+    const actualAmount = rawAmount > 0 ? Math.ceil(rawAmount) : Math.floor(rawAmount);
 
     // Ensure row exists
     const scores = await ensureUserScores(userId);

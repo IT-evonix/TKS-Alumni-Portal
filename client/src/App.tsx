@@ -106,7 +106,7 @@ function Router() {
       <ErrorBoundary>
         <Switch>
           {/* Public Routes - Authenticated users are redirected to portal */}
-          <PublicRoute path="/" component={LandingPage} />
+          <Route path="/" component={LandingPage} />
           <PublicRoute path="/login" component={LoginPage} />
           <PublicRoute path="/signup" component={SignupPage} />
           <PublicRoute path="/student-signup" component={StudentSignupPage} />
@@ -116,7 +116,7 @@ function Router() {
           <PublicRoute path="/contact" component={ContactUsPage} />
           <PublicRoute path="/linkedin-welcome" component={LinkedInWelcomePage} />
           <PublicRoute path="/admin/login" component={AdminLoginPage} />
-          <PublicRoute path="/alumni-map" component={AlumniMapPage} />
+          <Route path="/alumni-map" component={AlumniMapPage} />
           
           <Route path="/admin" component={() => <Redirect to="/admin/dashboard" />} />
           <ProtectedRoute path="/admin/signup-requests" component={AdminDashboard} adminOnly />

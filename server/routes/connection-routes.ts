@@ -185,10 +185,8 @@ router.post("/request", async (req, res) => {
             actorId: userId,
         });
 
-        // Gamification Points for Connection Request
-        incrementScore(userId, "connection_score", "network_connect", 1).catch(err => 
-            console.error("Gamification network request error:", err)
-        );
+        // Gamification Points for Connection Request are no longer awarded on SEND.
+        // They are only awarded when the connection is ACCEPTED.
 
         res.status(201).json({ message: "Connection request sent", request });
 
@@ -239,10 +237,7 @@ router.delete("/request", async (req, res) => {
             .eq("type", "connection_request")
             .eq("is_read", false);
 
-        // Deduct Gamification Points for Connection Request Withdrawal
-        incrementScore(userId, "connection_score", "network_connect", -1).catch(err => 
-            console.error("Gamification network withdraw error:", err)
-        );
+        // No points to deduct since they are only awarded on acceptance.
 
         res.json({ message: "Connection request withdrawn" });
     } catch (error) {
@@ -285,11 +280,11 @@ router.delete("/connection", async (req, res) => {
 
         if (deleteError) throw deleteError;
 
-        // Deduct Gamification Points for Connection Removal
-        incrementScore(userId, "connection_score", "network_connect", -1).catch(err => 
+        // Deduct Gamification Points for Connection Removal (Half points for each user)
+        incrementScore(userId, "connection_score", "network_connect", -0.5).catch(err => 
             console.error("Gamification network remove error (user):", err)
         );
-        incrementScore(targetUserId, "connection_score", "network_connect", -1).catch(err => 
+        incrementScore(targetUserId, "connection_score", "network_connect", -0.5).catch(err => 
             console.error("Gamification network remove error (target):", err)
         );
 
@@ -366,9 +361,9 @@ router.post("/respond", async (req, res) => {
                 actorId: userId,
             });
 
-            // Gamification Points for Connection
-            incrementScore(userId, "connection_score", "network_connect", 1).catch(err => console.error("Gamification network connect error (recipient):", err));
-            incrementScore(requesterId, "connection_score", "network_connect", 1).catch(err => console.error("Gamification network connect error (requester):", err));
+            // Gamification Points for Connection (Half points for each user)
+            incrementScore(userId, "connection_score", "network_connect", 0.5).catch(err => console.error("Gamification network connect error (recipient):", err));
+            incrementScore(requesterId, "connection_score", "network_connect", 0.5).catch(err => console.error("Gamification network connect error (requester):", err));
         }
 
         res.json({ message: `Connection request ${newStatus}` });

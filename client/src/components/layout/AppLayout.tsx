@@ -10,7 +10,7 @@ import { useGamification } from "@/contexts/GamificationContext";
 import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { socket } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
-import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles, MapPin, Locate, Loader2 } from "lucide-react";
+import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles, MapPin, Locate, Loader2, Globe } from "lucide-react";
 import { GamificationDrawer } from "@/components/GamificationDrawer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
@@ -58,15 +58,12 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
       return;
     }
 
-    const lastPromptKey = `location_prompt_last_shown_${user.id}`;
-    const lastPromptTime = localStorage.getItem(lastPromptKey);
-    const now = Date.now();
-    const ONE_DAY_MS = 24 * 60 * 60 * 1000;
+    const promptKey = `heatmap_location_prompted_${user.id}`;
+    const hasBeenPrompted = localStorage.getItem(promptKey);
 
-    const hasLocationData = alumniAny && (alumniAny.current_city || alumniAny.location_label) && alumniAny.latitude && alumniAny.longitude;
-    const timeToPrompt = !lastPromptTime || (now - parseInt(lastPromptTime) > ONE_DAY_MS);
-
-    if (timeToPrompt || !hasLocationData) {
+    // Force prompt exactly once per user to ensure heatmap compatibility,
+    // regardless of whether they already have legacy location data in DB.
+    if (!hasBeenPrompted) {
       if (alumniAny) {
         setLocalLocation({
           city: alumniAny.current_city || '',
@@ -119,13 +116,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
       if (response.ok) {
         await refreshAlumni();
 
-        const lastPromptKey = `location_prompt_last_shown_${user?.id}`;
-        localStorage.setItem(lastPromptKey, Date.now().toString());
+        const promptKey = `heatmap_location_prompted_${user?.id}`;
+        localStorage.setItem(promptKey, 'true');
 
         setShowDailyLocationPrompt(false);
         toast({
           title: "Location Updated!",
-          description: "Thank you for checking in your current location today.",
+          description: "Thank you! You will now appear on the Alumni Heatmap.",
           variant: "default",
         });
       } else {
@@ -374,6 +371,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     { id: 'events', icon: Calendar, label: 'Events', path: '/events', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'connections', icon: Users, label: 'Connections', path: '/connections', roles: ['alumni', 'student', 'faculty'] },
     { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'alumni-map', icon: MapPin, label: 'Alumni Map', path: '/alumni-map', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'home', icon: Globe, label: 'Website Home', path: '/', roles: ['alumni', 'student', 'faculty', 'administrator'] },
   ];
 
   // Define bottom navigation items
@@ -628,9 +627,11 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               <MapPin className="w-6 h-6 animate-bounce text-[#008060]" />
             </div>
             <DialogTitle className="text-2xl font-bold tracking-tight text-slate-800">
-              Daily Location Tracking            </DialogTitle>
+              Confirm Your Location
+            </DialogTitle>
             <DialogDescription className="text-sm text-slate-500">
-              Help keep our global alumni heatmap up to date. Let us know where you're logging in from today            </DialogDescription>
+              We've launched a new Global Alumni Heatmap! Please confirm or update your current location to appear on the map.
+            </DialogDescription>
           </DialogHeader>
 
           <div className="mt-6 space-y-6">
