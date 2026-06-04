@@ -17,7 +17,7 @@ import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums';
+  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map';
 }
 
 // Define user roles
@@ -372,7 +372,6 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     { id: 'connections', icon: Users, label: 'Connections', path: '/connections', roles: ['alumni', 'student', 'faculty'] },
     { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'alumni-map', icon: MapPin, label: 'Alumni Map', path: '/alumni-map', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'home', icon: Globe, label: 'Website Home', path: '/', roles: ['alumni', 'student', 'faculty', 'administrator'] },
   ];
 
   // Define bottom navigation items
@@ -417,7 +416,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
           <div
             className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity"
             onClick={() => {
-              setLocation('/feed');
+              setLocation('/');
               setShowMobileMenu(false);
             }}
           >

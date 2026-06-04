@@ -116,7 +116,6 @@ function Router() {
           <PublicRoute path="/contact" component={ContactUsPage} />
           <PublicRoute path="/linkedin-welcome" component={LinkedInWelcomePage} />
           <PublicRoute path="/admin/login" component={AdminLoginPage} />
-          <Route path="/alumni-map" component={AlumniMapPage} />
           
           <Route path="/admin" component={() => <Redirect to="/admin/dashboard" />} />
           <ProtectedRoute path="/admin/signup-requests" component={AdminDashboard} adminOnly />
@@ -128,6 +127,7 @@ function Router() {
           <ProtectedRoute path="/job-portal" component={JobPortalPage} />
           <ProtectedRoute path="/events" component={EventsPage} />
           <ProtectedRoute path="/connections" component={ConnectionsPage} />
+          <ProtectedRoute path="/alumni-map" component={AlumniMapPage} />
           <ProtectedRoute path="/inbox" component={InboxPage} />
           <ProtectedRoute path="/settings" component={SettingsPage} />
           <ProtectedRoute path="/notifications/history" component={NotificationHistoryPage} />

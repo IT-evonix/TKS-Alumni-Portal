@@ -110,7 +110,7 @@ export const InboxPage = (): JSX.Element => {
   // Handle URL query parameter (e.g. ?user=123) and sessionStorage — open chat with that user
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
-    const targetUserIdFromQuery = searchParams.get("user");
+    const targetUserIdFromQuery = searchParams.get("user") || searchParams.get("userId");
     const targetUsernameFromQuery = searchParams.get("username");
     const targetEmailFromQuery = searchParams.get("email");
     const targetUserIdFromStorage = sessionStorage.getItem('openConversationId');
