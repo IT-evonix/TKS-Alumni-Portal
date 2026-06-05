@@ -1,0 +1,9 @@
+<svg width="1600" height="2" viewBox="0 0 1600 2" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g opacity="0.2">
+<mask id="path-1-inside-1_91_1457" fill="white">
+<path fill-rule="evenodd" clip-rule="evenodd" d="M0 0.999769H1600H0Z"/>
+</mask>
+<path fill-rule="evenodd" clip-rule="evenodd" d="M0 0.999769H1600H0Z" fill="white"/>
+<path d="M0 0.999769V1.99977H1600V0.999769V-0.000231266H0V0.999769Z" fill="#CFE5AE" mask="url(#path-1-inside-1_91_1457)"/>
+</g>
+</svg>

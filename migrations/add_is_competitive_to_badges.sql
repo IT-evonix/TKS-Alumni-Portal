@@ -1,0 +1,2 @@
+ALTER TABLE gamification_badges 
+ADD COLUMN IF NOT EXISTS is_competitive BOOLEAN DEFAULT FALSE;
