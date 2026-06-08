@@ -70,6 +70,12 @@ export async function setupVite(app: Express, server: Server) {
   app.use("*", async (req, res, next) => {
     const url = req.originalUrl;
 
+    // Fast fail for missing static assets to prevent them from being processed as HTML
+    if (url.match(/\.(json|map|ico|png|jpg|svg|woff2?)(\?.*)?$/)) {
+      res.status(404).end();
+      return;
+    }
+
     try {
       const clientTemplate = path.resolve(
         __dirname,

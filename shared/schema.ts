@@ -987,3 +987,45 @@ export type InsertBlogComment = z.infer<typeof insertBlogCommentSchema>;
 export type BlogLike = typeof blogLikes.$inferSelect;
 export type BlogBookmark = typeof blogBookmarks.$inferSelect;
 export type InsertUserBadge = z.infer<typeof insertUserBadgeSchema>;
+
+// ==================== TRAVEL CHAPTERS ====================
+
+export const travelChapters = pgTable("travel_chapters", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  city: text("city").notNull(),
+  country: text("country").notNull(),
+  description: text("description"),
+  coverImage: text("cover_image"),
+  coordinates: text("coordinates"), // JSON string or lat,lng format
+  createdBy: varchar("created_by").references(() => users.id),
+  status: text("status").default("pending"), // pending, approved, rejected
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const travelChapterMembers = pgTable("travel_chapter_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chapterId: varchar("chapter_id").references(() => travelChapters.id, { onDelete: 'cascade' }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  role: text("role").default("member"), // member, lead, admin
+  joinedAt: timestamp("joined_at").defaultNow(),
+});
+
+// Travel Chapters Insert Schemas
+export const insertTravelChapterSchema = createInsertSchema(travelChapters).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTravelChapterMemberSchema = createInsertSchema(travelChapterMembers).omit({
+  id: true,
+  joinedAt: true,
+});
+
+// Travel Chapters Types
+export type TravelChapter = typeof travelChapters.$inferSelect;
+export type InsertTravelChapter = z.infer<typeof insertTravelChapterSchema>;
+export type TravelChapterMember = typeof travelChapterMembers.$inferSelect;
+export type InsertTravelChapterMember = z.infer<typeof insertTravelChapterMemberSchema>;

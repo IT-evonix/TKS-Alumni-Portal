@@ -17,7 +17,7 @@ import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs';
+  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters';
 }
 
 // Define user roles
@@ -198,14 +198,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
   // Handle Socket.IO connection and events
   React.useEffect(() => {
     if (user?.id) {
-      console.log('[AppLayout] Connecting socket for user:', user.id);
+      // console.log('[AppLayout] Connecting socket for user:', user.id);
       // Connect to socket
       socket.auth = { token: user.id };
       socket.connect();
 
       // Listen for connection events
       socket.on('connect', () => {
-        console.log('[AppLayout] Socket connected, ID:', socket.id);
+        // console.log('[AppLayout] Socket connected, ID:', socket.id);
       });
 
       socket.on('connect_error', (error) => {
@@ -214,7 +214,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
       // Listen for notifications
       const handleNotification = (data: any) => {
-        console.log('[AppLayout] Notification received:', data);
+        // console.log('[AppLayout] Notification received:', data);
         // Don't fetch - context will add notification directly via 'new-notification' event
         // This prevents duplicate API calls
 
@@ -228,7 +228,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
       socket.on('notification', handleNotification);
 
       return () => {
-        console.log('[AppLayout] Cleaning up socket listeners');
+        // console.log('[AppLayout] Cleaning up socket listeners');
         socket.off('notification', handleNotification);
         socket.off('connect');
         socket.off('connect_error');
@@ -371,7 +371,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     { id: 'events', icon: Calendar, label: 'Events', path: '/events', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'connections', icon: Users, label: 'Connections', path: '/connections', roles: ['alumni', 'student', 'faculty'] },
     { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'alumni-map', icon: MapPin, label: 'Alumni Map', path: '/alumni-map', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'alumni-map', icon: MapPin, label: 'Global Network', path: '/alumni-map', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'travel-chapters', icon: Globe, label: 'Travel Chapters', path: '/travel-chapters', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'blogs', icon: BookOpen, label: 'Blogs', path: '/blogs', roles: ['alumni', 'student', 'faculty', 'administrator'] },
   ];
 
@@ -421,8 +422,10 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               setShowMobileMenu(false);
             }}
           >
-            <div className="w-10 h-10 sm:w-12 sm:h-12 bg-gradient-to-br from-[#008060] to-[#006b51] rounded-xl flex items-center justify-center shadow-lg flex-shrink-0">
-              <span className="text-white text-xl sm:text-2xl font-bold">T</span>
+            <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
+              <div className="w-full h-full bg-white rounded-xl shadow-md group-hover:shadow-lg transition-shadow duration-300 flex items-center justify-center overflow-hidden p-1 border border-gray-200">
+                <img src="/tks_logo.png" alt="The Kalyani School Logo" className="w-full h-full object-contain" />
+              </div>
             </div>
             <div className="min-w-0">
               <span className="font-bold text-[#008060] text-base sm:text-lg xl:text-xl block leading-tight truncate">The Kalyani School</span>

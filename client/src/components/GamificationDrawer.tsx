@@ -219,7 +219,7 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
       const cat = (eb.gamification_badges?.category || '').toLowerCase().trim();
       return cat === 'series';
     });
-    console.log('[GamificationDrawer] rankBasedBadges:', res);
+    // console.log('[GamificationDrawer] rankBasedBadges:', res);
     return res;
   }, [filteredEarnedBadges]);
 
@@ -228,14 +228,14 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
       const cat = (eb.gamification_badges?.category || '').toLowerCase().trim();
       return cat === 'common' || !eb.gamification_badges?.category;
     });
-    console.log('[GamificationDrawer] commonBadges:', res);
+    // console.log('[GamificationDrawer] commonBadges:', res);
     return res;
   }, [filteredEarnedBadges]);
 
-  console.log('[GamificationDrawer] filteredEarnedBadges:', filteredEarnedBadges);
+  // console.log('[GamificationDrawer] filteredEarnedBadges:', filteredEarnedBadges);
 
   const renderBadgeCard = (eb: EarnedBadge) => {
-    console.log('[GamificationDrawer] renderBadgeCard:', eb.gamification_badges.name, 'series_type:', eb.gamification_badges.series_type, 'streak:', streak);
+    // console.log('[GamificationDrawer] renderBadgeCard:', eb.gamification_badges.name, 'series_type:', eb.gamification_badges.series_type, 'streak:', streak);
     const isLegacy = eb.gamification_badges.is_enabled === false;
     return (
       <Tooltip key={eb.id}>
@@ -288,7 +288,7 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
             </div>
 
             <div className="w-full mt-auto pt-2 flex justify-center shrink-0">
-              <Badge variant="secondary" className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md ${eb.gamification_badges.tier ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-100'}`}>Unlocked</Badge>
+              <Badge variant="secondary" className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md ${eb.gamification_badges.tier ? 'bg-emerald-100 text-emerald-700 hover:bg-emerald-100' : 'bg-cyan-100 text-cyan-700 hover:bg-cyan-100'}`}>Earned</Badge>
             </div>
           </div>
         </TooltipTrigger>
@@ -394,8 +394,8 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                 {/* Earned Badges Section */}
                 <div>
                   <h3 className="font-bold text-lg text-slate-800 mb-4 flex items-center gap-2">
-                    <Unlock className="w-5 h-5 text-amber-500" />
-                    Unlocked Achievements
+                    <Award className="w-5 h-5 text-amber-500" />
+                    Earned Achievements
                   </h3>
 
                   {filteredEarnedBadges.length === 0 ? (
@@ -452,7 +452,9 @@ export function GamificationDrawer({ isOpen, onClose }: GamificationDrawerProps)
                               </div>
 
                               <div className="w-full mt-auto pt-2 flex flex-col items-center shrink-0">
-                                <Badge variant="outline" className="text-[9px] uppercase tracking-wider text-slate-400 border-slate-200 font-bold px-2 py-0.5 rounded-md mb-2">Locked</Badge>
+                                <Badge variant="outline" className={`text-[9px] uppercase tracking-wider font-bold px-2 py-0.5 rounded-md mb-2 ${item.percentComplete > 0 ? 'text-amber-500 border-amber-200 bg-amber-50/50' : 'text-slate-400 border-slate-200'}`}>
+                                  {item.percentComplete > 0 ? 'Unlocked' : 'Locked'}
+                                </Badge>
 
                                 <div className="w-full min-h-[22px] flex items-center justify-center">
                                   {item.badge.category === 'common' || item.requiredScore === 0 ? (

@@ -26,9 +26,9 @@ interface LeaderboardEntry {
 function ShieldIcon({ badge, size = 16 }: { badge: any; size?: number }) {
   const tierGradient =
     badge.tier === "platinum" ? "from-purple-400 to-purple-700" :
-    badge.tier === "gold"     ? "from-yellow-400 to-amber-600" :
-    badge.tier === "silver"   ? "from-slate-300 to-slate-500" :
-    badge.tier === "bronze"   ? "from-orange-500 to-orange-800" : "from-cyan-400 to-teal-500";
+      badge.tier === "gold" ? "from-yellow-400 to-amber-600" :
+        badge.tier === "silver" ? "from-slate-300 to-slate-500" :
+          badge.tier === "bronze" ? "from-orange-500 to-orange-800" : "from-cyan-400 to-teal-500";
 
   return (
     <div
@@ -149,9 +149,9 @@ export function GamificationLeaderboard() {
         {/* Rank */}
         <div className="relative font-bold text-lg w-5 shrink-0 text-center text-slate-400 group-hover:text-amber-500">
           {idx === 0 ? <Medal className="w-5 h-5 mx-auto text-amber-500" /> :
-           idx === 1 ? <Medal className="w-5 h-5 mx-auto text-slate-400" /> :
-           idx === 2 ? <Medal className="w-5 h-5 mx-auto text-orange-400" /> :
-           <span className="text-xs">#{idx + 1}</span>}
+            idx === 1 ? <Medal className="w-5 h-5 mx-auto text-slate-400" /> :
+              idx === 2 ? <Medal className="w-5 h-5 mx-auto text-orange-400" /> :
+                <span className="text-xs">#{idx + 1}</span>}
         </div>
 
         {/* Avatar */}
@@ -230,9 +230,9 @@ export function GamificationLeaderboard() {
                   {badges.map((b: any, i: number) => {
                     const tierText =
                       b.tier === "platinum" ? "text-purple-600 dark:text-purple-400" :
-                      b.tier === "gold"     ? "text-amber-600 dark:text-amber-400" :
-                      b.tier === "silver"   ? "text-slate-500 dark:text-slate-400" :
-                      b.tier === "bronze"   ? "text-orange-600 dark:text-orange-400" : "text-cyan-600 dark:text-cyan-400";
+                        b.tier === "gold" ? "text-amber-600 dark:text-amber-400" :
+                          b.tier === "silver" ? "text-slate-500 dark:text-slate-400" :
+                            b.tier === "bronze" ? "text-orange-600 dark:text-orange-400" : "text-cyan-600 dark:text-cyan-400";
                     return (
                       <div key={i} className="flex items-center gap-2.5 px-3 py-2 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors">
                         <ShieldIcon badge={b} size={28} />

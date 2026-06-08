@@ -86,6 +86,8 @@ const ForumCategoryPage = lazy(() => import("@/pages/ForumCategoryPage").then(m 
 const BlogsPage = lazy(() => import("@/pages/BlogsPage").then(m => ({ default: m.BlogsPage })));
 const BlogDetailPage = lazy(() => import("@/pages/BlogDetailPage").then(m => ({ default: m.BlogDetailPage })));
 const AdminBlogsPage = lazy(() => import("@/pages/AdminBlogsPage").then(m => ({ default: m.AdminBlogsPage })));
+const TravelChaptersDirectoryPage = lazy(() => import("@/pages/TravelChaptersDirectoryPage").then(m => ({ default: m.default })));
+const TravelChapterPage = lazy(() => import("@/pages/TravelChapterPage").then(m => ({ default: m.default })));
 
 // Admin pages - lazy loaded (rarely accessed by most users)
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
@@ -100,6 +102,7 @@ const AdminBulkEmailPage = lazy(() => import("./pages/AdminBulkEmailPage").then(
 const AdminInboxPage = lazy(() => import("@/pages/AdminInboxPage").then(m => ({ default: m.AdminInboxPage })));
 const AdminGamificationPage = lazy(() => import("@/pages/AdminGamificationPage").then(m => ({ default: m.AdminGamificationPage })));
 const AdminLocationExportPage = lazy(() => import("./pages/AdminLocationExportPage").then(m => ({ default: m.default })));
+const AdminTravelChaptersPage = lazy(() => import("@/pages/AdminTravelChaptersPage").then(m => ({ default: m.default })));
 
 // Other pages - lazy loaded
 const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ default: m.SharedPostPage })));
@@ -145,6 +148,8 @@ function Router() {
           <ProtectedRoute path="/forums/category/:slug" component={ForumCategoryPage} />
           <ProtectedRoute path="/blogs" component={BlogsPage} />
           <ProtectedRoute path="/blogs/:slug" component={BlogDetailPage} />
+          <ProtectedRoute path="/travel-chapters" component={TravelChaptersDirectoryPage} />
+          <ProtectedRoute path="/travel-chapters/:id" component={TravelChapterPage} />
 
           {/* Protected Admin Routes */}
           <ProtectedRoute path="/admin/dashboard" component={AdminDashboard} adminOnly />
@@ -161,6 +166,7 @@ function Router() {
           <ProtectedRoute path="/admin/gamification" component={AdminGamificationPage} adminOnly />
           <ProtectedRoute path="/admin/location-export" component={AdminLocationExportPage} adminOnly />
           <ProtectedRoute path="/admin/blogs" component={AdminBlogsPage} adminOnly />
+          <ProtectedRoute path="/admin/travel-chapters" component={AdminTravelChaptersPage} adminOnly />
 
           {/* Fallback to 404 */}
           <Route component={NotFound} />
