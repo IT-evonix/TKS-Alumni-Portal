@@ -41,6 +41,8 @@ interface UserRanking {
   email: string;
   profilePicture: string | null;
   badgesCount: number;
+  badgeScore?: number;
+  created_at?: string;
   uniqueBadges?: any[];
 }
 
@@ -224,10 +226,15 @@ export function AdminUserRankings({ searchQuery = "" }: AdminUserRankingsProps) 
 
   const sortedUsers = [...filteredUsers].sort((a, b) => {
     if (activeTab === "badges") {
+      if (b.badgeScore !== a.badgeScore) return (b.badgeScore || 0) - (a.badgeScore || 0);
+      if (b.total_points !== a.total_points) return b.total_points - a.total_points;
       if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
-      return b.total_points - a.total_points;
+      return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
     }
-    return b.total_points - a.total_points;
+    if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+    if (b.badgeScore !== a.badgeScore) return (b.badgeScore || 0) - (a.badgeScore || 0);
+    if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
+    return new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime();
   });
 
   const totalPages = Math.ceil(sortedUsers.length / itemsPerPage);

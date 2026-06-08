@@ -646,81 +646,58 @@ router.get("/users/:userId/profile", async (req: Request, res: Response) => {
       }
     }
 
-    // Fast calculation of approximate global rank (ignores tie-breakers for speed)
+    // Exact calculation of global rank and badge rank matching the Leaderboard tie-breakers
     let globalRank = 1;
-    if (scores && scores.total_points > 0) {
-      const { count: higherRankedCount } = await supabase
-        .from("user_scores")
-        .select("*", { count: 'exact', head: true })
-        .gt("total_points", scores.total_points);
-      
-      globalRank = (higherRankedCount || 0) + 1;
-    } else if (scores && scores.total_points === 0) {
-      // If 0 points, they are at the bottom. Get total users count approximately
-      const { count: totalScorers } = await supabase
-        .from("user_scores")
-        .select("*", { count: 'exact', head: true })
-        .gt("total_points", 0);
-      globalRank = (totalScorers || 0) + 1;
-    }
-
-    const { uniqueBadges } = processUserBadges(earnedBadges || []);
-
-    // Calculate global badge rank using the same logic as the leaderboard
     let globalBadgeRank = 1;
+
+    const { data: validRoleUsers } = await supabase
+      .from("users")
+      .select("id, created_at")
+      .eq("user_role", "alumni");
+
+    const { data: allScores } = await supabase
+      .from("user_scores")
+      .select("user_id, total_points");
+
     const { data: allUserBadges } = await supabase
       .from("user_badges")
-      .select("user_id, gamification_badges(tier, series_type, name, is_enabled)");
+      .select("user_id, gamification_badges(id, tier, series_type, category)");
 
-    if (allUserBadges) {
-      const userBadgesMap = new Map<string, any[]>();
-      allUserBadges.forEach((ub: any) => {
-        if (!ub.user_id) return;
-        if (!userBadgesMap.has(ub.user_id)) {
-          userBadgesMap.set(ub.user_id, []);
-        }
-        userBadgesMap.get(ub.user_id)?.push(ub);
-      });
-
-      const userBadgeScores: Record<string, number> = {};
-      userBadgesMap.forEach((badgesList, uid) => {
-        const tierWeight: any = { platinum: 4, gold: 3, silver: 2, bronze: 1 };
-        const deduplicated = new Map();
-        badgesList.forEach(b => {
-          const badge = b.gamification_badges;
-          if (!badge) return;
-          
-          // Only deduplicate badges of 'series' category that have a tier.
-          // We group by series_type AND name so different series badges don't overwrite each other.
-          const isTiered = badge.tier && badge.category === 'series';
-          const key = isTiered ? `${badge.series_type}_${badge.name}` : badge.id;
-          const existing = deduplicated.get(key);
-          
-          if (!existing || (tierWeight[badge.tier || ''] || 0) > (tierWeight[existing.gamification_badges?.tier || ''] || 0)) {
-            deduplicated.set(key, b);
-          }
-        });
-
-        const getBadgeScoreValue = (tier: string | null | undefined) => {
-          if (tier === 'platinum') return 100;
-          if (tier === 'gold') return 50;
-          if (tier === 'silver') return 20;
-          if (tier === 'bronze') return 5;
-          return 1;
+    if (validRoleUsers && allScores && allUserBadges) {
+      const enrichedUsers = validRoleUsers.map(u => {
+        const scoreData = allScores.find(s => s.user_id === u.id) || { total_points: 0 };
+        const userBadgesList = allUserBadges.filter(b => b.user_id === u.id);
+        const { badgesCount, badgeScore } = processUserBadges(userBadgesList);
+        return {
+          user_id: u.id,
+          total_points: scoreData.total_points || 0,
+          badgesCount,
+          badgeScore,
+          created_at: u.created_at
         };
-
-        const score = Array.from(deduplicated.values()).reduce((acc, b: any) => acc + getBadgeScoreValue(b.gamification_badges?.tier), 0);
-        userBadgeScores[uid] = score;
       });
 
-      const targetScore = userBadgeScores[userId] || 0;
-      let higherCount = 0;
-      Object.entries(userBadgeScores).forEach(([uid, score]) => {
-        if (uid !== userId && score > targetScore) {
-          higherCount++;
-        }
+      // Sort exactly like Points Leaderboard
+      const sortedByPoints = [...enrichedUsers].sort((a, b) => {
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.badgeScore !== a.badgeScore) return b.badgeScore - a.badgeScore;
+        if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
       });
-      globalBadgeRank = higherCount + 1;
+
+      // Sort exactly like Badges Leaderboard
+      const sortedByBadges = [...enrichedUsers].sort((a, b) => {
+        if (b.badgeScore !== a.badgeScore) return b.badgeScore - a.badgeScore;
+        if (b.total_points !== a.total_points) return b.total_points - a.total_points;
+        if (b.badgesCount !== a.badgesCount) return b.badgesCount - a.badgesCount;
+        return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
+      });
+
+      const userPointsIndex = sortedByPoints.findIndex(u => u.user_id === userId);
+      globalRank = userPointsIndex !== -1 ? userPointsIndex + 1 : sortedByPoints.length + 1;
+
+      const userBadgesIndex = sortedByBadges.findIndex(u => u.user_id === userId);
+      globalBadgeRank = userBadgesIndex !== -1 ? userBadgesIndex + 1 : sortedByBadges.length + 1;
     }
 
     res.json({

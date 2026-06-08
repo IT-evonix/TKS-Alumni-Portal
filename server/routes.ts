@@ -26,6 +26,7 @@ import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
 import { aggregateAdminDashboardMetrics } from "./services/admin-metrics-service";
 import gamificationRoutes from "./routes/gamification-routes";
 import blogRoutes from "./routes/blog-routes";
+import travelChaptersRoutes from "./routes/travel-chapters";
 import { ensureDefaultPointRulesExist, ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
 import {
   createAndEmitNotification,
@@ -177,6 +178,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/resume", requireAuth, resumeRoutes);
   app.use("/api/gamification", gamificationRoutes);
   app.use("/api/blogs", blogRoutes);
+  app.use("/api/travel-chapters", travelChaptersRoutes);
   ensureDefaultPointRulesExist().catch(err =>
     console.error("[Gamification] Point rules auto-seed failed:", err)
   );

@@ -42,6 +42,11 @@ export const InboxPage = (): JSX.Element => {
   const [replyingTo, setReplyingTo] = useState<Message | null>(null);
   const [editingMessage, setEditingMessage] = useState<Message | null>(null);
 
+  // Whether we are currently fast-opening a conversation from URL (show skeleton)
+  const [isOpeningFromUrl, setIsOpeningFromUrl] = useState<boolean>(() => {
+    return !!(new URLSearchParams(window.location.search).get('user') || new URLSearchParams(window.location.search).get('userId'));
+  });
+
   // Selected user for "Compose"
   const [selectedUser, setSelectedUser] = useState<AlumniUser | null>(null);
   const [filteredUsers, setFilteredUsers] = useState<AlumniUser[]>([]);
@@ -68,6 +73,48 @@ export const InboxPage = (): JSX.Element => {
     fetchAllMessages();
     fetchAllUsers();
     fetchBlocks();
+
+    // Fast-open: immediately open chat from URL params without waiting for loading state
+    const searchParams = new URLSearchParams(window.location.search);
+    const targetUserId = searchParams.get("user") || searchParams.get("userId");
+    const prefillMsg = searchParams.get("msg");
+
+    if (prefillMsg) setMessageText(decodeURIComponent(prefillMsg));
+
+    if (targetUserId && openedFromUrlRef.current !== targetUserId) {
+      openedFromUrlRef.current = targetUserId;
+      (async () => {
+        try {
+          const res = await fetch(`/api/alumni/public/${targetUserId}`, {
+            headers: getAuthHeaders(),
+          });
+          if (!res.ok) { openedFromUrlRef.current = null; setIsOpeningFromUrl(false); return; }
+          const data = await res.json();
+          const p = data.profile;
+          if (!p || !p.user_id) { openedFromUrlRef.current = null; setIsOpeningFromUrl(false); return; }
+          const uid = p.user_id;
+          const newConv: Conversation = {
+            userId: uid,
+            username: p.email || uid,
+            email: p.email || '',
+            firstName: p.first_name ?? p.firstName ?? '',
+            lastName: p.last_name ?? p.lastName ?? '',
+            lastMessage: '',
+            lastMessageTime: new Date().toISOString(),
+            unreadCount: 0,
+            messages: []
+          };
+          setSelectedConversation(newConv);
+          setConversations(prev => (prev.some(c => c.userId === uid) ? prev : [newConv, ...prev]));
+          window.history.replaceState({}, '', '/inbox');
+        } catch (e) {
+          console.error("Inbox: fast-open from URL", e);
+        } finally {
+          openedFromUrlRef.current = null;
+          setIsOpeningFromUrl(false);
+        }
+      })();
+    }
   }, []);
 
   // Real-time message updates via Socket.IO (replaces polling)
@@ -107,48 +154,36 @@ export const InboxPage = (): JSX.Element => {
     selectedConversationIdRef.current = selectedConversation?.userId || null;
   }, [selectedConversation?.userId]);
 
-  // Handle URL query parameter (e.g. ?user=123) and sessionStorage — open chat with that user
+  // Handle URL query parameter (e.g. ?user=123) — merge existing conv details once allUsers loads
   useEffect(() => {
     const searchParams = new URLSearchParams(window.location.search);
     const targetUserIdFromQuery = searchParams.get("user") || searchParams.get("userId");
-    const targetUsernameFromQuery = searchParams.get("username");
-    const targetEmailFromQuery = searchParams.get("email");
     const targetUserIdFromStorage = sessionStorage.getItem('openConversationId');
     const targetUserId = targetUserIdFromQuery || targetUserIdFromStorage;
 
     if (!targetUserId || loading) return;
 
-    const existingConv = conversations.find(c => c.userId === targetUserId);
-    if (existingConv) {
-      setSelectedConversation(existingConv);
-      if (existingConv.unreadCount > 0) markMessagesAsRead(existingConv);
-      window.history.replaceState({}, '', '/inbox');
+    // Enrich already-opened conversation with full user details once allUsers is loaded
+    const targetUser = allUsers.find(u => u.id === targetUserId);
+    if (targetUser) {
+      setSelectedConversation(prev => {
+        if (prev?.userId !== targetUserId) return prev;
+        return {
+          ...prev,
+          username: targetUser.username,
+          email: targetUser.email,
+          firstName: targetUser.first_name,
+          lastName: targetUser.last_name,
+          profilePicture: targetUser.profile_picture,
+        };
+      });
       if (targetUserIdFromStorage) sessionStorage.removeItem('openConversationId');
-      openedFromUrlRef.current = null;
       return;
     }
 
-    const targetUser = allUsers.find(u => u.id === targetUserId);
-    if (targetUser) {
-      const newConv: Conversation = {
-        userId: targetUser.id,
-        username: targetUser.username,
-        email: targetUser.email,
-        firstName: targetUser.first_name,
-        lastName: targetUser.last_name,
-        lastMessage: '',
-        lastMessageTime: new Date().toISOString(),
-        unreadCount: 0,
-        messages: []
-      };
-      setSelectedConversation(newConv);
-      setConversations(prev => (prev.some(c => c.userId === newConv.userId) ? prev : [newConv, ...prev]));
-      window.history.replaceState({}, '', '/inbox');
-      if (targetUserIdFromStorage) sessionStorage.removeItem('openConversationId');
-      openedFromUrlRef.current = null;
-      return;
-    }
-    // Fallback for direct chat links (e.g. Contact Admin) when user is not in alumni search.
+    // Fallback for direct chat links with username/email params
+    const targetUsernameFromQuery = searchParams.get("username");
+    const targetEmailFromQuery = searchParams.get("email");
     if (targetUserIdFromQuery && (targetUsernameFromQuery || targetEmailFromQuery)) {
       const fallbackConv: Conversation = {
         userId: targetUserIdFromQuery,
@@ -165,64 +200,7 @@ export const InboxPage = (): JSX.Element => {
       setConversations(prev => (prev.some(c => c.userId === fallbackConv.userId) ? prev : [fallbackConv, ...prev]));
       window.history.replaceState({}, '', '/inbox');
       if (targetUserIdFromStorage) sessionStorage.removeItem('openConversationId');
-      openedFromUrlRef.current = null;
-      return;
     }
-
-    // User not in allUsers (e.g. not in first 1000) — fetch public profile and open chat
-    if (openedFromUrlRef.current === targetUserId) return;
-    openedFromUrlRef.current = targetUserId;
-    (async () => {
-      try {
-        const res = await fetch(`/api/alumni/public/${targetUserId}`, {
-          headers: getAuthHeaders(),
-        });
-        if (!res.ok) {
-          openedFromUrlRef.current = null;
-          return;
-        }
-        const data = await res.json();
-        const p = data.profile;
-        if (!p || !p.user_id) {
-          openedFromUrlRef.current = null;
-          return;
-        }
-        const uid = p.user_id;
-        const newUser: AlumniUser = {
-          id: uid,
-          username: p.email || uid,
-          email: p.email || '',
-          first_name: p.first_name ?? p.firstName,
-          last_name: p.last_name ?? p.lastName,
-          profile_picture: p.profile_picture,
-          batch: p.batch,
-          current_city: p.current_city,
-          current_company: p.current_company,
-          current_role: p.current_role ?? p.current_position,
-          industry: p.industry
-        };
-        const newConv: Conversation = {
-          userId: uid,
-          username: newUser.username,
-          email: newUser.email,
-          firstName: newUser.first_name,
-          lastName: newUser.last_name,
-          lastMessage: '',
-          lastMessageTime: new Date().toISOString(),
-          unreadCount: 0,
-          messages: []
-        };
-        setAllUsers(prev => (prev.some(u => u.id === uid) ? prev : [...prev, newUser]));
-        setSelectedConversation(newConv);
-        setConversations(prev => (prev.some(c => c.userId === uid) ? prev : [newConv, ...prev]));
-        window.history.replaceState({}, '', '/inbox');
-        if (targetUserIdFromStorage) sessionStorage.removeItem('openConversationId');
-      } catch (e) {
-        console.error("Inbox: fetch public profile for open conversation", e);
-      } finally {
-        openedFromUrlRef.current = null;
-      }
-    })();
   }, [allUsers, conversations, loading]);
 
   // Handle User Search (for Compose)
@@ -674,7 +652,37 @@ export const InboxPage = (): JSX.Element => {
     <AppLayout>
       <div className="h-full flex bg-white overflow-hidden">
         {/* Sidebar */}
-        <div className={`w-full lg:w-auto lg:flex-shrink-0 transition-all duration-300 ${selectedConversation ? 'hidden lg:block' : 'block'}`}>
+        <div className={`w-full lg:w-auto lg:flex-shrink-0 transition-all duration-300 ${selectedConversation || isOpeningFromUrl ? 'hidden lg:block' : 'block'}`}>
+          {isOpeningFromUrl ? (
+            /* Full sidebar skeleton while fast-opening */
+            <div className="w-full lg:w-[320px] h-full flex flex-col border-r border-gray-100 bg-white">
+              <div className="flex items-center justify-between px-4 py-4 border-b border-gray-100">
+                <div className="w-24 h-5 bg-gray-200 rounded animate-pulse" />
+                <div className="w-8 h-8 bg-gray-100 rounded-full animate-pulse" />
+              </div>
+              <div className="px-3 py-2 border-b border-gray-100">
+                <div className="w-full h-9 bg-gray-100 rounded-lg animate-pulse" />
+              </div>
+              {/* Skeleton conversation entry — highlighted as active */}
+              <div className="flex items-center gap-3 px-4 py-3 bg-emerald-50 border-l-4 border-[#008060]">
+                <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+                <div className="flex-1 space-y-2">
+                  <div className="w-28 h-3.5 bg-gray-200 rounded animate-pulse" />
+                  <div className="w-40 h-3 bg-gray-100 rounded animate-pulse" />
+                </div>
+              </div>
+              {/* More faint rows below */}
+              {[1,2,3].map(i => (
+                <div key={i} className="flex items-center gap-3 px-4 py-3 border-b border-gray-50 opacity-50">
+                  <div className="w-10 h-10 rounded-full bg-gray-100 animate-pulse flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <div className="w-24 h-3 bg-gray-100 rounded animate-pulse" />
+                    <div className="w-36 h-2.5 bg-gray-50 rounded animate-pulse" />
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
           <ConversationList
             conversations={filteredConversations}
             selectedConversationId={selectedConversation?.userId || null}
@@ -684,10 +692,37 @@ export const InboxPage = (): JSX.Element => {
             onNewMessage={() => setIsComposeOpen(true)}
             currentUserId={user?.id || ''}
           />
+          )}
         </div>
 
         {/* Chat Window */}
-        <div className={`flex-1 flex flex-col min-w-0 bg-[#f8fafc] ${!selectedConversation ? 'hidden lg:flex' : 'flex'}`}>
+        <div className={`flex-1 flex flex-col min-w-0 bg-[#f8fafc] ${!selectedConversation && !isOpeningFromUrl ? 'hidden lg:flex' : 'flex'}`}>
+          {isOpeningFromUrl && !selectedConversation ? (
+            // Loading skeleton while fast-opening from URL
+            <div className="flex flex-col h-full">
+              {/* Header skeleton */}
+              <div className="flex items-center gap-3 px-6 py-4 border-b border-gray-100 bg-white">
+                <div className="w-10 h-10 rounded-full bg-gray-200 animate-pulse" />
+                <div className="flex flex-col gap-2">
+                  <div className="w-32 h-4 bg-gray-200 rounded animate-pulse" />
+                  <div className="w-20 h-3 bg-gray-100 rounded animate-pulse" />
+                </div>
+              </div>
+              {/* Messages area skeleton */}
+              <div className="flex-1 p-6 space-y-4 overflow-hidden">
+                {[1,2,3].map(i => (
+                  <div key={i} className={`flex gap-3 ${i % 2 === 0 ? 'flex-row-reverse' : ''}`}>
+                    <div className="w-8 h-8 rounded-full bg-gray-200 animate-pulse flex-shrink-0" />
+                    <div className={`w-48 h-10 rounded-2xl bg-gray-200 animate-pulse ${i % 2 === 0 ? 'bg-emerald-100' : ''}`} />
+                  </div>
+                ))}
+              </div>
+              {/* Input skeleton */}
+              <div className="px-4 py-3 border-t border-gray-100 bg-white">
+                <div className="w-full h-12 bg-gray-100 rounded-xl animate-pulse" />
+              </div>
+            </div>
+          ) : (
           <ChatWindow
             conversation={selectedConversation}
             messageText={messageText}
@@ -709,6 +744,7 @@ export const InboxPage = (): JSX.Element => {
             onBlock={handleBlockUser}
             onUnblock={handleUnblockUser}
           />
+          )}
         </div>
       </div>
 

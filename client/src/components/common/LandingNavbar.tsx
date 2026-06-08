@@ -121,7 +121,7 @@ export const LandingNavbar = (): JSX.Element => {
                                 {mobileMenuOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
                             </button>
 
-                            {user ? (
+                            {user || adminUser ? (
                                 <div className="flex items-center gap-2 sm:gap-3">
 
                                     <Button

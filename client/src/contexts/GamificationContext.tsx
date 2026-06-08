@@ -126,7 +126,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
 
       let timeoutId: NodeJS.Timeout;
       const debouncedFetch = () => {
-        console.log("[GamificationContext] Socket triggered!");
+        // console.log("[GamificationContext] Socket triggered!");
         clearTimeout(timeoutId);
         timeoutId = setTimeout(() => {
           fetchGamificationProfile(true);
@@ -136,7 +136,7 @@ export function GamificationProvider({ children }: { children: React.ReactNode }
       const handleNewNotification = ((event: CustomEvent) => {
         const notification = event.detail;
         if (notification && notification.type && notification.type.startsWith('gamification')) {
-          console.log("[GamificationContext] Received gamification notification via Socket.IO, refreshing...");
+          // console.log("[GamificationContext] Received gamification notification via Socket.IO, refreshing...");
           debouncedFetch();
         }
       }) as EventListener;

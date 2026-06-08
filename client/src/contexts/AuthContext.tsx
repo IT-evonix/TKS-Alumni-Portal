@@ -154,7 +154,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       const { type } = event.data;
       const currentIsAdminContext = window.location.pathname.startsWith('/admin');
 
-      console.log(`[AuthSync] Received ${type}`);
+      // console.log(`[AuthSync] Received ${type}`);
 
       switch (type) {
         case 'LOGIN_ADMIN':
@@ -177,7 +177,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         case 'LOGOUT_ADMIN':
           // If we are in Admin context, logout.
           if (currentIsAdminContext && adminUserRef.current) {
-            console.log('[AuthSync] Admin logout detected in another tab. Logging out locally.');
+            // console.log('[AuthSync] Admin logout detected in another tab. Logging out locally.');
             logoutAdmin(false);
           }
           break;
@@ -185,7 +185,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         case 'LOGOUT_USER':
           // If we are in User context, logout.
           if (!currentIsAdminContext && userRef.current) {
-            console.log('[AuthSync] User logout detected in another tab. Logging out locally.');
+            // console.log('[AuthSync] User logout detected in another tab. Logging out locally.');
             logoutUser(false);
           }
           break;
@@ -240,7 +240,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
 
     // Listen for manual profile updates to refresh context
     const handleProfileUpdate = () => {
-      console.log('[AuthContext] Profile update event detected, refreshing...');
+      // console.log('[AuthContext] Profile update event detected, refreshing...');
       const currentUser = userRef.current;
       if (currentUser?.id) {
         fetchCurrentUser(currentUser.id, false);
@@ -350,6 +350,28 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
         if (isAdminContext) {
           console.warn('Attempted to set user session in admin context');
           throw new Error('Please use admin login for admin panel');
+        }
+
+        if (data.user.is_admin || data.user.user_role === 'administrator') {
+          // Clear any existing user session to prevent conflicts
+          setUser(null);
+          setAlumni(null);
+          localStorage.removeItem('user');
+          localStorage.removeItem('userId');
+
+          // Set admin session
+          setAdminUser(data.user);
+          localStorage.setItem('adminUser', JSON.stringify(data.user));
+          if (data.token) {
+            localStorage.setItem('auth_token', data.token);
+          }
+
+          // Broadcast success
+          const authChannel = new BroadcastChannel('auth_sync');
+          authChannel.postMessage({ type: 'LOGIN_ADMIN' });
+          authChannel.close();
+
+          return true;
         }
 
         // Clear any existing admin session to prevent conflicts
@@ -526,7 +548,7 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       refreshAlumni: async () => {
         const currentUser = userRef.current;
         if (currentUser?.id) {
-          console.log('[AuthContext] refreshAlumni called for user:', currentUser.id);
+          // console.log('[AuthContext] refreshAlumni called for user:', currentUser.id);
           await fetchCurrentUser(currentUser.id, false);
         }
       }

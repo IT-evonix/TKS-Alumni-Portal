@@ -262,7 +262,7 @@ export function AdminBadgeManager({ searchQuery = "" }: AdminBadgeManagerProps) 
     setIsDialogOpen(true);
   };
 
-  const filteredBadges = badges.filter(b => 
+  const filteredBadges = badges.filter(b =>
     b.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
     (b.description && b.description.toLowerCase().includes(searchQuery.toLowerCase())) ||
     b.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -453,7 +453,7 @@ export function AdminBadgeManager({ searchQuery = "" }: AdminBadgeManagerProps) 
                         <TableCell>
                           <Badge variant="outline" className={`capitalize border shadow-sm px-2.5 py-0.5 text-[10px] font-bold tracking-wider
                           ${badge.category === 'series' ? 'bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-950/30 dark:text-blue-400 dark:border-blue-800' :
-                                'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}
+                              'bg-slate-50 text-slate-700 border-slate-200 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-700'}
                         `}>
                             {badge.category}
                           </Badge>

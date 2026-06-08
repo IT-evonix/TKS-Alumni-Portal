@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'travel-chapters';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -113,6 +113,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       color: "text-indigo-600",
       bgColor: "bg-indigo-50"
     },
+    {
+      icon: Globe,
+      label: "Travel Chapters",
+      path: "/admin/travel-chapters",
+      key: "travel-chapters",
+      color: "text-emerald-600",
+      bgColor: "bg-emerald-50"
+    },
   ];
 
   const handleNavigation = (path: string) => {
@@ -128,7 +136,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       <div className="p-6 border-b border-gray-200 bg-white">
         <div
           className="flex items-center gap-3 cursor-pointer group"
-          onClick={() => handleNavigation("/admin/dashboard")}
+          onClick={() => handleNavigation("/")}
         >
           <div className="relative flex-shrink-0">
             {/* Logo */}

@@ -235,24 +235,38 @@ export const LandingPage = (): JSX.Element => {
 
               {/* CTA Row */}
               <motion.div variants={heroChild} className="flex flex-col sm:flex-row gap-3 mb-10">
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Button
-                    className="bg-gray-900 hover:bg-gray-800 text-white px-7 py-3 h-auto text-[15px] font-semibold shadow-lg shadow-gray-900/10 hover:shadow-xl transition-all duration-300 rounded-xl inline-flex items-center justify-center gap-2"
-                    onClick={() => setLocation("/signup")}
-                  >
-                    Join the Community
-                    <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </motion.div>
-                <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
-                  <Button
-                    variant="outline"
-                    className="border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 px-7 py-3 h-auto text-[15px] font-medium transition-all duration-300 rounded-xl"
-                    onClick={() => setLocation("/login")}
-                  >
-                    Sign In
-                  </Button>
-                </motion.div>
+                {user || adminUser ? (
+                  <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                    <Button
+                      className="bg-gray-900 hover:bg-gray-800 text-white px-7 py-3 h-auto text-[15px] font-semibold shadow-lg shadow-gray-900/10 hover:shadow-xl transition-all duration-300 rounded-xl inline-flex items-center justify-center gap-2"
+                      onClick={() => setLocation(adminUser ? "/admin/dashboard" : "/feed")}
+                    >
+                      Go to Dashboard
+                      <ArrowRight className="w-4 h-4" />
+                    </Button>
+                  </motion.div>
+                ) : (
+                  <>
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                      <Button
+                        className="bg-gray-900 hover:bg-gray-800 text-white px-7 py-3 h-auto text-[15px] font-semibold shadow-lg shadow-gray-900/10 hover:shadow-xl transition-all duration-300 rounded-xl inline-flex items-center justify-center gap-2"
+                        onClick={() => setLocation("/signup")}
+                      >
+                        Join the Community
+                        <ArrowRight className="w-4 h-4" />
+                      </Button>
+                    </motion.div>
+                    <motion.div whileHover={{ scale: 1.03 }} whileTap={{ scale: 0.97 }}>
+                      <Button
+                        variant="outline"
+                        className="border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 hover:border-gray-400 px-7 py-3 h-auto text-[15px] font-medium transition-all duration-300 rounded-xl"
+                        onClick={() => setLocation("/login")}
+                      >
+                        Sign In
+                      </Button>
+                    </motion.div>
+                  </>
+                )}
               </motion.div>
 
               {/* Stats row */}

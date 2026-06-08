@@ -5,6 +5,7 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeading } from "@/components/common/PageHeading";
 import { MapPin } from "lucide-react";
 
+
 function AlumniMapPage() {
   return (
     <AppLayout currentPage="alumni-map">
@@ -23,10 +24,14 @@ function AlumniMapPage() {
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.6, ease: "easeOut", delay: 0.1 }}
-          className="w-full"
+          className="w-full mb-12"
         >
           <AlumniHeatMap />
         </motion.div>
+
+        <div className="mt-8">
+          {/* Bottom padding or any other global network specific footer */}
+        </div>
       </div>
     </AppLayout>
   );
