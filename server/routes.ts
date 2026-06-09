@@ -264,9 +264,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "File size exceeds 5MB limit" });
         }
 
-        // Only allow image files
+        // Only allow image files — validate both extension and MIME type
         const fileExt = file.originalname.split(".").pop()?.toLowerCase() || "";
-        if (!["jpg", "jpeg", "png", "gif", "webp"].includes(fileExt)) {
+        const allowedImageExts = ["jpg", "jpeg", "png", "gif", "webp"];
+        const allowedImageMimes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+        if (!allowedImageExts.includes(fileExt) || !allowedImageMimes.includes(file.mimetype)) {
           return res.status(400).json({
             error: "Only image files are allowed for profile pictures",
           });
@@ -351,20 +353,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .json({ error: "File size exceeds 10MB limit" });
         }
 
-        // Determine file type and folder
+        // Determine file type and folder — validate both extension and MIME type
         const fileExt = file.originalname.split(".").pop()?.toLowerCase() || "";
         let fileType = "documents";
 
-        if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(fileExt)) {
+        const allowedMimes: Record<string, string[]> = {
+          images: ["image/jpeg", "image/png", "image/gif", "image/webp", "image/svg+xml"],
+          videos: ["video/mp4", "video/webm", "video/quicktime", "video/x-msvideo"],
+          documents: ["application/pdf", "application/msword",
+            "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            "text/plain",
+            "application/vnd.ms-excel",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            "application/vnd.ms-powerpoint",
+            "application/vnd.openxmlformats-officedocument.presentationml.presentation"],
+        };
+
+        if (["jpg", "jpeg", "png", "gif", "webp", "svg"].includes(fileExt) && allowedMimes.images.includes(file.mimetype)) {
           fileType = "images";
-        } else if (["mp4", "webm", "mov", "avi"].includes(fileExt)) {
+        } else if (["mp4", "webm", "mov", "avi"].includes(fileExt) && allowedMimes.videos.includes(file.mimetype)) {
           fileType = "videos";
         } else if (
-          ["pdf", "doc", "docx", "txt", "xlsx", "xls", "ppt", "pptx"].includes(
-            fileExt,
-          )
+          ["pdf", "doc", "docx", "txt", "xlsx", "xls", "ppt", "pptx"].includes(fileExt) &&
+          allowedMimes.documents.includes(file.mimetype)
         ) {
           fileType = "documents";
+        } else {
+          return res.status(400).json({ error: "Unsupported file type" });
         }
 
         const timestamp = Date.now();
@@ -450,12 +465,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ error: "Failed to upload file" });
         }
 
-        const { data: { publicUrl } } = supabase.storage
-          .from("message-attachments")
-          .getPublicUrl(filePath);
+        const proxyUrl = `/api/storage/view?bucket=message-attachments&path=${encodeURIComponent(filePath)}`;
 
         res.json({
-          url: publicUrl,
+          url: proxyUrl,
           fileName: file.originalname,
           fileType: file.mimetype,
           filePath: filePath
@@ -524,9 +537,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(400).json({ error: "File size exceeds 5MB limit" });
         }
 
-        // Only allow image files
+        // Only allow image files — validate both extension and MIME type
         const fileExt = file.originalname.split(".").pop()?.toLowerCase() || "";
-        if (!["jpg", "jpeg", "png", "gif", "webp"].includes(fileExt)) {
+        const allowedImageExts = ["jpg", "jpeg", "png", "gif", "webp"];
+        const allowedImageMimes = ["image/jpeg", "image/png", "image/gif", "image/webp"];
+        if (!allowedImageExts.includes(fileExt) || !allowedImageMimes.includes(file.mimetype)) {
           return res
             .status(400)
             .json({ error: "Only image files are allowed for event covers" });

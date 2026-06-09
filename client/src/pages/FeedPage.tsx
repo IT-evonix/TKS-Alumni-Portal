@@ -5,20 +5,21 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { PostCreator } from "@/components/feed/PostCreator";
+import { CreatePostModal } from "@/components/feed/CreatePostModal";
 import { PostCard } from "@/components/feed/PostCard";
 import { SidebarEvents, SidebarJobs, SidebarConnections } from "@/components/feed/SidebarComponents";
 import { GamificationLeaderboard } from "@/components/GamificationLeaderboard";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { useGamification } from "@/contexts/GamificationContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { RefreshCw } from "lucide-react";
+import { Flame, Trophy, PenSquare, X } from "lucide-react";
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { validateTextLength } from "@/utils/validation";
 import { SkeletonPostCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
-import { PageHeading } from "@/components/common/PageHeading";
 
 export const FeedPage = (): JSX.Element => {
   const [postText, setPostText] = useState("");
@@ -26,7 +27,18 @@ export const FeedPage = (): JSX.Element => {
   const dropdownRef = useRef<HTMLDivElement>(null);
   const { toast } = useToast();
   const { user, alumni } = useAuth();
+  const { scores, globalRank } = useGamification();
   const { fetch: optimizedFetch, invalidateCache } = useOptimizedFetch();
+
+  const getGreeting = (): string => {
+    const hour = new Date().getHours();
+    if (hour < 12) return "Good morning";
+    if (hour < 17) return "Good afternoon";
+    return "Good evening";
+  };
+  const firstName = alumni?.first_name || user?.username || "there";
+  const graduationYear = (alumni as any)?.graduation_year as string | undefined;
+  const streakDays: number = scores?.current_streak_days || 0;
   const getAuthHeaders = (extraHeaders: Record<string, string> = {}): Record<string, string> => {
     const userId = user?.id || localStorage.getItem('userId') || '';
     const token = localStorage.getItem('auth_token') || '';
@@ -41,6 +53,24 @@ export const FeedPage = (): JSX.Element => {
   // Set page title
   React.useEffect(() => {
     document.title = "Feed - TKS Alumni Portal";
+  }, []);
+
+  // Login greeting popup — show once per session
+  useEffect(() => {
+    if (!sessionStorage.getItem('greetingShown')) {
+      sessionStorage.setItem('greetingShown', '1');
+      setShowLoginGreeting(true);
+      // Trigger fade-in on next tick
+      const fadeIn = setTimeout(() => setGreetingVisible(true), 50);
+      // Start fade-out at 3s, remove from DOM after transition (300ms)
+      const fadeOut = setTimeout(() => setGreetingVisible(false), 3000);
+      const remove = setTimeout(() => setShowLoginGreeting(false), 3350);
+      return () => {
+        clearTimeout(fadeIn);
+        clearTimeout(fadeOut);
+        clearTimeout(remove);
+      };
+    }
   }, []);
 
   // Loading and error states
@@ -83,14 +113,22 @@ export const FeedPage = (): JSX.Element => {
   // Notification dropdown state
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Refresh functionality states
-  const [isRefreshing, setIsRefreshing] = useState(false);
-  const [pullStartY, setPullStartY] = useState(0);
-  const [pullDistance, setPullDistance] = useState(0);
-  const [isPulling, setIsPulling] = useState(false);
+  // Create post modal state
+  const [showPostModal, setShowPostModal] = useState(false);
+
+  // Login greeting popup
+  const [showLoginGreeting, setShowLoginGreeting] = useState(false);
+  const [greetingVisible, setGreetingVisible] = useState(false);
+  const hasPostedRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
-  const PULL_THRESHOLD = 80; // Distance to trigger refresh
-  const MAX_PULL_DISTANCE = 120; // Maximum pull distance
+
+  // Auto-close modal after successful post
+  useEffect(() => {
+    if (hasPostedRef.current && !isPosting && postText === "" && attachedFiles.length === 0) {
+      setShowPostModal(false);
+      hasPostedRef.current = false;
+    }
+  }, [isPosting, postText, attachedFiles]);
 
   // Fetch posts on mount
   useEffect(() => {
@@ -239,126 +277,8 @@ export const FeedPage = (): JSX.Element => {
       });
     } finally {
       setIsLoadingPosts(false);
-      setIsRefreshing(false);
-      setIsPulling(false);
-      setPullDistance(0);
     }
   };
-
-  const handleRefresh = async () => {
-    setIsRefreshing(true);
-    // Refresh posts and all sidebar data
-    await Promise.all([
-      fetchPosts(true),
-      fetchUpcomingEvents(),
-      fetchRecentJobs(),
-      fetchSuggestedConnections()
-    ]);
-    setIsRefreshing(false);
-  };
-
-  // Pull-to-refresh handlers for touch devices
-  const handleTouchStart = (e: React.TouchEvent) => {
-    if (contentRef.current && contentRef.current.scrollTop === 0) {
-      setPullStartY(e.touches[0].clientY);
-      setIsPulling(true);
-    }
-  };
-
-  const handleTouchMove = (e: React.TouchEvent) => {
-    if (!isPulling || !pullStartY) return;
-
-    const currentY = e.touches[0].clientY;
-    const distance = currentY - pullStartY;
-
-    // Only allow pulling down when at the top
-    if (contentRef.current && contentRef.current.scrollTop === 0 && distance > 0) {
-      // Apply resistance - the more you pull, the harder it gets
-      const resistance = 0.5;
-      const adjustedDistance = Math.min(distance * resistance, MAX_PULL_DISTANCE);
-      setPullDistance(adjustedDistance);
-
-      // Prevent default scroll behavior while pulling - but only for vertical movement
-      if (adjustedDistance > 10) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-    }
-  };
-
-  const handleTouchEnd = () => {
-    if (isPulling && pullDistance >= PULL_THRESHOLD) {
-      handleRefresh();
-    } else {
-      setIsPulling(false);
-      setPullDistance(0);
-    }
-    setPullStartY(0);
-  };
-
-  // Pull-to-refresh handlers for mouse (desktop)
-  const handleMouseDown = (e: React.MouseEvent) => {
-    // Only start pull if at top of scroll and not clicking on interactive elements
-    if (contentRef.current && contentRef.current.scrollTop === 0) {
-      const target = e.target as HTMLElement;
-      // Don't activate pull-to-refresh if clicking on buttons, inputs, or other interactive elements
-      if (target.closest('button, a, input, textarea, [role="button"]')) {
-        return;
-      }
-      setPullStartY(e.clientY);
-      // Don't set isPulling yet - wait for actual movement
-    }
-  };
-
-  const handleMouseMove = (e: React.MouseEvent) => {
-    // This handler is now just for visual feedback, actual pulling handled in global effect
-  };
-
-  const handleMouseUp = () => {
-    // Cleanup handled in global effect
-  };
-
-  // Add global mouse event listeners for desktop drag
-  useEffect(() => {
-    const handleGlobalMouseMove = (e: MouseEvent) => {
-      if (!pullStartY) return;
-
-      const currentY = e.clientY;
-      const distance = currentY - pullStartY;
-
-      // Only activate pulling if user has dragged at least 10px down
-      if (contentRef.current && contentRef.current.scrollTop === 0 && distance > 10) {
-        if (!isPulling) {
-          setIsPulling(true);
-        }
-        const resistance = 0.5;
-        const adjustedDistance = Math.min(distance * resistance, MAX_PULL_DISTANCE);
-        setPullDistance(adjustedDistance);
-      }
-    };
-
-    const handleGlobalMouseUp = () => {
-      if (pullStartY) {
-        if (isPulling && pullDistance >= PULL_THRESHOLD) {
-          handleRefresh();
-        } else {
-          setIsPulling(false);
-          setPullDistance(0);
-        }
-        setPullStartY(0);
-      }
-    };
-
-    if (pullStartY) {
-      document.addEventListener('mousemove', handleGlobalMouseMove);
-      document.addEventListener('mouseup', handleGlobalMouseUp);
-    }
-
-    return () => {
-      document.removeEventListener('mousemove', handleGlobalMouseMove);
-      document.removeEventListener('mouseup', handleGlobalMouseUp);
-    };
-  }, [isPulling, pullStartY, pullDistance]);
 
   // State for events from database
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
@@ -518,6 +438,7 @@ export const FeedPage = (): JSX.Element => {
       return;
     }
 
+    hasPostedRef.current = true;
     setIsPosting(true);
     try {
       const userId = localStorage.getItem('userId');
@@ -1136,68 +1057,92 @@ export const FeedPage = (): JSX.Element => {
       >
         Skip to main content
       </a>
-      <div className="flex min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50 relative isolate overflow-x-hidden">
+      <div className="flex min-h-screen relative isolate overflow-x-hidden" style={{ background: 'var(--surface-subtle)' }}>
         {/* Main Content */}
         <div
           ref={contentRef}
           className="flex-1 w-full overflow-y-auto relative"
-          onTouchStart={handleTouchStart}
-          onTouchMove={handleTouchMove}
-          onTouchEnd={handleTouchEnd}
-          onMouseDown={handleMouseDown}
         >
-          <div className="min-h-full xl:pr-80 transition-all duration-300 overflow-x-hidden">
-            <div className="max-w-[900px] mx-auto px-3 sm:px-4 md:px-5 lg:px-6 xl:px-8 py-2 sm:py-3 md:py-4 w-full">
+          <div className="min-h-full xl:pr-[316px] transition-all duration-300 overflow-x-hidden">
+            <div className="max-w-[680px] mx-auto px-3 sm:px-4 md:px-5 pt-0 pb-4 sm:pb-5 md:pb-6 w-full">
 
-              {/* Premium Feed Header */}
-              <div className="mb-3 sm:mb-4 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 sm:gap-4 bg-white/90 backdrop-blur-xl sticky top-0 z-30 py-2 sm:py-3 -mx-3 sm:-mx-4 md:-mx-5 lg:-mx-6 xl:-mx-8 px-3 sm:px-4 md:px-5 lg:px-6 xl:px-8 border-b border-gray-100/50 shadow-sm transition-all duration-300">
-                <PageHeading firstWord="Alumni" secondWord="Feed" />
-
-                <Button
-                  onClick={() => handleRefresh()}
-                  disabled={isRefreshing}
-                  variant="ghost"
-                  size="sm"
-                  className="group text-gray-500 hover:text-[#008060] hover:bg-[#008060]/5 transition-all duration-300 rounded-full p-2 sm:p-2.5 h-10 w-10 sm:h-11 sm:w-11 border border-transparent hover:border-[#008060]/10 flex items-center justify-center"
-                  aria-label={isRefreshing ? "Refreshing feed" : "Refresh feed"}
-                >
-                  <RefreshCw className={`w-4 h-4 sm:w-5 sm:h-5 transition-transform duration-500 ${isRefreshing ? 'animate-spin' : 'group-hover:rotate-180'}`} />
-                </Button>
-              </div>
-
-              {/* Pull-to-refresh indicator */}
+              {/* Welcome Hero Strip */}
               <div
-                className="fixed left-0 right-0 top-0 z-50 flex items-center justify-center transition-all duration-300 pointer-events-none"
+                className="mb-4 rounded-2xl overflow-hidden"
                 style={{
-                  top: isPulling || isRefreshing ? '80px' : '-120px',
-                  opacity: isPulling || isRefreshing ? 1 : 0,
-                  transform: `translateY(${isPulling ? pullDistance / 2 : 0}px)`
+                  background: 'linear-gradient(135deg, #008060 0%, #006b51 60%, #005d47 100%)',
+                  border: '1px solid rgba(0,128,96,0.3)',
+                  boxShadow: 'var(--shadow-card)',
                 }}
               >
-                <div className="flex flex-col items-center gap-2 bg-white/95 backdrop-blur-sm px-4 sm:px-6 py-2 sm:py-3 rounded-2xl shadow-2xl border border-[#008060]/10">
-                  <div className="p-1.5 sm:p-2 bg-[#008060]/5 rounded-full">
-                    <RefreshCw
-                      className={`w-4 h-4 sm:w-5 sm:h-5 text-[#008060] transition-transform ${isRefreshing ? 'animate-spin' : ''}`}
-                      style={{ transform: isRefreshing ? 'none' : `rotate(${pullDistance * 4}deg)` }}
-                    />
+                <div className="px-5 sm:px-6 py-3.5 flex flex-row items-center justify-between gap-3">
+                  {/* Left: greeting + class badge */}
+                  <div className="flex flex-col gap-1 min-w-0">
+                    <h1 className="text-white font-bold text-[17px] sm:text-lg leading-tight truncate">
+                      {getGreeting()}, {firstName} 👋
+                    </h1>
+                    {graduationYear && (
+                      <span
+                        className="inline-flex items-center self-start px-2 py-0.5 rounded-full text-[12px] font-semibold leading-tight"
+                        style={{ background: 'rgba(166,206,57,0.25)', color: '#a6ce39', border: '1px solid rgba(166,206,57,0.35)' }}
+                      >
+                        Class of {graduationYear}
+                      </span>
+                    )}
                   </div>
-                  <p className="text-[9px] sm:text-[10px] uppercase tracking-widest text-[#008060] font-bold">
-                    {isRefreshing ? 'Loading' : pullDistance >= PULL_THRESHOLD ? 'Ready' : 'Pull'}
-                  </p>
+                  {/* Right: streak + rank pills */}
+                  <div className="flex flex-row items-center gap-2 shrink-0">
+                    {streakDays >= 2 && (
+                      <div
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold"
+                        style={{ background: 'rgba(253,187,19,0.18)', color: '#fdbb13', border: '1px solid rgba(253,187,19,0.3)' }}
+                      >
+                        <Flame className="w-3.5 h-3.5 fill-[#fdbb13]" />
+                        <span>{streakDays}-day streak</span>
+                      </div>
+                    )}
+                    {globalRank > 0 && (
+                      <div
+                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold"
+                        style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)' }}
+                      >
+                        <Trophy className="w-3.5 h-3.5" />
+                        <span>#{globalRank} globally</span>
+                      </div>
+                    )}
+                  </div>
                 </div>
               </div>
 
-              {/* Post Creation */}
+              {/* Alumni Feed header + Create Post */}
+              <div className="mb-4 flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <div className="w-1 h-6 rounded-full bg-[#008060]" />
+                  <h2 className="text-[17px] font-bold text-gray-900 dark:text-white tracking-tight">Alumni Feed</h2>
+                </div>
+                <Button
+                  onClick={() => setShowPostModal(true)}
+                  className="bg-[#008060] hover:bg-[#006b51] text-white font-semibold px-5 py-2 rounded-full shadow-sm transition-all flex items-center gap-2 text-sm"
+                >
+                  <PenSquare className="w-4 h-4" />
+                  Create Post
+                </Button>
+              </div>
+
+              <CreatePostModal
+                open={showPostModal}
+                onClose={() => setShowPostModal(false)}
+                postText={postText}
+                attachedFiles={attachedFiles}
+                isPosting={isPosting}
+                onPostTextChange={setPostText}
+                onFileAttachment={handleFileAttachment}
+                onPost={handlePost}
+                onRemoveFile={(index) => setAttachedFiles(prev => prev.filter((_, i) => i !== index))}
+              />
+
+              {/* Post loading/error states */}
               <div className="mb-4" data-post-creator>
-                <PostCreator
-                  postText={postText}
-                  attachedFiles={attachedFiles}
-                  isPosting={isPosting}
-                  onPostTextChange={setPostText}
-                  onFileAttachment={handleFileAttachment}
-                  onPost={handlePost}
-                  onRemoveFile={(index) => setAttachedFiles(prev => prev.filter((_, i) => i !== index))}
-                />
 
                 {/* Loading & Error States */}
                 {isLoadingPosts && (
@@ -1336,9 +1281,10 @@ export const FeedPage = (): JSX.Element => {
 
         {/* Desktop Sidebar */}
         <div
-          className="hidden xl:block w-80 2xl:w-96 bg-white/95 backdrop-blur-md border-l border-gray-200 shadow-xl fixed right-0 top-[72px] md:top-[96px] bottom-0 overflow-y-auto z-10"
+          className="hidden xl:block w-[300px] fixed right-0 top-14 sm:top-16 bottom-0 overflow-y-auto z-10"
+          style={{ borderLeft: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
         >
-          <div className="p-4 sm:p-5 xl:p-6 2xl:p-7 space-y-6 xl:space-y-8 2xl:space-y-9">
+          <div className="p-4 space-y-4">
             <GamificationLeaderboard />
             <SidebarEvents
               events={upcomingEvents}
@@ -1363,6 +1309,69 @@ export const FeedPage = (): JSX.Element => {
           </div>
         </div>
       </div>
+      {/* Login greeting popup */}
+      {showLoginGreeting && (
+        <div
+          className="fixed top-20 right-5 z-50 pointer-events-auto"
+          style={{
+            transition: 'opacity 0.3s ease, transform 0.3s ease',
+            opacity: greetingVisible ? 1 : 0,
+            transform: greetingVisible ? 'translateY(0)' : 'translateY(-8px)',
+          }}
+        >
+          <div
+            className="rounded-2xl px-5 py-4 flex flex-col gap-2 min-w-[220px] max-w-[280px]"
+            style={{
+              background: 'linear-gradient(135deg, #008060 0%, #006b51 100%)',
+              boxShadow: '0 8px 32px rgba(0,128,96,0.35)',
+            }}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <p className="text-white font-bold text-[15px] leading-tight">
+                  {getGreeting()}, {firstName} 👋
+                </p>
+                {graduationYear && (
+                  <span
+                    className="inline-flex items-center mt-1 px-2 py-0.5 rounded-full text-[11px] font-semibold"
+                    style={{ background: 'rgba(166,206,57,0.25)', color: '#a6ce39', border: '1px solid rgba(166,206,57,0.35)' }}
+                  >
+                    Class of {graduationYear}
+                  </span>
+                )}
+              </div>
+              <button
+                onClick={() => { setGreetingVisible(false); setTimeout(() => setShowLoginGreeting(false), 300); }}
+                className="text-white/60 hover:text-white mt-0.5 shrink-0"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+            {(streakDays >= 2 || globalRank > 0) && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {streakDays >= 2 && (
+                  <div
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
+                    style={{ background: 'rgba(253,187,19,0.18)', color: '#fdbb13', border: '1px solid rgba(253,187,19,0.3)' }}
+                  >
+                    <Flame className="w-3 h-3 fill-[#fdbb13]" />
+                    {streakDays}-day streak
+                  </div>
+                )}
+                {globalRank > 0 && (
+                  <div
+                    className="flex items-center gap-1 px-2.5 py-0.5 rounded-full text-[11px] font-semibold"
+                    style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)' }}
+                  >
+                    <Trophy className="w-3 h-3" />
+                    #{globalRank} globally
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
     </AppLayout>
   );
 };

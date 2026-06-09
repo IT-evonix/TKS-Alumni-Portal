@@ -85,7 +85,16 @@ export const AdminLoginPage = (): JSX.Element => {
     const params = new URLSearchParams(window.location.search);
     const redirectUrl = params.get("redirect");
 
-    if (redirectUrl) {
+    const isSafeRedirect = (url: string) => {
+      try {
+        const decoded = decodeURIComponent(url);
+        return decoded.startsWith('/') && !decoded.startsWith('//');
+      } catch {
+        return false;
+      }
+    };
+
+    if (redirectUrl && isSafeRedirect(redirectUrl)) {
       setTimeout(() => setLocation(decodeURIComponent(redirectUrl)), 500);
     } else {
       setTimeout(() => setLocation("/admin/dashboard"), 500);
@@ -156,7 +165,7 @@ export const AdminLoginPage = (): JSX.Element => {
         return;
       }
 
-      setError(data.debug ? `${data.error} (${data.debug})` : (data.error || "Invalid credentials"));
+      setError("Invalid credentials");
     } catch (err: any) {
       setError(err.message || "An error occurred during login");
     } finally {

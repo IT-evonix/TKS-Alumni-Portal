@@ -10,14 +10,14 @@ import { useGamification } from "@/contexts/GamificationContext";
 import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { socket } from "@/lib/socket";
 import { useToast } from "@/hooks/use-toast";
-import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles, MapPin, Locate, Loader2, Globe, BookOpen } from "lucide-react";
+import { Home, Calendar, MessageSquare, Settings, Bell, LogOut, Search, Briefcase, Users, User, ArrowLeft, MessagesSquare, ArrowUp, Trophy, Star, Sparkles, MapPin, Locate, Loader2, Globe, BookOpen, GraduationCap, Mic2, ChevronDown } from "lucide-react";
 import { GamificationDrawer } from "@/components/GamificationDrawer";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters';
+  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters' | 'mentorship' | 'podcast';
 }
 
 // Define user roles
@@ -37,6 +37,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
   const [showScrollToTop, setShowScrollToTop] = React.useState(false);
   const [showGamificationDrawer, setShowGamificationDrawer] = React.useState(false);
   const scrollableContainerRef = React.useRef<HTMLDivElement>(null);
+  const [showProfileDropdown, setShowProfileDropdown] = React.useState(false);
+  const profileDropdownRef = React.useRef<HTMLDivElement>(null);
 
   // Daily Location Prompt States
   const [showDailyLocationPrompt, setShowDailyLocationPrompt] = React.useState(false);
@@ -50,6 +52,13 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
   });
   const [isSubmittingLocation, setIsSubmittingLocation] = React.useState(false);
   const [locationSubmitError, setLocationSubmitError] = React.useState<string | null>(null);
+
+  // Open gamification drawer from anywhere via custom event
+  React.useEffect(() => {
+    const handler = () => setShowGamificationDrawer(true);
+    window.addEventListener('open-gamification-drawer', handler);
+    return () => window.removeEventListener('open-gamification-drawer', handler);
+  }, []);
 
   // Daily Location Check-in trigger logic
   React.useEffect(() => {
@@ -263,6 +272,19 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     };
   }, []);
 
+  // Close profile dropdown on outside click
+  React.useEffect(() => {
+    const handleOutsideClick = (e: MouseEvent) => {
+      if (profileDropdownRef.current && !profileDropdownRef.current.contains(e.target as Node)) {
+        setShowProfileDropdown(false);
+      }
+    };
+    if (showProfileDropdown) {
+      document.addEventListener('mousedown', handleOutsideClick);
+    }
+    return () => document.removeEventListener('mousedown', handleOutsideClick);
+  }, [showProfileDropdown]);
+
   // Scroll to top function
   const scrollToTop = () => {
     // Scroll the content container if it exists, otherwise scroll window
@@ -365,37 +387,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
   };
 
   const navItems = [
-    { id: 'feed', icon: Home, label: 'Feed', path: '/feed', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'forums', icon: MessagesSquare, label: 'Forums', path: '/forums', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'job-portal', icon: Briefcase, label: 'Job Portal', path: '/job-portal', roles: ['alumni', 'student', 'faculty'] },
-    { id: 'events', icon: Calendar, label: 'Events', path: '/events', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'connections', icon: Users, label: 'Connections', path: '/connections', roles: ['alumni', 'student', 'faculty'] },
-    { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'alumni-map', icon: MapPin, label: 'Global Network', path: '/alumni-map', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'travel-chapters', icon: Globe, label: 'Travel Chapters', path: '/travel-chapters', roles: ['alumni', 'student', 'faculty', 'administrator'] },
-    { id: 'blogs', icon: BookOpen, label: 'Blogs', path: '/blogs', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'feed', icon: Home, label: 'Feed', path: '/feed', section: 'main', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'connections', icon: Users, label: 'Connections', path: '/connections', section: 'main', roles: ['alumni', 'student', 'faculty'] },
+    { id: 'inbox', icon: MessageSquare, label: 'Inbox', path: '/inbox', section: 'main', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'forums', icon: MessagesSquare, label: 'Forums', path: '/forums', section: 'main', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'events', icon: Calendar, label: 'Events', path: '/events', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'job-portal', icon: Briefcase, label: 'Job Portal', path: '/job-portal', section: 'discover', roles: ['alumni', 'student', 'faculty'] },
+    { id: 'mentorship', icon: GraduationCap, label: 'Mentorship', path: '/mentorship', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'blogs', icon: BookOpen, label: 'Blogs', path: '/blogs', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'alumni-map', icon: MapPin, label: 'Global Network', path: '/alumni-map', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'travel-chapters', icon: Globe, label: 'Travel Chapters', path: '/travel-chapters', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'podcast', icon: Mic2, label: 'Podcast', path: '/podcast', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
   ];
 
-  // Define bottom navigation items
-  const bottomNavItems = [
-    {
-      icon: User,
-      label: "Profile",
-      path: "/profile",
-      onClick: () => setLocation("/profile")
-    },
-    {
-      icon: Settings,
-      label: "Settings",
-      path: "/settings",
-      onClick: () => setLocation("/settings")
-    }
-  ];
 
   // Helper function to check if the user has at least one of the required roles
   const hasRole = (requiredRoles: UserRole[]): boolean => {
     if (!user) return false; // If no user is logged in, deny access
-    if (!role) return true; // If role is not determined yet, show all items (fail open)
+    if (!role) return false; // Fail closed until role is determined
     return requiredRoles.includes(role as UserRole);
   };
 
@@ -412,182 +421,212 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
       {/* Left Sidebar - Fixed */}
       {/* z-[60] ensures mobile menu is above Save Changes overlay (z-50) */}
-      <div className={`${showMobileMenu ? 'flex' : 'hidden'} lg:flex w-full sm:w-80 lg:w-60 xl:w-72 bg-white shadow-xl flex-col border-r border-gray-100 fixed h-full z-[110] lg:z-30`}>
+      <div className={`${showMobileMenu ? 'flex' : 'hidden'} lg:flex w-full sm:w-80 lg:w-60 xl:w-72 bg-white flex-col border-r fixed h-full z-[110] lg:z-30`} style={{ borderColor: 'var(--border-subtle)' }}>
         {/* Logo */}
-        <div className="p-4 sm:p-6 border-b border-gray-100 shrink-0">
+        <div className="px-3 py-3 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div
-            className="flex items-center gap-2 sm:gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+            className="flex items-center gap-2.5 cursor-pointer hover:opacity-90 transition-opacity"
             onClick={() => {
               setLocation('/');
               setShowMobileMenu(false);
             }}
           >
-            <div className="relative w-10 h-10 sm:w-12 sm:h-12 flex-shrink-0">
-              <div className="w-full h-full bg-white rounded-xl shadow-md group-hover:shadow-lg transition-shadow duration-300 flex items-center justify-center overflow-hidden p-1 border border-gray-200">
+            <div className="relative w-7 h-7 flex-shrink-0">
+              <div className="w-full h-full bg-white rounded-lg shadow-sm flex items-center justify-center overflow-hidden p-0.5 border" style={{ borderColor: 'var(--border-default)' }}>
                 <img src="/tks_logo.png" alt="The Kalyani School Logo" className="w-full h-full object-contain" />
               </div>
             </div>
             <div className="min-w-0">
-              <span className="font-bold text-[#008060] text-base sm:text-lg xl:text-xl block leading-tight truncate">The Kalyani School</span>
-              <span className="text-[10px] sm:text-xs xl:text-sm text-gray-500 font-bold uppercase tracking-wider">Alumni Portal</span>
+              <span className="font-bold text-xs block leading-tight truncate" style={{ color: 'var(--brand-primary)' }}>The Kalyani School</span>
+              <span className="text-[9px] text-gray-400 font-medium uppercase tracking-widest">Alumni Network</span>
             </div>
           </div>
         </div>
 
         {/* Navigation */}
-        {/* pb-24 adds bottom padding to account for Save Changes overlay on mobile */}
-        <nav className="flex-1 p-3 sm:p-4 pb-24 sm:pb-4 space-y-1 sm:space-y-2 overflow-y-auto">
+        <nav className="flex-1 px-3 py-4 overflow-y-auto">
           {navItems
-            .filter(item => hasRole(item.roles as UserRole[]))
+            .filter(item => hasRole(item.roles as UserRole[]) && item.section === 'main')
             .map((item) => (
               <Button
                 key={item.id}
-                variant={activePage === item.id ? "default" : "ghost"}
-                className={`w-full justify-start rounded-xl px-4 py-3 sm:py-3 lg:py-3.5 xl:py-4 h-auto min-h-[44px] font-bold transition-all duration-300 ${activePage === item.id
-                  ? "bg-gradient-to-r from-[#008060] to-[#006b51] text-white shadow-lg hover:shadow-xl hover:from-[#006b51] hover:to-[#005d47]"
-                  : "text-gray-700 hover:bg-emerald-50 hover:text-[#008060]"
+                variant="ghost"
+                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${activePage === item.id
+                  ? "bg-[#e6f5f0] text-[#008060] hover:bg-[#d0ede4]"
+                  : "text-gray-600 hover:bg-[#e6f5f0]/60 hover:text-[#008060]"
                   }`}
                 onClick={() => {
                   setLocation(item.path);
                   setShowMobileMenu(false);
                 }}
               >
-                <item.icon className="mr-2 sm:mr-3 text-lg flex-shrink-0" />
-                <span className="truncate">{item.label}</span>
+                {activePage === item.id && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
+                <item.icon className={`mr-3 w-[18px] h-[18px] flex-shrink-0 ${activePage === item.id ? 'text-[#008060]' : 'text-gray-500'}`} />
+                <span className="truncate text-sm">{item.label}</span>
                 {item.id === 'inbox' && unreadMessageCount > 0 && (
-                  <span className="ml-auto bg-red-500 text-white text-xs font-bold px-2 py-0.5 rounded-full shadow-sm">
+                  <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
                     {unreadMessageCount > 99 ? '99+' : unreadMessageCount}
                   </span>
                 )}
               </Button>
             ))}
+
+          {/* Discover section */}
+          <div className="mt-2 mb-1 border-t" style={{ borderColor: 'var(--border-subtle)' }} />
+          {navItems
+            .filter(item => hasRole(item.roles as UserRole[]) && item.section === 'discover')
+            .map((item) => (
+              <Button
+                key={item.id}
+                variant="ghost"
+                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${activePage === item.id
+                  ? "bg-[#e6f5f0] text-[#008060] hover:bg-[#d0ede4]"
+                  : "text-gray-600 hover:bg-[#e6f5f0]/60 hover:text-[#008060]"
+                  }`}
+                onClick={() => { setLocation(item.path); setShowMobileMenu(false); }}
+              >
+                {activePage === item.id && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
+                <item.icon className={`mr-3 w-[17px] h-[17px] flex-shrink-0 ${activePage === item.id ? 'text-[#008060]' : 'text-gray-500'}`} />
+                <span className="truncate text-sm">{item.label}</span>
+              </Button>
+            ))}
         </nav>
 
-        {/* Bottom Navigation */}
-        {/* pb-24 adds bottom padding on mobile to account for Save Changes overlay */}
-        <div className="p-3 sm:p-4 pb-24 sm:pb-4 border-t border-gray-100 space-y-1 shrink-0">
-          {bottomNavItems.map((item) => {
-            const isActive = location.includes(item.path);
-            return (
-              <Button
-                key={item.label}
-                variant={isActive ? "default" : "ghost"}
-                className={`w-full justify-start rounded-xl px-4 py-3 h-auto min-h-[44px] font-bold transition-all duration-300 ${isActive
-                  ? "bg-gradient-to-r from-[#008060] to-[#006b51] text-white shadow-lg hover:shadow-xl hover:from-[#006b51] hover:to-[#005d47]"
-                  : "text-gray-700 hover:bg-emerald-50 hover:text-[#008060]"
-                  }`}
-                onClick={() => {
-                  item.onClick();
-                  setShowMobileMenu(false);
-                }}
-              >
-                <item.icon className="mr-2 sm:mr-3 text-lg flex-shrink-0" />
-                <span className="truncate">{item.label}</span>
-              </Button>
-            );
-          })}
-        </div>
       </div>
 
       {/* Main Content - Fixed Layout */}
       <div className="flex-1 flex flex-col lg:ml-60 xl:ml-72 min-h-screen overflow-x-hidden max-w-full">
         {/* Header - Fixed */}
-        <div className="bg-white border-b border-gray-100 p-2 sm:p-3 md:p-4 lg:p-5 xl:p-6 fixed top-0 right-0 left-0 lg:left-60 xl:left-72 z-[100]">
-          <div className="flex items-center justify-between gap-1.5 sm:gap-2 md:gap-3 lg:gap-4">
+        <div className="bg-white fixed top-0 right-0 left-0 lg:left-60 xl:left-72 z-[100] h-14 sm:h-16" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+          <div className="h-full flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 lg:px-6">
             {/* Mobile Menu Button */}
             <Button
               variant="ghost"
               size="icon"
-              className="lg:hidden mr-1 min-w-[44px] min-h-[44px] flex-shrink-0"
+              className="lg:hidden min-w-[40px] min-h-[40px] w-10 h-10 flex-shrink-0 rounded-lg text-gray-600"
               onClick={() => setShowMobileMenu(!showMobileMenu)}
             >
-              <span className="text-xl">☰</span>
+              <span className="text-lg leading-none">☰</span>
             </Button>
 
-            {/* Back Button - Show on all pages except feed */}
-
-
-            <div className="flex-1 flex justify-center min-w-0 max-w-full">
-              <div className="w-full max-w-md lg:max-w-lg xl:max-w-xl">
+            {/* Search Bar */}
+            <div className="flex-1 flex justify-center min-w-0">
+              <div className="w-full max-w-sm lg:max-w-md xl:max-w-lg">
                 <button
                   onClick={() => setShowSearchModal(true)}
-                  className="w-full bg-gray-50 border-0 rounded-full px-3 sm:px-4 md:px-6 lg:px-8 xl:px-10 py-2 sm:py-2.5 md:py-3 text-xs sm:text-sm text-left text-gray-500 hover:bg-gray-100 transition-colors flex items-center justify-between min-h-[44px] gap-2"
+                  className="w-full rounded-full px-4 py-2 text-sm text-left text-gray-500 hover:bg-[#e6f5f0]/70 transition-colors flex items-center justify-between min-h-[38px] gap-2 border"
+                  style={{ background: 'var(--surface-subtle)', borderColor: 'var(--border-default)' }}
                   aria-label="Open search"
                 >
-                  <span className="flex items-center gap-1.5 sm:gap-2 truncate min-w-0 flex-1">
-                    <Search className="w-4 h-4 sm:w-5 sm:h-5 text-gray-400 flex-shrink-0" />
-                    <span className="truncate text-xs sm:text-sm">Search...</span>
+                  <span className="flex items-center gap-2 truncate flex-1">
+                    <Search className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                    <span className="truncate text-sm text-gray-400">Search alumni, posts, events…</span>
                   </span>
-                  <kbd className="hidden md:inline-flex items-center px-2 py-1 bg-white rounded text-[10px] sm:text-xs text-gray-500 flex-shrink-0 border border-gray-200 font-mono">⌘K</kbd>
+                  <kbd className="hidden md:inline-flex items-center px-1.5 py-0.5 bg-white rounded text-[10px] text-gray-400 flex-shrink-0 border font-mono" style={{ borderColor: 'var(--border-default)' }}>⌘K</kbd>
                 </button>
               </div>
             </div>
-            <div className="flex items-center gap-1 sm:gap-1.5 md:gap-2 lg:gap-3 flex-shrink-0">
-              {/* Gamification Trophy Button */}
+
+            {/* Right actions */}
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-shrink-0">
+              {/* Gamification Trophy */}
               {user && user.user_role === 'alumni' && (
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="relative min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-colors text-amber-600 bg-amber-50 hover:bg-amber-100/80 hover:text-amber-700 ring-2 ring-amber-500/30 mr-1 sm:mr-3"
+                  className="relative min-w-[40px] min-h-[40px] w-10 h-10 p-0 rounded-full transition-colors text-amber-600 bg-amber-50 hover:bg-amber-100 border border-amber-200/60"
                   onClick={() => setShowGamificationDrawer(true)}
                   aria-label="Rewards & Gamification"
                 >
-                  <Trophy className="w-5 h-5 sm:w-6 sm:h-6 fill-amber-500/20" strokeWidth={1.5} />
-                  <span className="absolute -top-1.5 -right-2 min-w-[20px] h-[20px] px-1.5 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white shadow-sm shadow-amber-500/30 animate-pulse-scale">
+                  <Trophy className="w-[18px] h-[18px] fill-amber-500/30" strokeWidth={1.5} />
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 bg-gradient-to-r from-amber-500 to-orange-500 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white animate-pulse-scale">
                     {(scores?.total_points || 0) > 999 ? `${((scores?.total_points || 0) / 1000).toFixed(1).replace('.0', '')}k` : (scores?.total_points || 0)}
                   </span>
                 </Button>
               )}
 
+              {/* Notification Bell */}
               <div className="relative">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={`relative min-w-[44px] min-h-[44px] w-[44px] h-[44px] p-0 rounded-full transition-colors ${notificationCount > 0
-                    ? "text-[#008060] hover:bg-[#008060]/10 hover:text-[#006b51] ring-2 ring-[#008060]/30"
-                    : "text-gray-600 hover:text-[#008060] hover:bg-gray-100"
+                  className={`relative min-w-[40px] min-h-[40px] w-10 h-10 p-0 rounded-full transition-colors ${notificationCount > 0
+                    ? "text-[#008060] bg-[#e6f5f0] hover:bg-[#d0ede4] border border-[#d4e4dc]"
+                    : "text-gray-600 hover:text-[#008060] hover:bg-[#e6f5f0]"
                     }`}
                   onClick={() => setShowNotifications(!showNotifications)}
                   aria-label={`Notifications${notificationCount > 0 ? ` (${notificationCount} unread)` : ''}`}
                 >
-                  <Bell className="w-5 h-5 sm:w-6 sm:h-6" strokeWidth={2} />
+                  <Bell className="w-[18px] h-[18px]" strokeWidth={2} />
                   {notificationCount > 0 && (
-                    <span className="absolute -top-0.5 right-0 sm:top-0 sm:right-1 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white animate-pulse">
+                    <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[9px] font-bold text-white">
                       {notificationCount > 99 ? "99+" : notificationCount > 9 ? "9+" : notificationCount}
                     </span>
                   )}
                 </Button>
-
                 {showNotifications && <NotificationDropdown onClose={() => setShowNotifications(false)} />}
               </div>
-              <div className="hidden md:flex items-center gap-2 sm:gap-3">
-                <div className="text-right">
-                  <p className="font-semibold text-gray-900 text-xs sm:text-sm truncate max-w-[120px] lg:max-w-none">{displayName}</p>
-                  <span className="text-xs text-gray-500 capitalize">{roleLabel}</span>
-                </div>
-                <button onClick={() => setLocation("/profile")}>
-                  <Avatar className="w-9 h-9 sm:w-10 sm:h-10 hover:ring-2 hover:ring-[#008060] transition-all flex-shrink-0">
-                    <AvatarImage src={getProfilePicture()} alt={displayName} />
-                    <AvatarFallback className="text-xs sm:text-sm bg-[#008060] text-white">{getInitials(displayName)}</AvatarFallback>
-                  </Avatar>
-                </button>
-              </div>
-              {user && (
-                <Button
-                  variant="outline"
-                  className="text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-300 transition-all duration-200 px-2 sm:px-3 lg:px-4 py-1.5 sm:py-2 text-xs sm:text-sm min-h-[44px]"
-                  onClick={handleLogout}
+
+              {/* Profile dropdown */}
+              <div className="relative" ref={profileDropdownRef}>
+                <button
+                  onClick={() => setShowProfileDropdown(v => !v)}
+                  className="flex items-center gap-2 hover:opacity-90 transition-opacity pl-1"
+                  aria-label="Account menu"
                 >
-                  <LogOut className="mr-0 sm:mr-2 text-base" />
-                  <span className="hidden sm:inline">Log Out</span>
-                </Button>
-              )}
+                  <Avatar className="w-8 h-8 ring-2 ring-[#d4e4dc] hover:ring-[#008060] transition-all flex-shrink-0">
+                    <AvatarImage src={getProfilePicture()} alt={displayName} />
+                    <AvatarFallback className="text-xs bg-[#008060] text-white">{getInitials(displayName)}</AvatarFallback>
+                  </Avatar>
+                  <div className="text-left hidden lg:block">
+                    <p className="font-semibold text-gray-900 text-xs leading-tight truncate max-w-[100px]">{displayName}</p>
+                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ background: 'var(--brand-primary-light)', color: 'var(--brand-primary)' }}>{roleLabel}</span>
+                  </div>
+                  <ChevronDown className="w-3.5 h-3.5 text-gray-400 hidden lg:block flex-shrink-0" />
+                </button>
+
+                {showProfileDropdown && (
+                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border z-[200] py-1.5 animate-in fade-in slide-in-from-top-2 duration-150" style={{ borderColor: 'var(--border-subtle)' }}>
+                    {/* Identity card */}
+                    <div className="px-4 py-3 flex items-center gap-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
+                      <Avatar className="w-10 h-10 ring-2 ring-[#d4e4dc] flex-shrink-0">
+                        <AvatarImage src={getProfilePicture()} alt={displayName} />
+                        <AvatarFallback className="text-sm bg-[#008060] text-white">{getInitials(displayName)}</AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0">
+                        <p className="font-semibold text-gray-900 text-sm leading-tight truncate">{displayName}</p>
+                        <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full mt-0.5 inline-block" style={{ background: 'var(--brand-primary-light)', color: 'var(--brand-primary)' }}>{roleLabel}</span>
+                      </div>
+                    </div>
+                    {/* Links */}
+                    <button
+                      onClick={() => { setLocation('/profile'); setShowProfileDropdown(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-[#e6f5f0]/60 hover:text-[#008060] transition-colors"
+                    >
+                      <User className="w-4 h-4 flex-shrink-0" /> Profile
+                    </button>
+                    <button
+                      onClick={() => { setLocation('/settings'); setShowProfileDropdown(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-[#e6f5f0]/60 hover:text-[#008060] transition-colors"
+                    >
+                      <Settings className="w-4 h-4 flex-shrink-0" /> Settings
+                    </button>
+                    <div className="border-t my-1" style={{ borderColor: 'var(--border-subtle)' }} />
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-red-500 hover:bg-red-50 transition-colors"
+                    >
+                      <LogOut className="w-4 h-4 flex-shrink-0" /> Log out
+                    </button>
+                  </div>
+                )}
+              </div>
             </div>
           </div>
         </div>
 
         {/* Page Content - Scrollable with centered container for large screens */}
-        <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-[60px] sm:mt-[68px] lg:mt-[96px] w-full max-w-full`}>
+        <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-14 sm:mt-16 w-full max-w-full`}>
           <div className={`w-full mx-auto ${activePage === 'inbox' ? 'h-full' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 lg:py-10'}`}>
             {children}
           </div>
