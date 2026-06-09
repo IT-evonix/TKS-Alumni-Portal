@@ -2,6 +2,10 @@
 import { Router } from "express";
 import { supabase } from "../supabase";
 
+function escapeLike(value: string): string {
+  return value.replace(/%/g, "\\%").replace(/_/g, "\\_");
+}
+
 const router = Router();
 
 // ==================== ALUMNI SEARCH ROUTES ====================
@@ -75,7 +79,7 @@ router.get("/search", async (req, res) => {
 
         if (search) {
             const searchTerm = search as string;
-            const sanitizedSearchTerm = searchTerm.replace(/,/g, " ").trim();
+            const sanitizedSearchTerm = escapeLike(searchTerm.replace(/,/g, " ").trim());
 
             // Smart search: Search users.email separately to find matching user_ids
             // This allows partial email matching (e.g., "atul" matches "atultelang@gmail.com")

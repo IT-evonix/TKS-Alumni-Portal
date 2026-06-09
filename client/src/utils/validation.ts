@@ -2,6 +2,7 @@
  * Comprehensive client-side validation utilities
  * Provides consistent validation across all pages
  */
+import DOMPurify from "isomorphic-dompurify";
 
 export interface ValidationResult {
   isValid: boolean;
@@ -15,21 +16,10 @@ export interface ValidationResult {
 export function sanitizeString(input: string | undefined | null, maxLength: number = 1000): string {
   if (!input) return '';
 
-  let sanitized = String(input).trim();
+  // Use DOMPurify to strip all HTML/XSS vectors, then limit length
+  const sanitized = DOMPurify.sanitize(String(input).trim(), { ALLOWED_TAGS: [], ALLOWED_ATTR: [] });
 
-  // Remove potentially dangerous characters
-  sanitized = sanitized
-    .replace(/[<>]/g, '') // Remove angle brackets
-    .replace(/javascript:/gi, '') // Remove javascript: protocol
-    .replace(/on\w+=/gi, '') // Remove event handlers
-    .replace(/script/gi, ''); // Remove script tags
-
-  // Limit length
-  if (sanitized.length > maxLength) {
-    sanitized = sanitized.substring(0, maxLength);
-  }
-
-  return sanitized;
+  return sanitized.length > maxLength ? sanitized.substring(0, maxLength) : sanitized;
 }
 
 /**

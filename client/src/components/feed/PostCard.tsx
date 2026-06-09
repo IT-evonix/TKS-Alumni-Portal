@@ -497,45 +497,41 @@ const PostCardComponent: React.FC<PostCardProps> = ({
   };
 
   return (
-    <Card id={`post-${post.id}`} className="bg-white rounded-xl sm:rounded-2xl border border-gray-200 shadow-sm sm:shadow-md hover:shadow-xl transition-all duration-300 hover:scale-[1.005] sm:hover:scale-[1.01] max-w-full overflow-hidden">
-      <CardContent className="p-4 sm:p-6 md:p-8">
-        <div className="flex items-start gap-3 sm:gap-4 mb-3 sm:mb-4">
+    <Card id={`post-${post.id}`} className="bg-white max-w-full overflow-hidden transition-shadow duration-200 hover:shadow-md" style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+      <CardContent className="p-4 sm:p-5">
+        {/* Author header */}
+        <div className="flex items-start gap-3 mb-3">
           <Avatar
-            className="w-10 h-10 sm:w-12 sm:h-12 cursor-pointer hover:opacity-80 transition-opacity"
+            className="w-10 h-10 cursor-pointer hover:opacity-80 transition-opacity ring-2 flex-shrink-0"
+            style={{ '--tw-ring-color': 'var(--border-default)' } as React.CSSProperties}
             onClick={() => setLocation(`/profile/${(post as any).author_id}`)}
           >
-            <AvatarImage
-              src={getAuthorProfilePicture()}
-              alt={authorName}
-            />
-            <AvatarFallback className="bg-[#008060] text-white">
+            <AvatarImage src={getAuthorProfilePicture()} alt={authorName} />
+            <AvatarFallback className="bg-[#008060] text-white text-sm">
               {authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
             <h4
-              className="font-semibold text-gray-900 text-base sm:text-lg cursor-pointer hover:text-[#008060] hover:underline transition-colors w-fit truncate max-w-full"
+              className="font-semibold text-gray-900 text-[15px] cursor-pointer hover:text-[#008060] transition-colors truncate"
               onClick={() => setLocation(`/profile/${(post as any).author_id}`)}
             >
               {authorName}
             </h4>
-            <p className="text-xs sm:text-sm text-gray-600 mb-0.5 sm:mb-1 truncate">
+            <p className="text-xs text-gray-500 truncate mt-0.5">
               {isAdminPost ? (
-                <span className="text-[#008060] font-medium flex items-center gap-1">
-                  <span>Administrator</span>
-                  <span className="bg-[#008060]/10 text-[#008060] text-[10px] px-1.5 py-0.5 rounded-full uppercase tracking-wider font-bold">Official</span>
+                <span className="inline-flex items-center gap-1 text-[#008060] font-medium">
+                  Administrator
+                  <span className="bg-[#e6f5f0] text-[#008060] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wide font-bold">Official</span>
                 </span>
               ) : (
-                post.author.email
+                <span>{post.author.email} · {formatTimeAgo(post.created_at)}</span>
               )}
             </p>
-            <p className="text-[10px] sm:text-xs text-gray-500">{formatTimeAgo(post.created_at)}</p>
+            {!isAdminPost && <p className="sr-only">{formatTimeAgo(post.created_at)}</p>}
           </div>
           {(() => {
             const isAuthor = (post as any).author_id === currentUserId;
-            // Show edit/delete options if:
-            // 1. User is the author of the post, OR
-            // 2. Current user is an admin AND the post is an admin post
             const canEditDelete = isAuthor || (isCurrentUserAdmin && isAdminPost);
 
             return canEditDelete ? (
@@ -543,31 +539,26 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="text-gray-400 hover:text-gray-600 h-8 w-8 sm:h-10 sm:w-10"
+                  className="text-gray-400 hover:text-gray-600 h-8 w-8 rounded-lg"
                   onClick={onOptionsClick}
                 >
-                  <span className="text-lg sm:text-xl">⋯</span>
+                  <span className="text-lg leading-none">⋯</span>
                 </Button>
 
                 {showOptions && (
-                  <div className="absolute right-0 top-8 w-48 bg-white border border-gray-200 rounded-lg shadow-lg z-50">
-                    <div className="py-1">
-                      <button
-                        onClick={() => {
-                          setIsEditing(true);
-                          onOptionsClick(); // Close menu
-                        }}
-                        className="w-full text-left px-4 py-3 sm:py-2 text-sm text-gray-700 hover:bg-gray-50 active:bg-gray-100 min-h-[44px]"
-                      >
-                        Edit Post
-                      </button>
-                      <button
-                        onClick={onDelete}
-                        className="w-full text-left px-4 py-3 sm:py-2 text-sm text-red-600 hover:bg-gray-50 active:bg-gray-100 min-h-[44px]"
-                      >
-                        Delete Post
-                      </button>
-                    </div>
+                  <div className="absolute right-0 top-9 w-44 bg-white rounded-xl shadow-lg z-50 py-1 overflow-hidden" style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-panel)' }}>
+                    <button
+                      onClick={() => { setIsEditing(true); onOptionsClick(); }}
+                      className="w-full text-left px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 min-h-[40px]"
+                    >
+                      Edit Post
+                    </button>
+                    <button
+                      onClick={onDelete}
+                      className="w-full text-left px-4 py-2.5 text-sm text-red-600 hover:bg-red-50 min-h-[40px]"
+                    >
+                      Delete Post
+                    </button>
                   </div>
                 )}
               </div>
@@ -575,75 +566,50 @@ const PostCardComponent: React.FC<PostCardProps> = ({
           })()}
         </div>
 
-        <div className="mb-4 sm:mb-6">
+        {/* Content */}
+        <div className="mb-4">
           {isEditing ? (
             <div className="space-y-3">
               <Textarea
                 value={editedContent}
                 onChange={(e) => setEditedContent(e.target.value)}
-                className="min-h-[100px] resize-none text-base"
+                className="min-h-[100px] resize-none text-[15px]"
                 placeholder="What's on your mind?"
               />
               <div className="flex gap-2 justify-end">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleEditCancel}
-                  className="min-h-[40px]"
-                >
-                  Cancel
-                </Button>
-                <Button
-                  size="sm"
-                  onClick={handleEditSubmit}
-                  className="bg-[#008060] hover:bg-[#007055] min-h-[40px]"
-                >
-                  Save Changes
-                </Button>
+                <Button variant="outline" size="sm" onClick={handleEditCancel} className="min-h-[36px]">Cancel</Button>
+                <Button size="sm" onClick={handleEditSubmit} className="bg-[#008060] hover:bg-[#006b51] min-h-[36px]">Save Changes</Button>
               </div>
             </div>
           ) : (
             <>
-              <div className={`text-gray-800 leading-relaxed text-sm sm:text-base mb-3 sm:mb-4 break-words whitespace-pre-wrap ${!isExpanded && post.content.length > 200 ? 'line-clamp-4' : ''}`}>
+              <div className={`text-gray-800 leading-[1.65] text-[15px] break-words whitespace-pre-wrap ${!isExpanded && post.content.length > 200 ? 'line-clamp-4' : ''}`}>
                 {post.content}
               </div>
               {post.content.length > 200 && (
-                <button
-                  onClick={onReadMore}
-                  className="text-[#008060] hover:text-[#007055] text-sm font-medium mb-4 p-1 -ml-1"
-                >
-                  {isExpanded ? 'Show Less' : 'Read Full Post'}
+                <button onClick={onReadMore} className="text-[#008060] hover:text-[#006b51] text-sm font-medium mt-2">
+                  {isExpanded ? 'Show less' : 'Read more'}
                 </button>
               )}
             </>
           )}
 
-          {/* Display attached file */}
+          {/* Attached file */}
           {post.image_url && (
-            <div className="mb-4 rounded-lg overflow-hidden bg-gray-50/50 border border-gray-100 max-w-full">
+            <div className="mt-3 rounded-xl overflow-hidden max-w-full" style={{ border: '1px solid var(--border-subtle)' }}>
               {post.image_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
                 <OptimizedImage
                   src={post.image_url}
                   alt="Post attachment"
-                  className="w-full h-auto object-cover sm:object-contain max-h-[400px] sm:max-h-[500px] md:max-h-[600px] mx-auto"
+                  className="w-full h-auto object-cover max-h-[480px] mx-auto"
                   loading="lazy"
                   responsive={true}
                   quality={85}
                 />
               ) : post.image_url.match(/\.(mp4|webm)$/i) ? (
-                <video
-                  src={post.image_url}
-                  controls
-                  className="w-full h-auto max-h-[400px] sm:max-h-[500px] md:max-h-[600px] mx-auto"
-                  style={{ maxWidth: '100%' }}
-                />
+                <video src={post.image_url} controls className="w-full h-auto max-h-[480px] mx-auto" style={{ maxWidth: '100%' }} />
               ) : (
-                <a
-                  href={post.image_url}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex items-center gap-3 p-3 bg-white rounded-lg hover:bg-gray-100 w-full min-h-[50px]"
-                >
+                <a href={post.image_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 w-full min-h-[50px]">
                   <span className="text-2xl">📄</span>
                   <span className="text-sm text-gray-700 truncate">View attached document</span>
                 </a>
@@ -652,259 +618,180 @@ const PostCardComponent: React.FC<PostCardProps> = ({
           )}
         </div>
 
-        <div className="flex items-center justify-between pt-3 sm:pt-4 border-t border-gray-50">
-          <div className="flex items-center gap-4 sm:gap-6 w-full sm:w-auto justify-between sm:justify-start">
-            <button
-              onClick={onLike}
-              className={`flex items-center gap-1.5 sm:gap-2 transition-all duration-200 transform active:scale-125 p-2 -ml-2 rounded-lg hover:bg-gray-50 ${isLiked
-                ? 'text-red-500'
-                : 'text-gray-600 hover:text-red-500'
-                }`}
-            >
-              <span className="text-xl sm:text-lg">{isLiked ? '❤️' : '🤍'}</span>
-              <span className="text-sm font-medium">
-                {post.likes_count}
-              </span>
-            </button>
-            <button
-              onClick={onComment}
-              className="flex items-center gap-1.5 sm:gap-2 text-gray-600 hover:text-[#008060] transition-all duration-200 transform active:scale-110 p-2 rounded-lg hover:bg-gray-50"
-            >
-              <span className="text-xl sm:text-lg">💬</span>
-              <span className="text-sm font-medium">{post.comments_count}</span>
-            </button>
-            <button
-              onClick={handleShare}
-              className="flex items-center gap-1.5 sm:gap-2 text-gray-600 hover:text-[#008060] transition-all duration-200 transform active:scale-110 p-2 rounded-lg hover:bg-gray-50"
-            >
-              <span className="text-xl sm:text-lg">🔗</span>
-              <span className="text-sm font-medium">Share</span>
-            </button>
-          </div>
-          {post.content.length > 200 && (
-            <button
-              onClick={onReadMore}
-              className="text-[#008060] hover:text-[#007055] text-sm font-medium"
-            >
-              {isExpanded ? 'Show Less' : 'Read Full Post'}
-            </button>
-          )}
+        {/* Engagement row */}
+        <div className="flex items-center gap-1 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          <button
+            onClick={onLike}
+            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 active:scale-110 ${isLiked ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-gray-500 hover:text-red-500 hover:bg-red-50'}`}
+          >
+            <span className="text-base">{isLiked ? '❤️' : '🤍'}</span>
+            <span>{post.likes_count}</span>
+          </button>
+          <button
+            onClick={onComment}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all duration-200 active:scale-110"
+          >
+            <span className="text-base">💬</span>
+            <span>{post.comments_count}</span>
+          </button>
+          <button
+            onClick={handleShare}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all duration-200 active:scale-110 ml-auto"
+          >
+            <span className="text-base">🔗</span>
+            <span className="hidden sm:inline">Share</span>
+          </button>
         </div>
 
+        {/* Comments section */}
         {showComments && (
-          <div className="mt-6 pt-6 border-t border-gray-100">
-            {/* Comment input */}
-            <div className="flex items-center gap-2 mb-4">
-              <Avatar className="w-8 h-8">
+          <div className="mt-4 pt-4 -mx-4 sm:-mx-5 px-4 sm:px-5 pb-0" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}>
+            <div className="flex items-center gap-2 mb-3">
+              <Avatar className="w-7 h-7 flex-shrink-0">
                 <AvatarImage src={getAuthorProfilePicture()} alt="Current user" />
-                <AvatarFallback className="bg-[#008060] text-white">
+                <AvatarFallback className="bg-[#008060] text-white text-xs">
                   {authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                 </AvatarFallback>
               </Avatar>
               <Input
-                placeholder="Write a comment..."
+                placeholder="Write a comment…"
                 value={commentText}
                 onChange={(e) => onCommentTextChange(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && !e.shiftKey && handlePostComment()}
-                className="flex-1 text-sm"
+                className="flex-1 text-sm h-9 rounded-full border-gray-200 bg-white focus:border-[#008060]"
               />
-              <Button
-                size="sm"
-                onClick={handlePostComment}
-                disabled={!commentText?.trim()}
-                className="bg-[#008060] hover:bg-[#007055] disabled:opacity-50"
-              >
+              <Button size="sm" onClick={handlePostComment} disabled={!commentText?.trim()} className="bg-[#008060] hover:bg-[#006b51] disabled:opacity-50 rounded-full h-9 px-4 text-xs">
                 Post
               </Button>
             </div>
 
-            {/* Comments list */}
             {isLoadingComments ? (
               <div className="text-center py-4">
-                <div className="inline-block animate-spin rounded-full h-6 w-6 border-b-2 border-[#008060]"></div>
+                <div className="inline-block animate-spin rounded-full h-5 w-5 border-b-2 border-[#008060]" />
               </div>
             ) : comments.length > 0 ? (
-              <div className="space-y-3 max-h-96 overflow-y-auto">
+              <div className="space-y-2 pb-3 max-h-96 overflow-y-auto">
                 {comments.map((comment) => {
                   const commentAuthorName = comment.user_first_name
                     ? `${comment.user_first_name} ${comment.user_last_name || ''}`.trim()
                     : comment.user.username;
 
                   const getCommentAuthorAvatar = () => {
-                    if (comment.user_profile_picture && comment.user_profile_picture.trim() !== '') {
-                      return comment.user_profile_picture;
-                    }
-
+                    if (comment.user_profile_picture && comment.user_profile_picture.trim() !== '') return comment.user_profile_picture;
                     const seed = encodeURIComponent(commentAuthorName);
                     const gender = comment.user_gender;
-
                     switch (gender) {
-                      case 'male':
-                        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-                      case 'female':
-                        return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
-                      case 'other':
-                        return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
-                      case 'prefer_not_to_say':
-                        return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
-                      default:
-                        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
+                      case 'male': return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
+                      case 'female': return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
+                      case 'other': return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
+                      case 'prefer_not_to_say': return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
+                      default: return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
                     }
                   };
 
                   const commentTimeAgo = formatTimeAgo(comment.created_at);
-
                   const replies = commentReplies[comment.id] || [];
                   const hasReplies = (comment.replies_count || 0) > 0;
 
                   return (
-                    <div key={comment.id} className="bg-gradient-to-br from-gray-50 to-white rounded-xl p-4 shadow-sm hover:shadow-md transition-all duration-200 border border-gray-100">
+                    <div key={comment.id} className="bg-white rounded-xl p-3 transition-shadow hover:shadow-sm" style={{ border: '1px solid var(--border-subtle)' }}>
                       <div className="flex items-start gap-2">
-                        <Avatar className="w-8 h-8">
+                        <Avatar className="w-7 h-7 flex-shrink-0">
                           <AvatarImage src={getCommentAuthorAvatar()} alt={commentAuthorName} />
-                          <AvatarFallback className="bg-[#008060] text-white">
+                          <AvatarFallback className="bg-[#008060] text-white text-xs">
                             {commentAuthorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                           </AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center justify-between mb-1">
-                            <div className="flex items-center gap-2">
-                              <span className="font-semibold text-sm text-gray-900">{commentAuthorName}</span>
-                              <span className="text-xs text-gray-500">{commentTimeAgo}</span>
+                            <div className="flex items-center gap-1.5 flex-wrap">
+                              <span className="font-semibold text-[13px] text-gray-900">{commentAuthorName}</span>
+                              <span className="text-[11px] text-gray-400">{commentTimeAgo}</span>
                             </div>
                             {comment.user.id === currentUserId && (
-                              <button
-                                onClick={() => handleDeleteComment(comment.id)}
-                                className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                                title="Delete comment"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
+                              <button onClick={() => handleDeleteComment(comment.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete comment">
+                                <Trash2 className="w-3 h-3" />
                               </button>
                             )}
                           </div>
-                          <p className="text-sm text-gray-700 mb-2">{comment.content}</p>
-
-                          {/* Reply button */}
+                          <p className="text-sm text-gray-700 mb-1.5">{comment.content}</p>
                           <div className="flex items-center gap-3 text-xs">
                             <button
                               onClick={() => {
                                 const currentValue = replyTexts[comment.id];
                                 if (currentValue !== undefined) {
-                                  // Hide reply input
                                   const { [comment.id]: _discard, ...rest } = replyTexts;
                                   setReplyTexts(rest);
                                 } else {
-                                  // Show reply input
-                                  setReplyTexts(prev => ({
-                                    ...prev,
-                                    [comment.id]: ''
-                                  }));
+                                  setReplyTexts(prev => ({ ...prev, [comment.id]: '' }));
                                 }
                               }}
-                              className="text-[#008060] hover:text-[#007055] font-medium"
+                              className="text-[#008060] hover:text-[#006b51] font-medium"
                             >
                               {replyTexts[comment.id] !== undefined ? 'Cancel' : 'Reply'}
                             </button>
-
                             {hasReplies && (
-                              <button
-                                onClick={() => handleToggleReplies(comment.id)}
-                                className="text-gray-600 hover:text-gray-800 font-medium flex items-center gap-1"
-                              >
-                                {showReplies.has(comment.id) ? '▼' : '▶'}
-                                {comment.replies_count} {comment.replies_count === 1 ? 'reply' : 'replies'}
+                              <button onClick={() => handleToggleReplies(comment.id)} className="text-gray-500 hover:text-gray-700 font-medium flex items-center gap-1">
+                                {showReplies.has(comment.id) ? '▼' : '▶'} {comment.replies_count} {comment.replies_count === 1 ? 'reply' : 'replies'}
                               </button>
                             )}
                           </div>
 
-                          {/* Reply input */}
                           {replyTexts[comment.id] !== undefined && (
                             <div className="mt-2 flex items-center gap-2">
-                              <Avatar className="w-6 h-6">
+                              <Avatar className="w-5 h-5">
                                 <AvatarImage src={getAuthorProfilePicture()} alt="You" />
-                                <AvatarFallback className="bg-[#008060] text-white text-xs">
+                                <AvatarFallback className="bg-[#008060] text-white text-[10px]">
                                   {authorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                                 </AvatarFallback>
                               </Avatar>
                               <Input
-                                placeholder="Write a reply..."
+                                placeholder="Write a reply…"
                                 value={replyTexts[comment.id] || ''}
                                 onChange={(e) => setReplyTexts(prev => ({ ...prev, [comment.id]: e.target.value }))}
-                                onKeyPress={(e) => {
-                                  if (e.key === 'Enter' && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handlePostReply(comment.id);
-                                  }
-                                }}
-                                className="text-xs h-8 flex-1"
+                                onKeyPress={(e) => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handlePostReply(comment.id); } }}
+                                className="text-xs h-7 flex-1 rounded-full"
                                 autoFocus
                               />
-                              <Button
-                                size="sm"
-                                onClick={() => handlePostReply(comment.id)}
-                                disabled={!replyTexts[comment.id]?.trim()}
-                                className="bg-[#008060] hover:bg-[#007055] h-8 px-3 text-xs"
-                              >
+                              <Button size="sm" onClick={() => handlePostReply(comment.id)} disabled={!replyTexts[comment.id]?.trim()} className="bg-[#008060] hover:bg-[#006b51] h-7 px-2.5 text-xs rounded-full">
                                 Post
                               </Button>
                             </div>
                           )}
 
-                          {/* Replies list */}
                           {showReplies.has(comment.id) && (
-                            <div className="mt-3 ml-4 space-y-2 border-l-2 border-gray-200 pl-3">
+                            <div className="mt-2 ml-3 space-y-2 pl-3" style={{ borderLeft: '2px solid var(--border-default)' }}>
                               {loadingReplies.has(comment.id) ? (
-                                <div className="text-center py-2">
-                                  <div className="inline-block animate-spin rounded-full h-4 w-4 border-b-2 border-[#008060]"></div>
-                                </div>
+                                <div className="text-center py-2"><div className="inline-block animate-spin rounded-full h-3.5 w-3.5 border-b-2 border-[#008060]" /></div>
                               ) : replies.length > 0 ? (
                                 replies.map((reply) => {
-                                  const replyAuthorName = reply.user_first_name
-                                    ? `${reply.user_first_name} ${reply.user_last_name || ''}`.trim()
-                                    : reply.user.username;
-
+                                  const replyAuthorName = reply.user_first_name ? `${reply.user_first_name} ${reply.user_last_name || ''}`.trim() : reply.user.username;
                                   const getReplyAuthorAvatar = () => {
-                                    if (reply.user_profile_picture && reply.user_profile_picture.trim() !== '') {
-                                      return reply.user_profile_picture;
-                                    }
+                                    if (reply.user_profile_picture && reply.user_profile_picture.trim() !== '') return reply.user_profile_picture;
                                     const seed = encodeURIComponent(replyAuthorName);
                                     const gender = reply.user_gender;
                                     switch (gender) {
-                                      case 'male':
-                                        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-                                      case 'female':
-                                        return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
-                                      case 'other':
-                                        return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
-                                      case 'prefer_not_to_say':
-                                        return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
-                                      default:
-                                        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
+                                      case 'male': return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
+                                      case 'female': return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
+                                      case 'other': return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
+                                      case 'prefer_not_to_say': return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
+                                      default: return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
                                     }
                                   };
-
-                                  const replyTimeAgo = formatTimeAgo(reply.created_at);
-
                                   return (
                                     <div key={reply.id} className="flex items-start gap-2 bg-white rounded-lg p-2">
-                                      <Avatar className="w-6 h-6">
+                                      <Avatar className="w-5 h-5">
                                         <AvatarImage src={getReplyAuthorAvatar()} alt={replyAuthorName} />
-                                        <AvatarFallback className="bg-[#008060] text-white text-xs">
-                                          {replyAuthorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                                        </AvatarFallback>
+                                        <AvatarFallback className="bg-[#008060] text-white text-[9px]">{replyAuthorName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}</AvatarFallback>
                                       </Avatar>
                                       <div className="flex-1 min-w-0">
-                                        <div className="flex items-center justify-between mb-1">
-                                          <div className="flex items-center gap-2">
-                                            <span className="font-semibold text-xs text-gray-900">{replyAuthorName}</span>
-                                            <span className="text-xs text-gray-500">{replyTimeAgo}</span>
+                                        <div className="flex items-center justify-between mb-0.5">
+                                          <div className="flex items-center gap-1.5">
+                                            <span className="font-semibold text-[12px] text-gray-900">{replyAuthorName}</span>
+                                            <span className="text-[11px] text-gray-400">{formatTimeAgo(reply.created_at)}</span>
                                           </div>
                                           {reply.user.id === currentUserId && (
-                                            <button
-                                              onClick={() => handleDeleteReply(comment.id, reply.id)}
-                                              className="text-gray-400 hover:text-red-500 transition-colors p-1"
-                                              title="Delete reply"
-                                            >
+                                            <button onClick={() => handleDeleteReply(comment.id, reply.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete reply">
                                               <Trash2 className="w-3 h-3" />
                                             </button>
                                           )}
@@ -915,7 +802,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                                   );
                                 })
                               ) : (
-                                <p className="text-xs text-gray-500 py-2">No replies yet</p>
+                                <p className="text-xs text-gray-400 py-1">No replies yet</p>
                               )}
                             </div>
                           )}
@@ -926,7 +813,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                 })}
               </div>
             ) : (
-              <p className="text-center text-sm text-gray-500 py-4">No comments yet. Be the first to comment!</p>
+              <p className="text-center text-sm text-gray-400 py-4 pb-3">No comments yet. Be the first!</p>
             )}
           </div>
         )}

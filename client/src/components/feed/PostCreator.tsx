@@ -50,36 +50,61 @@ export const PostCreator: React.FC<PostCreatorProps> = ({
     }
   };
 
+  const quickActions = [
+    { icon: "💼", label: "Share an opportunity", prefill: "I wanted to share an exciting opportunity with the TKS community: " },
+    { icon: "🙋", label: "Ask the community",    prefill: "Hey TKS alumni, I need your advice on: " },
+    { icon: "🎉", label: "Announce a milestone", prefill: "Excited to share that I've recently: " },
+  ];
+
   return (
-    <Card className="bg-white rounded-lg sm:rounded-xl md:rounded-2xl border border-gray-100 shadow-sm hover:shadow-md transition-all duration-300 mb-4 sm:mb-6 md:mb-8 overflow-hidden w-full max-w-full">
-      {/* Top border - always visible with light green accent */}
-      <div className="h-1 w-full bg-[#95D1BD]" />
-      
-      <CardContent className="p-3 sm:p-4 md:p-5 lg:p-6">
+    <Card className="bg-white overflow-hidden w-full max-w-full mb-4 sm:mb-5 transition-shadow duration-200 hover:shadow-md" style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+      <CardContent className="p-4 sm:p-5">
+        {/* Header hint */}
+        <p className="text-[13px] font-medium text-gray-400 mb-3">Share something with the community</p>
+
+        {/* Quick-action chips */}
+        {!postText && (
+          <div className="flex flex-wrap gap-2 mb-4">
+            {quickActions.map((action) => (
+              <button
+                key={action.label}
+                type="button"
+                onClick={() => onPostTextChange(action.prefill)}
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-gray-600 transition-all duration-150 hover:text-[#008060] hover:border-[#008060]/40 hover:bg-[#e6f5f0]/60 active:scale-95 touch-manipulation"
+                style={{ border: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
+                aria-label={action.label}
+              >
+                <span>{action.icon}</span>
+                <span>{action.label}</span>
+              </button>
+            ))}
+          </div>
+        )}
+
         {/* Top Section: Avatar and Input */}
-        <div className="flex items-start gap-2.5 sm:gap-3 md:gap-4 mb-3 sm:mb-4 md:mb-5">
-          <Avatar className="w-10 h-10 sm:w-11 sm:h-11 md:w-12 md:h-12 lg:w-14 lg:h-14 ring-2 ring-[#95D1BD]/30 transition-all shrink-0">
+        <div className="flex items-start gap-3 mb-4">
+          <Avatar className="w-9 h-9 sm:w-10 sm:h-10 ring-2 shrink-0" style={{ '--tw-ring-color': 'var(--border-default)' } as React.CSSProperties}>
             <AvatarImage src={getProfilePicture()} alt="Profile" />
-            <AvatarFallback className="bg-[#008060] text-white font-semibold text-xs sm:text-sm md:text-base">
+            <AvatarFallback className="bg-[#008060] text-white font-semibold text-xs">
               {displayName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
             </AvatarFallback>
           </Avatar>
-          
+
           <div className="flex-1 min-w-0">
             <Textarea
               placeholder="What's on your mind today?"
               value={postText}
               onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => onPostTextChange(e.target.value)}
-              className={`min-h-[50px] xs:min-h-[60px] sm:min-h-[70px] md:min-h-[80px] lg:min-h-[90px] border-0 bg-transparent text-sm xs:text-base sm:text-base md:text-lg placeholder:text-gray-400 focus-visible:ring-0 p-0 resize-none leading-relaxed w-full ${postText.length > 5000 ? 'text-red-600' : ''}`}
+              className={`min-h-[80px] sm:min-h-[96px] lg:min-h-[110px] border-0 bg-transparent text-[15px] placeholder:text-gray-400 focus-visible:ring-0 p-0 resize-none leading-relaxed w-full ${postText.length > 5000 ? 'text-red-600' : 'text-gray-800'}`}
               aria-label="Post content"
               aria-describedby="post-helper-text"
             />
-            {postText.length > 0 && (
-              <div className="flex items-center justify-between mt-1">
-                {postText.length > 5000
-                  ? <p className="text-xs text-red-600 flex items-center gap-1">⚠ Content exceeds 5000 characters</p>
-                  : <span />}
-                <p className={`text-xs ml-auto ${postText.length > 4800 ? postText.length > 5000 ? 'text-red-600 font-medium' : 'text-orange-500' : 'text-gray-400'}`}>
+            {postText.length > 100 && (
+              <div className="flex items-center justify-end mt-1 gap-2">
+                {postText.length > 5000 && (
+                  <p className="text-xs text-red-600">⚠ Exceeds 5000 characters</p>
+                )}
+                <p className={`text-[11px] ${postText.length > 4800 ? postText.length > 5000 ? 'text-red-600 font-semibold' : 'text-orange-500' : 'text-gray-400'}`}>
                   {postText.length}/5000
                 </p>
               </div>
@@ -90,13 +115,13 @@ export const PostCreator: React.FC<PostCreatorProps> = ({
 
             {/* Attached Files Preview */}
             {attachedFiles.length > 0 && (
-              <div className="mt-2.5 sm:mt-3 md:mt-4 space-y-2">
+              <div className="mt-3 space-y-1.5">
                 {attachedFiles.map((file, index) => (
-                  <div key={index} className="flex items-center gap-2 sm:gap-2.5 p-2 sm:p-2.5 md:p-3 bg-gray-50 rounded-lg border border-gray-100">
-                    <span className="text-xs sm:text-sm text-gray-600 truncate flex-1 min-w-0 font-medium">{file.name}</span>
+                  <div key={index} className="flex items-center gap-2 px-3 py-2 rounded-lg" style={{ background: 'var(--surface-subtle)', border: '1px solid var(--border-subtle)' }}>
+                    <span className="text-xs text-gray-600 truncate flex-1 min-w-0 font-medium">{file.name}</span>
                     <button
                       onClick={() => onRemoveFile(index)}
-                      className="text-red-500 hover:text-red-700 text-base sm:text-lg ml-auto p-1.5 sm:p-2 min-w-[32px] min-h-[32px] sm:min-w-[36px] sm:min-h-[36px] flex items-center justify-center rounded-full hover:bg-red-50 transition-colors touch-manipulation"
+                      className="text-gray-400 hover:text-red-500 ml-auto p-1 min-w-[28px] min-h-[28px] flex items-center justify-center rounded-full hover:bg-red-50 transition-colors touch-manipulation text-base"
                       aria-label="Remove file"
                     >
                       ✕
@@ -108,38 +133,38 @@ export const PostCreator: React.FC<PostCreatorProps> = ({
           </div>
         </div>
 
-        {/* Bottom Section: Post Options and Action Button */}
-        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 md:gap-4 pt-2.5 sm:pt-3 md:pt-4 border-t border-gray-100">
-          {/* Post Options */}
-          <div className="grid grid-cols-3 sm:flex sm:items-center gap-1.5 sm:gap-2 md:gap-3 lg:gap-4 xl:gap-6 flex-1 w-full sm:w-auto">
+        {/* Bottom Section */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+          {/* Attachment buttons grouped */}
+          <div className="flex items-center gap-1 rounded-lg px-1 py-0.5" style={{ background: 'var(--surface-subtle)' }}>
             <button
               onClick={() => onFileAttachment('document')}
-              className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 text-[#585858] hover:text-[#9D84BD] hover:bg-[#9D84BD]/5 active:bg-[#9D84BD]/10 transition-all rounded-lg p-2 sm:p-2.5 md:px-3 md:py-2 min-h-[44px] sm:min-h-[40px] md:min-h-[44px] group touch-manipulation"
+              className="flex items-center gap-1.5 text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all rounded-md px-2.5 py-2 min-h-[36px] group touch-manipulation"
               aria-label="Attach document"
               type="button"
             >
-              <FileText className="w-4 h-4 sm:w-4 sm:h-4 md:w-5 md:h-5 text-[#9D84BD] group-hover:scale-110 transition-transform flex-shrink-0" />
-              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Document</span>
+              <FileText className="w-4 h-4 text-violet-400 group-hover:text-[#008060] transition-colors flex-shrink-0" />
+              <span className="text-xs font-medium hidden sm:block">Document</span>
             </button>
-            
+
             <button
               onClick={() => onFileAttachment('photo')}
-              className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 text-[#585858] hover:text-[#6F667F] hover:bg-[#6F667F]/5 active:bg-[#6F667F]/10 transition-all rounded-lg p-2 sm:p-2.5 md:px-3 md:py-2 min-h-[44px] sm:min-h-[40px] md:min-h-[44px] group touch-manipulation"
+              className="flex items-center gap-1.5 text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all rounded-md px-2.5 py-2 min-h-[36px] group touch-manipulation"
               aria-label="Attach photo"
               type="button"
             >
-              <ImageIcon className="w-4 h-4 sm:w-4 sm:h-4 md:w-5 md:h-5 text-[#6F667F] group-hover:scale-110 transition-transform flex-shrink-0" />
-              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Photo</span>
+              <ImageIcon className="w-4 h-4 text-blue-400 group-hover:text-[#008060] transition-colors flex-shrink-0" />
+              <span className="text-xs font-medium hidden sm:block">Photo</span>
             </button>
-            
+
             <button
               onClick={() => onFileAttachment('video')}
-              className="flex items-center justify-center sm:justify-start gap-1.5 sm:gap-2 text-[#585858] hover:text-[#6F667F] hover:bg-[#6F667F]/5 active:bg-[#6F667F]/10 transition-all rounded-lg p-2 sm:p-2.5 md:px-3 md:py-2 min-h-[44px] sm:min-h-[40px] md:min-h-[44px] group touch-manipulation"
+              className="flex items-center gap-1.5 text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all rounded-md px-2.5 py-2 min-h-[36px] group touch-manipulation"
               aria-label="Attach video"
               type="button"
             >
-              <Video className="w-4 h-4 sm:w-4 sm:h-4 md:w-5 md:h-5 text-[#6F667F] group-hover:scale-110 transition-transform flex-shrink-0" />
-              <span className="text-xs sm:text-sm font-medium whitespace-nowrap">Video</span>
+              <Video className="w-4 h-4 text-pink-400 group-hover:text-[#008060] transition-colors flex-shrink-0" />
+              <span className="text-xs font-medium hidden sm:block">Video</span>
             </button>
           </div>
 
@@ -147,11 +172,11 @@ export const PostCreator: React.FC<PostCreatorProps> = ({
           <Button
             onClick={onPost}
             disabled={isPosting || (!postText.trim() && attachedFiles.length === 0) || postText.length > 5000}
-            className="bg-[#3F8A7D] hover:bg-[#2E6B5F] active:bg-[#1F4D44] text-white px-5 sm:px-6 md:px-8 lg:px-10 py-2.5 sm:py-2.5 md:py-3 rounded-full font-semibold disabled:opacity-50 disabled:cursor-not-allowed min-h-[44px] sm:min-h-[44px] md:min-h-[48px] text-sm sm:text-sm md:text-base shadow-sm hover:shadow-md active:shadow-sm transition-all duration-200 shrink-0 w-full sm:w-auto touch-manipulation"
+            className="bg-[#008060] hover:bg-[#006b51] active:bg-[#005d47] text-white px-6 py-2 rounded-full font-semibold disabled:opacity-50 disabled:cursor-not-allowed min-h-[40px] text-sm shadow-sm hover:shadow-md transition-all duration-200 shrink-0 w-full sm:w-auto touch-manipulation"
             aria-label={isPosting ? "Posting your message" : "Post your message"}
             aria-busy={isPosting}
           >
-            {isPosting ? "Posting..." : "Post"}
+            {isPosting ? "Posting…" : "Post"}
           </Button>
         </div>
       </CardContent>

@@ -87,6 +87,35 @@
   --surface-hover: rgba(249, 250, 251, 1);
 
   --white: rgba(255, 255, 255, 1);
+
+  /* === Redesign Design Tokens === */
+  /* Elevation */
+  --shadow-card: 0 1px 3px 0 rgb(0 0 0 / 0.06), 0 1px 2px -1px rgb(0 0 0 / 0.04);
+  --shadow-card-hover: 0 4px 12px -2px rgb(0 0 0 / 0.10), 0 2px 4px -1px rgb(0 0 0 / 0.06);
+  --shadow-panel: 0 10px 24px -4px rgb(0 0 0 / 0.10), 0 4px 8px -2px rgb(0 0 0 / 0.06);
+
+  /* Brand tokens */
+  --brand-primary: #008060;
+  --brand-primary-dark: #006b51;
+  --brand-primary-light: #e6f5f0;
+  --brand-primary-light-hover: #d0ede4;
+  --brand-accent: #A6CE39;
+
+  /* Surface tokens */
+  --surface-card: #ffffff;
+  --surface-subtle: #f7faf8;
+  --surface-accent: #f0faf6;
+
+  /* Border tokens */
+  --border-subtle: #eef2ef;
+  --border-default: #d4e4dc;
+
+  /* Radius tokens */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 20px;
+  --radius-pill: 9999px;
 }
 
 /* Responsive Font Scaling for Large Screens & Projection */

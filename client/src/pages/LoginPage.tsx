@@ -94,9 +94,18 @@ export const LoginPage = (): JSX.Element => {
         const redirectUrl = params.get('redirect');
         const sessionRedirect = sessionStorage.getItem('redirectAfterLogin');
 
-        if (redirectUrl) {
+        const isSafeRedirect = (url: string) => {
+          try {
+            const decoded = decodeURIComponent(url);
+            return decoded.startsWith('/') && !decoded.startsWith('//');
+          } catch {
+            return false;
+          }
+        };
+
+        if (redirectUrl && isSafeRedirect(redirectUrl)) {
           setLocation(decodeURIComponent(redirectUrl));
-        } else if (sessionRedirect) {
+        } else if (sessionRedirect && isSafeRedirect(sessionRedirect)) {
           sessionStorage.removeItem('redirectAfterLogin');
           setLocation(sessionRedirect);
         } else {

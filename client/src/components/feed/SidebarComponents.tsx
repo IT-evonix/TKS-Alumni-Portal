@@ -2,6 +2,7 @@ import React from "react";
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import { AlumniPrideVideo } from "@/components/common/AlumniPrideVideo";
+import { Briefcase } from "lucide-react";
 
 interface Event {
     id: string;
@@ -47,15 +48,16 @@ interface SidebarSectionProps {
 }
 
 const SidebarSection: React.FC<SidebarSectionProps> = ({ title, viewAllPath, onViewAll, children, className = "" }) => (
-    <div className={`pb-6 ${className}`}>
-        <div className="flex items-center justify-between mb-4 xl:mb-5">
-            <h3 className="font-semibold text-gray-900 text-base xl:text-lg">{title}</h3>
+    <div className={`bg-white rounded-[14px] p-4 ${className}`} style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+        <div className="flex items-center justify-between mb-3">
+            <h3 className="font-semibold text-gray-900 text-[13px]">{title}</h3>
             <button
                 onClick={onViewAll}
-                className="text-[#008060] text-sm hover:text-[#007055] font-medium flex items-center gap-1 transition-colors group"
+                className="text-[12px] font-medium flex items-center gap-0.5 transition-colors group hover:opacity-80"
+                style={{ color: 'var(--brand-primary)' }}
             >
                 <span>View all</span>
-                <span className="transition-transform group-hover:translate-x-1">→</span>
+                <span className="transition-transform group-hover:translate-x-0.5">→</span>
             </button>
         </div>
         {children}
@@ -82,73 +84,61 @@ export const SidebarEvents: React.FC<{
         return (
             <div
                 key={event.id}
-                className={`${isMobile ? 'min-w-[280px] sm:min-w-[320px] snap-center' : ''} bg-gradient-to-br from-gray-50 to-white rounded-xl p-3 xl:p-5 hover:shadow-md transition-all duration-200 border border-gray-100 group`}
+                className={`${isMobile ? 'min-w-[280px] sm:min-w-[300px] snap-center' : ''} rounded-xl p-3 hover:shadow-sm transition-all duration-200 group cursor-pointer`}
+                style={{ border: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
                 onClick={() => onNavigate(`/events#event-${event.id}`)}
             >
-                <div className="flex items-start gap-2 xl:gap-3 cursor-pointer mb-3">
-                    <div className="text-center min-w-[3rem] bg-white rounded-lg p-1.5 shadow-sm border border-gray-50">
-                        <div className="text-[10px] xl:text-xs text-gray-500 font-medium uppercase">
+                <div className="flex items-start gap-3 mb-3">
+                    {/* Brand date box */}
+                    <div className="w-10 h-10 flex flex-col items-center justify-center rounded-lg flex-shrink-0 text-white" style={{ background: 'var(--brand-primary)' }}>
+                        <span className="text-[9px] font-semibold uppercase leading-none">
                             {new Date(event.event_date).toLocaleDateString('en-US', { month: 'short' })}
-                        </div>
-                        <div className="text-lg xl:text-xl font-bold text-[#008060]">
+                        </span>
+                        <span className="text-[15px] font-bold leading-none mt-0.5">
                             {new Date(event.event_date).getDate()}
-                        </div>
+                        </span>
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-xs xl:text-sm text-gray-900 mb-1 line-clamp-2 group-hover:text-[#008060] transition-colors">
+                        <h4 className="font-medium text-[13px] text-gray-900 mb-0.5 line-clamp-2 group-hover:text-[#008060] transition-colors">
                             {event.title}
                         </h4>
-                        <div className="text-[10px] xl:text-xs text-gray-600 flex flex-col gap-0.5">
-                            <span>{event.event_time || new Date(event.event_date).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}</span>
-                            <span className="truncate">{event.is_virtual ? '🌐 Virtual' : `📍 ${event.location || event.venue}`}</span>
-                        </div>
+                        <p className="text-[11px] text-gray-500 truncate">
+                            {event.is_virtual ? '🌐 Virtual' : `📍 ${event.location || event.venue || 'TBD'}`}
+                        </p>
                     </div>
                 </div>
 
                 {!isPast ? (
                     isRegistrationClosed ? (
-                        <div className="w-full py-1.5 bg-orange-50 text-orange-700 text-center text-[10px] xl:text-xs rounded-lg font-medium">
+                        <div className="w-full py-1 bg-orange-50 text-orange-600 text-center text-[10px] rounded-full font-medium border border-orange-100">
                             Registration Closed
                         </div>
                     ) : (
-                        <div className="flex gap-2">
-                            <Button
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); onRSVP(event.id, 'attending'); }}
-                                disabled={isRsvping}
-                                className={`flex-1 text-[10px] xl:text-xs py-1.5 h-auto rounded-lg transition-all ${userRsvpStatus === 'attending'
-                                    ? 'bg-[#008060] text-white'
-                                    : 'bg-white text-[#008060] border border-[#008060] hover:bg-[#008060]/5'
-                                    }`}
-                            >
-                                {isRsvping ? '...' : userRsvpStatus === 'attending' ? '✓ Going' : 'Going'}
-                            </Button>
-                            <Button
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); onRSVP(event.id, 'maybe'); }}
-                                disabled={isRsvping}
-                                className={`flex-1 text-[10px] xl:text-xs py-1.5 h-auto rounded-lg transition-all ${userRsvpStatus === 'maybe'
-                                    ? 'bg-blue-500 text-white'
-                                    : 'bg-white text-blue-500 border border-blue-500 hover:bg-blue-50'
-                                    }`}
-                            >
-                                {isRsvping ? '...' : userRsvpStatus === 'maybe' ? '✓ Maybe' : 'Maybe'}
-                            </Button>
-                            <Button
-                                size="sm"
-                                onClick={(e) => { e.stopPropagation(); onRSVP(event.id, 'not_attending'); }}
-                                disabled={isRsvping}
-                                className={`flex-1 text-[10px] xl:text-xs py-1.5 h-auto rounded-lg transition-all ${userRsvpStatus === 'not_attending'
-                                    ? 'bg-gray-500 text-white'
-                                    : 'bg-white text-gray-500 border border-gray-300 hover:bg-gray-50'
-                                    }`}
-                            >
-                                {isRsvping ? '...' : userRsvpStatus === 'not_attending' ? '✓ No' : 'No'}
-                            </Button>
+                        <div className="flex gap-1.5">
+                            {(['attending', 'maybe', 'not_attending'] as const).map((status) => {
+                                const labels: Record<string, string> = { attending: 'Going', maybe: 'Maybe', not_attending: 'No' };
+                                const activeStyles: Record<string, string> = {
+                                    attending: 'bg-[#008060] text-white border-[#008060]',
+                                    maybe: 'bg-blue-500 text-white border-blue-500',
+                                    not_attending: 'bg-gray-400 text-white border-gray-400',
+                                };
+                                const isActive = userRsvpStatus === status;
+                                return (
+                                    <Button
+                                        key={status}
+                                        size="sm"
+                                        onClick={(e) => { e.stopPropagation(); onRSVP(event.id, status); }}
+                                        disabled={isRsvping}
+                                        className={`flex-1 text-[10px] h-7 rounded-full border transition-all font-medium ${isActive ? activeStyles[status] : 'bg-white text-gray-600 border-gray-200 hover:border-[#008060] hover:text-[#008060]'}`}
+                                    >
+                                        {isRsvping ? '…' : isActive ? `✓ ${labels[status]}` : labels[status]}
+                                    </Button>
+                                );
+                            })}
                         </div>
                     )
                 ) : (
-                    <div className="w-full py-1.5 bg-gray-100 text-gray-500 text-center text-[10px] xl:text-xs rounded-lg font-medium">
+                    <div className="w-full py-1 bg-gray-100 text-gray-400 text-center text-[10px] rounded-full font-medium">
                         Ended
                     </div>
                 )}
@@ -177,13 +167,13 @@ export const SidebarEvents: React.FC<{
     }
 
     return (
-        <SidebarSection title="Upcoming Events" viewAllPath="/events" onViewAll={() => onNavigate("/events")} className="border-b border-gray-100 mb-6">
+        <SidebarSection title="Upcoming Events" viewAllPath="/events" onViewAll={() => onNavigate("/events")}>
             {events.length > 0 ? (
-                <div className="space-y-4">
+                <div className="space-y-2">
                     {events.slice(0, 3).map(renderEventCard)}
                 </div>
             ) : (
-                <p className="text-sm text-gray-500 text-center py-8">No upcoming events</p>
+                <p className="text-xs text-gray-400 text-center py-4">No upcoming events</p>
             )}
         </SidebarSection>
     );
@@ -204,28 +194,29 @@ export const SidebarJobs: React.FC<{
         return (
             <div
                 key={job.id}
-                className={`${isMobile ? 'min-w-[280px] sm:min-w-[320px] snap-center' : ''} bg-gradient-to-br from-gray-50 to-white rounded-xl p-3 xl:p-5 hover:shadow-md transition-all duration-200 border border-gray-100 cursor-pointer group`}
+                className={`${isMobile ? 'min-w-[260px] sm:min-w-[300px] snap-center' : ''} rounded-xl p-3 hover:shadow-sm transition-all duration-200 border cursor-pointer group`}
+                style={{ border: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
                 onClick={() => onNavigate(`/job-portal?jobId=${job.id}`)}
             >
-                <div className="flex items-center gap-2 xl:gap-3 mb-3">
-                    <div className="w-10 h-10 xl:w-12 xl:h-12 bg-white rounded-xl flex items-center justify-center shadow-sm group-hover:scale-110 transition-transform border border-gray-50">
-                        <span className="text-xl xl:text-2xl">💼</span>
+                <div className="flex items-center gap-2.5 mb-3">
+                    <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0" style={{ background: 'var(--brand-primary-light)' }}>
+                        <Briefcase className="w-4 h-4" style={{ color: 'var(--brand-primary)' }} />
                     </div>
                     <div className="flex-1 min-w-0">
-                        <h4 className="font-semibold text-xs xl:text-sm text-gray-900 truncate group-hover:text-[#008060] transition-colors">{job.title}</h4>
-                        <p className="text-[10px] xl:text-xs text-gray-600 truncate">{job.company} | {job.location}</p>
+                        <h4 className="font-medium text-[13px] text-gray-900 truncate group-hover:text-[#008060] transition-colors">{job.title}</h4>
+                        <p className="text-[11px] text-gray-500 truncate">{job.company} · {job.location}</p>
                     </div>
                 </div>
                 <Button
                     size="sm"
                     onClick={(e) => { e.stopPropagation(); onApply(job.id); }}
                     disabled={hasApplied || isApplying}
-                    className={`w-full text-[10px] xl:text-xs py-1.5 h-auto rounded-lg transition-all ${hasApplied
-                        ? 'bg-green-500 text-white'
-                        : 'bg-[#008060] text-white hover:bg-[#007055]'
+                    className={`w-full text-[11px] h-7 rounded-full font-medium transition-all ${hasApplied
+                        ? 'bg-green-500 text-white border-green-500'
+                        : 'bg-[#008060] text-white hover:bg-[#006b51]'
                         }`}
                 >
-                    {isApplying ? 'Applying...' : hasApplied ? '✓ Applied' : 'Apply Now'}
+                    {isApplying ? 'Applying…' : hasApplied ? '✓ Applied' : 'Apply Now'}
                 </Button>
             </div>
         );
@@ -246,9 +237,9 @@ export const SidebarJobs: React.FC<{
     }
 
     return (
-        <SidebarSection title="Recent Jobs" viewAllPath="/job-portal" onViewAll={() => onNavigate("/job-portal")} className="border-b border-gray-100 mb-6">
-            <div className="space-y-4">
-                {jobs.length > 0 ? jobs.slice(0, 3).map(renderJobCard) : <p className="text-sm text-gray-500 text-center py-4">No jobs found</p>}
+        <SidebarSection title="Recent Jobs" viewAllPath="/job-portal" onViewAll={() => onNavigate("/job-portal")}>
+            <div className="space-y-2">
+                {jobs.length > 0 ? jobs.slice(0, 3).map(renderJobCard) : <p className="text-xs text-gray-400 text-center py-4">No jobs found</p>}
             </div>
         </SidebarSection>
     );
@@ -276,9 +267,9 @@ export const SidebarConnections: React.FC<{
         };
 
         const getMatchDetails = (score: number) => {
-            if (score >= 40) return { text: 'High match', color: 'text-green-600', icon: '🎯' };
-            if (score >= 25) return { text: 'Good match', color: 'text-blue-600', icon: '✨' };
-            return { text: 'Potential', color: 'text-gray-600', icon: '💫' };
+            if (score >= 40) return { text: 'High match', bg: 'bg-green-50', color: 'text-green-700' };
+            if (score >= 25) return { text: 'Good match', bg: 'bg-blue-50', color: 'text-blue-600' };
+            return { text: 'Potential', bg: 'bg-gray-100', color: 'text-gray-500' };
         };
 
         const match = getMatchDetails(connection.connection_score || 0);
@@ -286,46 +277,45 @@ export const SidebarConnections: React.FC<{
         return (
             <div
                 key={connection.user_id || connection.id}
-                className={`${isMobile ? 'min-w-[260px] sm:min-w-[280px] snap-center' : 'flex flex-col gap-2 p-3 xl:p-4'} bg-gradient-to-br from-gray-50 to-white rounded-xl border border-gray-100 hover:shadow-md transition-all duration-200 group`}
+                className={`${isMobile ? 'min-w-[240px] sm:min-w-[260px] snap-center' : ''} rounded-xl p-3 transition-all duration-200 group`}
+                style={{ border: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
             >
-                <div className={`flex ${isMobile ? 'flex-col items-center text-center p-4' : 'items-start'} gap-3`}>
+                <div className={`flex ${isMobile ? 'flex-col items-center text-center' : 'items-center'} gap-3 mb-2.5`}>
                     <Avatar
-                        className={`${isMobile ? 'w-16 h-16' : 'w-12 h-12'} ring-2 ring-white shadow-sm cursor-pointer group-hover:ring-[#008060]/20 transition-all`}
+                        className="w-10 h-10 ring-2 cursor-pointer transition-all flex-shrink-0"
+                        style={{ '--tw-ring-color': 'var(--border-default)' } as React.CSSProperties}
                         onClick={() => onNavigate(`/profile/${connection.user_id || connection.id}`)}
                     >
                         <AvatarImage src={getConnectionAvatar()} alt={connectionName} />
-                        <AvatarFallback className="bg-[#008060] text-white">
+                        <AvatarFallback className="bg-[#008060] text-white text-xs">
                             {connectionName.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
                         </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0 w-full">
                         <h4
-                            className="font-semibold text-sm text-gray-900 truncate mb-0.5 cursor-pointer hover:text-[#008060] hover:underline transition-colors"
+                            className="font-semibold text-[13px] text-gray-900 truncate cursor-pointer hover:text-[#008060] transition-colors"
                             onClick={() => onNavigate(`/profile/${connection.user_id || connection.id}`)}
                         >
                             {connectionName}
                         </h4>
-                        <p className="text-[10px] xl:text-xs text-gray-500 line-clamp-1 mb-1.5">
-                            {connection.current_role || ''} {connection.current_company && `at ${connection.current_company}`}
+                        <p className="text-[11px] text-gray-500 truncate">
+                            {connection.current_role || ''}{connection.current_company ? ` · ${connection.current_company}` : ''}
                         </p>
                         {connection.connection_score > 0 && (
-                            <div className={`flex items-center gap-1.5 mb-2 ${isMobile ? 'justify-center' : ''}`}>
-                                <span className="text-xs">{match.icon}</span>
-                                <span className={`text-[10px] xl:text-xs font-medium ${match.color}`}>{match.text}</span>
-                            </div>
+                            <span className={`inline-block mt-1 text-[10px] font-medium px-2 py-0.5 rounded-full ${match.bg} ${match.color}`}>
+                                {match.text}
+                            </span>
                         )}
                     </div>
                 </div>
-                <div className={`${isMobile ? 'px-4 pb-4' : ''}`}>
-                    <Button
-                        size="sm"
-                        onClick={() => onConnect(connection.user_id || connection.id, isSent)}
-                        variant={isSent ? "outline" : "brand"}
-                        className="w-full text-[10px] xl:text-xs py-1.5 h-auto rounded-lg font-medium"
-                    >
-                        {isSent ? 'Withdraw' : 'Connect'}
-                    </Button>
-                </div>
+                <Button
+                    size="sm"
+                    onClick={() => onConnect(connection.user_id || connection.id, isSent)}
+                    variant={isSent ? "outline" : "brand"}
+                    className="w-full text-[11px] h-7 rounded-full font-medium"
+                >
+                    {isSent ? 'Withdraw' : 'Connect'}
+                </Button>
             </div>
         );
     };
@@ -346,8 +336,8 @@ export const SidebarConnections: React.FC<{
 
     return (
         <SidebarSection title="You May Know" viewAllPath="/connections" onViewAll={() => onNavigate("/connections")}>
-            <div className="space-y-4">
-                {connections.length > 0 ? connections.slice(0, 3).map(renderConnectionCard) : <p className="text-sm text-gray-500 text-center py-8">No suggestions yet</p>}
+            <div className="space-y-2">
+                {connections.length > 0 ? connections.slice(0, 3).map(renderConnectionCard) : <p className="text-xs text-gray-400 text-center py-4">No suggestions yet</p>}
             </div>
         </SidebarSection>
     );

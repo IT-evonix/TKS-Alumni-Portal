@@ -2,6 +2,7 @@ import { Router } from "express";
 import { supabase } from "../supabase";
 import { transformToCamelCase } from "../utils/case-transform";
 import { experienceValidationSchema, skillValidationSchema } from "../../shared/validation";
+import { requireAuth } from "../middleware/auth";
 
 const router = Router();
 
@@ -567,7 +568,7 @@ router.delete("/skills/:id", async (req, res) => {
 });
 
 // Get skill suggestions (for autocomplete)
-router.get("/skills/suggestions", async (req, res) => {
+router.get("/skills/suggestions", requireAuth, async (req, res) => {
     try {
         const { query } = req.query;
 
