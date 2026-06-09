@@ -7,6 +7,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeading } from "@/components/common/PageHeading";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
   EnhancedNotification,
@@ -234,7 +235,7 @@ export const NotificationHistoryPage: React.FC = () => {
     <AppLayout>
       <div className="max-w-4xl mx-auto p-4 sm:p-6 lg:p-8">
         <div className="mb-6">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-2">Notification History</h1>
+          <PageHeading firstWord="Notification" secondWord="History" className="mb-0" />
           <p className="text-sm sm:text-base text-gray-600">View and manage all your notifications</p>
         </div>
 

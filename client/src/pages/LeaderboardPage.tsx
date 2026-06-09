@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeading } from "@/components/common/PageHeading";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -121,9 +122,7 @@ export function LeaderboardPage() {
           <div className="inline-flex items-center justify-center p-4 bg-emerald-100 rounded-full mb-2">
             <Trophy className="w-10 h-10 text-emerald-600" />
           </div>
-          <h1 className="text-4xl md:text-5xl font-black bg-gradient-to-r from-emerald-600 to-teal-500 bg-clip-text text-transparent">
-            Hall of Fame
-          </h1>
+          <PageHeading firstWord="Hall of" secondWord="Fame" className="mb-0" />
           <p className="text-slate-500 text-lg max-w-xl mx-auto">
             Discover the most active and inspiring members of our alumni community. Compete for the most points or collect the highest value badges!
           </p>

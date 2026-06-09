@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { PenSquare, BookOpen, ChevronLeft, ChevronRight, Edit } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeading } from "@/components/common/PageHeading";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BlogCard } from "@/components/blogs/BlogCard";
@@ -208,10 +209,7 @@ export function BlogsPage() {
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
-              <BookOpen className="h-6 w-6 text-[#008060]" />
-              Blogs
-            </h1>
+            <PageHeading firstWord="TKS Alumni" secondWord="Blogs" className="mb-0" />
             <p className="text-sm text-gray-500 mt-0.5">Insights and stories from the TKS community</p>
           </div>
           {user && (

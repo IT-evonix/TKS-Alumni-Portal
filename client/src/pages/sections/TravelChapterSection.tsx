@@ -13,6 +13,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { LoadingState } from "@/components/common/LoadingState";
+import { PageHeading } from "@/components/common/PageHeading";
 import maplibregl from 'maplibre-gl';
 import { supabase } from "@/lib/supabase";
 import { generateCoordinatesForCity } from "@/components/TravelChaptersMap";
@@ -208,7 +209,7 @@ export function TravelChapterSection({
       {/* ── Header & Filters ──────────────────────────────────────────────────── */}
       <div className={`lg:sticky lg:top-0 lg:z-50 bg-white pt-6 flex ${sidebarMode ? 'flex-col gap-4 items-start px-6' : 'flex-col xl:flex-row xl:items-center px-4 sm:px-6'} justify-between mb-6 border-b border-gray-100 pb-6`}>
         <div>
-          <h2 className="text-2xl sm:text-3xl font-bold text-gray-900 tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>Travel Chapters</h2>
+          <PageHeading firstWord="Travel" secondWord="Chapters" className="mb-0" />
         </div>
 
         <div className={`flex flex-col sm:flex-row items-center gap-3 w-full ${sidebarMode ? 'sm:flex-col items-stretch' : 'xl:w-auto justify-end'}`}>

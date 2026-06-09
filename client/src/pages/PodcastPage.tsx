@@ -1,6 +1,7 @@
 import React from "react";
 import { Mic2, Headphones, Play } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeading } from "@/components/common/PageHeading";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 
@@ -33,14 +34,9 @@ export function PodcastPage() {
     <AppLayout currentPage="podcast">
       <div className="max-w-3xl mx-auto py-10 px-4 space-y-8">
         {/* Header */}
-        <div className="flex items-center gap-4">
-          <div className="w-14 h-14 rounded-2xl bg-[#e6f5f0] flex items-center justify-center flex-shrink-0">
-            <Mic2 className="w-7 h-7 text-[#008060]" />
-          </div>
-          <div>
-            <h1 className="text-2xl font-bold text-gray-900">TKS Alumni Podcast</h1>
-            <p className="text-sm text-gray-500 mt-0.5">Stories, insights, and inspiration from the TKS alumni community.</p>
-          </div>
+        <div>
+          <PageHeading firstWord="Alumni" secondWord="Podcast" className="mb-0" />
+          <p className="text-sm text-gray-500 mt-1">Stories, insights, and inspiration from the TKS alumni community.</p>
         </div>
 
         {/* Coming Soon Banner */}

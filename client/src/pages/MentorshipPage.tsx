@@ -1,6 +1,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
+import { PageHeading } from '@/components/common/PageHeading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -113,7 +114,7 @@ export const MentorshipPage = (): JSX.Element => {
 
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900">Alumni Mentorship</h1>
+              <PageHeading firstWord="Alumni" secondWord="Mentorship" className="mb-0" />
               <p className="text-sm sm:text-base text-gray-600 mt-1">Connect with experienced alumni for guidance</p>
             </div>
             <Button

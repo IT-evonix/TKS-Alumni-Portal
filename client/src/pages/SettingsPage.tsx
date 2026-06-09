@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { PageHeading } from "@/components/common/PageHeading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -126,7 +127,7 @@ export const SettingsPage = (): JSX.Element => {
               <span className="text-xl">←</span>
               <span className="sm:inline">Back</span>
             </Button>
-            <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 mb-2">Settings</h1>
+            <PageHeading firstWord="Account" secondWord="Settings" className="mb-0" />
             <p className="text-sm sm:text-base text-gray-600">Manage your account and preferences</p>
           </div>
         </div>

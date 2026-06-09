@@ -20,6 +20,7 @@ import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHan
 import { validateTextLength } from "@/utils/validation";
 import { SkeletonPostCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
+import { PageHeading } from "@/components/common/PageHeading";
 
 export const FeedPage = (): JSX.Element => {
   const [postText, setPostText] = useState("");
@@ -1066,60 +1067,9 @@ export const FeedPage = (): JSX.Element => {
           <div className="min-h-full xl:pr-[316px] transition-all duration-300 overflow-x-hidden">
             <div className="max-w-[680px] mx-auto px-3 sm:px-4 md:px-5 pt-0 pb-4 sm:pb-5 md:pb-6 w-full">
 
-              {/* Welcome Hero Strip */}
-              <div
-                className="mb-4 rounded-2xl overflow-hidden"
-                style={{
-                  background: 'linear-gradient(135deg, #008060 0%, #006b51 60%, #005d47 100%)',
-                  border: '1px solid rgba(0,128,96,0.3)',
-                  boxShadow: 'var(--shadow-card)',
-                }}
-              >
-                <div className="px-5 sm:px-6 py-3.5 flex flex-row items-center justify-between gap-3">
-                  {/* Left: greeting + class badge */}
-                  <div className="flex flex-col gap-1 min-w-0">
-                    <h1 className="text-white font-bold text-[17px] sm:text-lg leading-tight truncate">
-                      {getGreeting()}, {firstName} 👋
-                    </h1>
-                    {graduationYear && (
-                      <span
-                        className="inline-flex items-center self-start px-2 py-0.5 rounded-full text-[12px] font-semibold leading-tight"
-                        style={{ background: 'rgba(166,206,57,0.25)', color: '#a6ce39', border: '1px solid rgba(166,206,57,0.35)' }}
-                      >
-                        Class of {graduationYear}
-                      </span>
-                    )}
-                  </div>
-                  {/* Right: streak + rank pills */}
-                  <div className="flex flex-row items-center gap-2 shrink-0">
-                    {streakDays >= 2 && (
-                      <div
-                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold"
-                        style={{ background: 'rgba(253,187,19,0.18)', color: '#fdbb13', border: '1px solid rgba(253,187,19,0.3)' }}
-                      >
-                        <Flame className="w-3.5 h-3.5 fill-[#fdbb13]" />
-                        <span>{streakDays}-day streak</span>
-                      </div>
-                    )}
-                    {globalRank > 0 && (
-                      <div
-                        className="flex items-center gap-1.5 px-3 py-1 rounded-full text-[12px] font-semibold"
-                        style={{ background: 'rgba(255,255,255,0.15)', color: 'white', border: '1px solid rgba(255,255,255,0.25)' }}
-                      >
-                        <Trophy className="w-3.5 h-3.5" />
-                        <span>#{globalRank} globally</span>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </div>
-
               {/* Alumni Feed header + Create Post */}
               <div className="mb-4 flex items-center justify-between">
-                <div className="flex items-center gap-3">
-                  <div className="w-1 h-6 rounded-full bg-[#008060]" />
-                  <h2 className="text-[17px] font-bold text-gray-900 dark:text-white tracking-tight">Alumni Feed</h2>
-                </div>
+                <PageHeading firstWord="Alumni" secondWord="Feed" className="mb-0" />
                 <Button
                   onClick={() => setShowPostModal(true)}
                   className="bg-[#008060] hover:bg-[#006b51] text-white font-semibold px-5 py-2 rounded-full shadow-sm transition-all flex items-center gap-2 text-sm"
