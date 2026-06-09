@@ -1,4 +1,5 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useMemo } from "react";
+import DOMPurify from "dompurify";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, Heart, Bookmark, Share2, Clock, Eye, Calendar, CheckCircle, XCircle, Edit } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
@@ -164,7 +165,20 @@ export function BlogDetailPage() {
   const formatDate = (date: string) =>
     new Date(date).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" });
 
-  // BUG 6 FIX: removed renderContent helper — whitespace-pre-wrap handles \n natively
+  // Sanitize HTML content from TipTap — memoized so it only runs when post.content changes
+  const safeContent = useMemo(() => {
+    if (!post?.content) return "";
+    // Allow safe HTML tags produced by TipTap; strip event handlers and dangerous attrs
+    return DOMPurify.sanitize(post.content, {
+      ALLOWED_TAGS: [
+        "p", "br", "strong", "em", "s", "u", "a", "ul", "ol", "li",
+        "h1", "h2", "h3", "h4", "blockquote", "pre", "code", "img",
+        "hr", "span", "div",
+      ],
+      ALLOWED_ATTR: ["href", "target", "rel", "src", "alt", "class"],
+      ADD_ATTR: ["target"],
+    });
+  }, [post?.content]);
 
   if (loading) {
     return (
@@ -346,11 +360,17 @@ export function BlogDetailPage() {
           </p>
         )}
 
-        {/* Content */}
-        {/* BUG 6 FIX: use whitespace-pre-wrap alone — no manual \n→<br> conversion */}
-        <div className="text-gray-800 leading-relaxed text-base whitespace-pre-wrap break-words">
-          {post.content}
-        </div>
+        {/* Content — rendered as sanitized HTML from TipTap */}
+        <div
+          className="prose prose-gray max-w-none text-base leading-relaxed
+            prose-headings:font-bold prose-headings:text-gray-900
+            prose-a:text-[#008060] prose-a:underline hover:prose-a:text-[#006b51]
+            prose-code:bg-gray-100 prose-code:rounded prose-code:px-1 prose-code:text-sm prose-code:font-mono
+            prose-pre:bg-gray-900 prose-pre:text-gray-100 prose-pre:rounded-lg prose-pre:p-4
+            prose-blockquote:border-l-4 prose-blockquote:border-[#008060] prose-blockquote:pl-4 prose-blockquote:italic prose-blockquote:text-gray-600
+            prose-img:rounded-lg prose-img:max-w-full"
+          dangerouslySetInnerHTML={{ __html: safeContent }}
+        />
 
         {/* Action bar */}
         <div className="flex items-center gap-3 py-4 border-t border-b border-gray-100">

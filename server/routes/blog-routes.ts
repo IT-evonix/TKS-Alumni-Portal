@@ -1,7 +1,30 @@
 import { Router } from "express";
+import multer from "multer";
 import { supabase } from "../supabase";
 
 const router = Router();
+
+// Multer: keep files in memory for Supabase Storage upload
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 5 * 1024 * 1024 }, // 5 MB
+  fileFilter: (_req, file, cb) => {
+    if (file.mimetype.startsWith("image/")) {
+      cb(null, true);
+    } else {
+      cb(new Error("Only image files are allowed"));
+    }
+  },
+});
+
+// Atomic counter helper — uses increment_blog_counter SQL function
+async function atomicCounter(postId: string, col: string, delta: number) {
+  await supabase.rpc("increment_blog_counter", {
+    p_post_id: postId,
+    p_col: col,
+    p_delta: delta,
+  });
+}
 
 // ==================== UTILITIES ====================
 
@@ -49,6 +72,44 @@ async function isAdminUser(userId: string): Promise<boolean> {
     .maybeSingle();
   return !!(data?.is_admin || data?.user_role === "administrator");
 }
+
+// ==================== COVER IMAGE UPLOAD ====================
+
+// POST /api/blogs/upload-cover — upload cover image to Supabase Storage
+router.post("/upload-cover", (req: any, res: any, next: any) => {
+  // Run multer inline so fileFilter/size errors are catchable in the same handler
+  upload.single("image")(req, res, async (err) => {
+    if (err) {
+      // MulterError (LIMIT_FILE_SIZE etc.) or fileFilter error
+      return res.status(400).json({ error: err.message || "File upload error" });
+    }
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "Unauthorized" });
+      if (!req.file) return res.status(400).json({ error: "No image file provided" });
+
+      // Sanitize filename: strip path traversal, keep extension only
+      const originalName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
+      const ext = (originalName.split(".").pop() || "jpg").toLowerCase().substring(0, 5);
+      const fileName = `${userId}-${Date.now()}.${ext}`;
+
+      const { error: uploadError } = await supabase.storage
+        .from("blog-covers")
+        .upload(fileName, req.file.buffer, {
+          contentType: req.file.mimetype,
+          upsert: false,
+        });
+
+      if (uploadError) throw uploadError;
+
+      const { data: urlData } = supabase.storage.from("blog-covers").getPublicUrl(fileName);
+      res.json({ url: urlData.publicUrl });
+    } catch (error: any) {
+      console.error("Cover image upload error:", error);
+      res.status(500).json({ error: error.message || "Failed to upload image" });
+    }
+  });
+});
 
 // ==================== PUBLIC READS ====================
 
@@ -275,12 +336,8 @@ router.get("/:slug", async (req, res) => {
       return res.status(404).json({ error: "Post not found" });
     }
 
-    // Increment view count (fire and forget — not awaited intentionally)
-    supabase
-      .from("blog_posts")
-      .update({ views_count: (post.views_count || 0) + 1 })
-      .eq("id", post.id)
-      .then(() => {});
+    // Increment view count atomically (fire and forget)
+    atomicCounter(post.id, "views_count", 1).catch(() => {});
 
     let viewerHasLiked = false;
     let viewerHasBookmarked = false;
@@ -512,47 +569,29 @@ router.post("/:id/publish", async (req, res) => {
   }
 });
 
-// POST /api/blogs/:id/like — toggle like
+// POST /api/blogs/:id/like — toggle like (atomic counter)
 router.post("/:id/like", async (req, res) => {
   try {
     const userId = req.headers["user-id"] as string;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     const { id } = req.params;
 
-    // Verify post exists
-    const { data: post, error: postErr } = await supabase
-      .from("blog_posts")
-      .select("id, likes_count")
-      .eq("id", id)
-      .maybeSingle();
-    if (postErr) throw postErr;
+    const { data: post } = await supabase.from("blog_posts").select("id").eq("id", id).maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
 
     const { data: existing } = await supabase
-      .from("blog_likes")
-      .select("id")
-      .eq("post_id", id)
-      .eq("user_id", userId)
-      .maybeSingle();
+      .from("blog_likes").select("id").eq("post_id", id).eq("user_id", userId).maybeSingle();
 
     if (existing) {
-      // BUG 2 FIX: removed dead rpc call; just delete and update counter
       const { error: delErr } = await supabase.from("blog_likes").delete().eq("id", existing.id);
       if (delErr) throw delErr;
-      await supabase
-        .from("blog_posts")
-        .update({ likes_count: Math.max(0, (post.likes_count || 0) - 1) })
-        .eq("id", id);
+      await atomicCounter(id, "likes_count", -1);
       return res.json({ liked: false });
     }
 
-    // BUG 2 FIX: check insert error
     const { error: insErr } = await supabase.from("blog_likes").insert({ post_id: id, user_id: userId });
     if (insErr) throw insErr;
-    await supabase
-      .from("blog_posts")
-      .update({ likes_count: (post.likes_count || 0) + 1 })
-      .eq("id", id);
+    await atomicCounter(id, "likes_count", 1);
     res.json({ liked: true });
   } catch (error) {
     console.error("Toggle blog like error:", error);
@@ -560,46 +599,29 @@ router.post("/:id/like", async (req, res) => {
   }
 });
 
-// POST /api/blogs/:id/bookmark — toggle bookmark
+// POST /api/blogs/:id/bookmark — toggle bookmark (atomic counter)
 router.post("/:id/bookmark", async (req, res) => {
   try {
     const userId = req.headers["user-id"] as string;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     const { id } = req.params;
 
-    // BUG 3 FIX: verify post exists before proceeding
-    const { data: post, error: postErr } = await supabase
-      .from("blog_posts")
-      .select("id, bookmarks_count")
-      .eq("id", id)
-      .maybeSingle();
-    if (postErr) throw postErr;
+    const { data: post } = await supabase.from("blog_posts").select("id").eq("id", id).maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
 
     const { data: existing } = await supabase
-      .from("blog_bookmarks")
-      .select("id")
-      .eq("post_id", id)
-      .eq("user_id", userId)
-      .maybeSingle();
+      .from("blog_bookmarks").select("id").eq("post_id", id).eq("user_id", userId).maybeSingle();
 
     if (existing) {
       const { error: delErr } = await supabase.from("blog_bookmarks").delete().eq("id", existing.id);
       if (delErr) throw delErr;
-      await supabase
-        .from("blog_posts")
-        .update({ bookmarks_count: Math.max(0, (post.bookmarks_count || 0) - 1) })
-        .eq("id", id);
+      await atomicCounter(id, "bookmarks_count", -1);
       return res.json({ bookmarked: false });
     }
 
-    // BUG 3 FIX: check insert error
     const { error: insErr } = await supabase.from("blog_bookmarks").insert({ post_id: id, user_id: userId });
     if (insErr) throw insErr;
-    await supabase
-      .from("blog_posts")
-      .update({ bookmarks_count: (post.bookmarks_count || 0) + 1 })
-      .eq("id", id);
+    await atomicCounter(id, "bookmarks_count", 1);
     res.json({ bookmarked: true });
   } catch (error) {
     console.error("Toggle blog bookmark error:", error);
@@ -648,10 +670,7 @@ router.post("/:id/comments", async (req, res) => {
       .single();
     if (error) throw error;
 
-    await supabase
-      .from("blog_posts")
-      .update({ comments_count: (post.comments_count || 0) + 1 })
-      .eq("id", id);
+    await atomicCounter(id, "comments_count", 1);
 
     // BUG 1 FIX: nested join for author info
     const { data: fullComment } = await supabase
@@ -693,7 +712,7 @@ router.delete("/comments/:commentId", async (req, res) => {
     const adminFlag = await isAdminUser(userId);
     if (comment.author_id !== userId && !adminFlag) return res.status(403).json({ error: "Forbidden" });
 
-    // BUG 7 FIX: count active child replies before soft-deleting
+    // Count active replies BEFORE any soft-delete
     const { data: activeReplies } = await supabase
       .from("blog_comments")
       .select("id")
@@ -701,26 +720,14 @@ router.delete("/comments/:commentId", async (req, res) => {
       .eq("is_active", true);
     const replyCount = (activeReplies || []).length;
 
-    // Soft-delete the comment and all its active replies
-    await supabase.from("blog_comments").update({ is_active: false }).eq("id", commentId);
+    // Soft-delete replies first (while their is_active is still true), then parent
     if (replyCount > 0) {
-      await supabase
-        .from("blog_comments")
-        .update({ is_active: false })
-        .eq("parent_id", commentId)
-        .eq("is_active", true);
+      await supabase.from("blog_comments").update({ is_active: false }).eq("parent_id", commentId);
     }
+    await supabase.from("blog_comments").update({ is_active: false }).eq("id", commentId);
 
-    // Decrement count for parent + replies
-    const { data: postRow } = await supabase
-      .from("blog_posts")
-      .select("comments_count")
-      .eq("id", comment.post_id)
-      .maybeSingle();
-    if (postRow) {
-      const newCount = Math.max(0, (postRow.comments_count || 0) - 1 - replyCount);
-      await supabase.from("blog_posts").update({ comments_count: newCount }).eq("id", comment.post_id);
-    }
+    // Atomically decrement comments_count by parent + reply count
+    await atomicCounter(comment.post_id, "comments_count", -(1 + replyCount));
 
     res.json({ success: true });
   } catch (error) {
