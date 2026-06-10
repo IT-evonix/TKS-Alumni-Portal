@@ -15,6 +15,7 @@ interface BlogCardProps {
 
 export function BlogCard({ post, onLike, onBookmark, showStatus = false }: BlogCardProps) {
   const [, setLocation] = useLocation();
+  const [coverError, setCoverError] = React.useState(false);
 
   const authorName = post.author
     ? `${post.author.first_name || ""} ${post.author.last_name || ""}`.trim() || post.author.username
@@ -36,7 +37,7 @@ export function BlogCard({ post, onLike, onBookmark, showStatus = false }: BlogC
   return (
     <Card className="group flex flex-col overflow-hidden border border-gray-200 hover:shadow-md transition-shadow duration-200 cursor-pointer h-full">
       {/* Cover image */}
-      {post.cover_image ? (
+      {post.cover_image && !coverError ? (
         <div
           className="relative w-full bg-gray-100 overflow-hidden"
           style={{ paddingTop: "56.25%" }}
@@ -46,7 +47,7 @@ export function BlogCard({ post, onLike, onBookmark, showStatus = false }: BlogC
             src={post.cover_image}
             alt={post.title}
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-            onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
+            onError={() => setCoverError(true)}
           />
         </div>
       ) : (

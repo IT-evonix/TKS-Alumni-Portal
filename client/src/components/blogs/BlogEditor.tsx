@@ -37,10 +37,12 @@ import { createLowlight, common } from "lowlight";
 const lowlight = createLowlight(common);
 
 // ── Validation schema ──────────────────────────────────────────────────────────
+const EXCERPT_LIMIT = 50;
+
 const blogPostSchema = z.object({
   title: z.string().min(5, "Title must be at least 5 characters").max(200),
-  excerpt: z.string().max(300, "Excerpt must be under 300 characters").optional(),
-  cover_image: z.string().url("Must be a valid URL").optional().or(z.literal("")),
+  excerpt: z.string().max(EXCERPT_LIMIT, `Excerpt must be under ${EXCERPT_LIMIT} characters`).optional(),
+  cover_image: z.string().optional().or(z.literal("")),
   category_id: z.string().optional(),
 });
 
@@ -144,7 +146,9 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
   // Track whether content was initialized to avoid overwriting on re-renders
   const editorInitialized = useRef(false);
 
-  const draftKey = editPost ? `blog_draft_${editPost.id}` : "blog_draft_new";
+  // Use a stable session-scoped key for new posts so concurrent tabs don't overwrite each other
+  const sessionDraftId = useRef<string>(Math.random().toString(36).substring(2, 9));
+  const draftKey = editPost ? `blog_draft_${editPost.id}` : `blog_draft_new_${sessionDraftId.current}`;
 
   const {
     register,
@@ -158,6 +162,13 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
     resolver: zodResolver(blogPostSchema),
     defaultValues: { title: "", excerpt: "", cover_image: "", category_id: "" },
   });
+
+  const CONTENT_MIN = 50;
+  const CONTENT_MAX = 1000;
+
+  // Tracked in state so React re-renders on every keystroke
+  const [contentText, setContentText] = useState("");
+  const [contentTouched, setContentTouched] = useState(false);
 
   // ── TipTap editor ──────────────────────────────────────────────────────────
   const editor = useEditor({
@@ -173,11 +184,20 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
         class: "prose prose-sm max-w-none min-h-[260px] p-3 focus:outline-none text-gray-800",
       },
     },
+    onUpdate({ editor }) {
+      const text = editor.getText();
+      setContentText(text);
+      setContentTouched(true);
+    },
   });
 
-  // Word count derived from editor HTML
-  const htmlContent = editor?.getHTML() ?? "";
-  const wordCount = htmlContent.replace(/<[^>]*>/g, " ").split(/\s+/).filter(Boolean).length;
+  const contentCharCount = contentText.length;
+  const contentOverLimit = contentCharCount > CONTENT_MAX;
+  const contentUnderMin = contentTouched && contentCharCount < CONTENT_MIN;
+  const contentInvalid = contentOverLimit || contentUnderMin;
+
+  // Word count derived from live contentText
+  const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
   const readingTime = Math.max(1, Math.ceil(wordCount / 200));
 
   const getHeaders = () => {
@@ -207,12 +227,15 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
       setCoverPreview(editPost.cover_image || "");
       setTags(editPost.tags || []);
       editor.commands.setContent(editPost.content || "");
+      setContentText(editor.getText());
     } else {
       reset({ title: "", excerpt: "", cover_image: "", category_id: "" });
       setTags([]);
       setCoverPreview("");
       editor.commands.setContent("");
+      setContentText("");
     }
+    setContentTouched(false);
 
     // Check localStorage for auto-saved draft
     const saved = localStorage.getItem(draftKey);
@@ -275,8 +298,12 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
       });
       setCoverPreview(parsed.cover_image || "");
       setTags(parsed.tags || []);
-      if (editor) editor.commands.setContent(parsed.content || "");
+      if (editor) {
+        editor.commands.setContent(parsed.content || "");
+        setContentText(editor.getText());
+      }
     } catch {}
+    setContentTouched(false);
     setDraftBanner(null);
   };
 
@@ -331,10 +358,10 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
   // ── Save / submit ─────────────────────────────────────────────────────────
   const savePost = async (data: BlogPostForm, status: "draft" | "pending_review") => {
     const content = editor?.getHTML() ?? "";
-    const isEmpty = !content || content === "<p></p>" || content.trim() === "";
-    if (isEmpty) throw new Error("Content must be at least 100 characters");
-    const textContent = content.replace(/<[^>]*>/g, "").trim();
-    if (textContent.length < 100) throw new Error("Content must be at least 100 characters");
+    const textContent = editor?.getText().trim() ?? "";
+    setContentTouched(true);
+    if (textContent.length < CONTENT_MIN) throw new Error(`Content must be at least ${CONTENT_MIN} characters (currently ${textContent.length})`);
+    if (textContent.length > CONTENT_MAX) throw new Error(`Content must be ${CONTENT_MAX} characters or fewer (currently ${textContent.length})`);
 
     const body = {
       ...data,
@@ -421,7 +448,9 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
         <DialogHeader>
           <DialogTitle>{editPost ? "Edit Blog Post" : "Write a Blog Post"}</DialogTitle>
           <DialogDescription>
-            Share your knowledge and experiences with the TKS community.
+            {editPost && ["published", "pending_review"].includes(editPost.status)
+              ? "Saving changes will move this post back to draft and require re-approval."
+              : "Share your knowledge and experiences with the TKS community."}
           </DialogDescription>
         </DialogHeader>
 
@@ -464,14 +493,20 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
 
           {/* Excerpt */}
           <div className="space-y-1">
-            <Label htmlFor="excerpt">
-              Excerpt <span className="text-gray-400 font-normal">(optional)</span>
-            </Label>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="excerpt">
+                Excerpt <span className="text-gray-400 font-normal">(optional)</span>
+              </Label>
+              <span className={`text-xs tabular-nums ${(watch("excerpt")?.length ?? 0) > EXCERPT_LIMIT ? "text-red-500 font-medium" : (watch("excerpt")?.length ?? 0) >= EXCERPT_LIMIT * 0.8 ? "text-amber-500" : "text-gray-400"}`}>
+                {watch("excerpt")?.length ?? 0}/{EXCERPT_LIMIT}
+              </span>
+            </div>
             <Textarea
               id="excerpt"
               placeholder="A short summary that appears in the blog listing..."
               rows={2}
               {...register("excerpt")}
+              maxLength={EXCERPT_LIMIT}
               className={`resize-none ${errors.excerpt ? "border-red-400" : ""}`}
             />
             {errors.excerpt && <p className="text-xs text-red-500">{errors.excerpt.message}</p>}
@@ -542,7 +577,6 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
                       src={coverPreview}
                       alt="Cover preview"
                       className="w-full h-full object-cover"
-                      onError={() => setCoverPreview("")}
                     />
                     <button
                       type="button"
@@ -595,13 +629,22 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
               <Label>Content *</Label>
               <span className="text-xs text-gray-400">{wordCount} words · ~{readingTime} min read</span>
             </div>
-            <div className="border border-gray-200 rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-[#008060]/30 focus-within:border-[#008060]">
+            <div className={`border rounded-md overflow-hidden focus-within:ring-2 focus-within:ring-[#008060]/30 focus-within:border-[#008060] ${contentInvalid ? "border-red-400" : "border-gray-200"}`}>
               {editor && <EditorToolbar editor={editor} />}
               <EditorContent editor={editor} />
             </div>
-            <p className="text-xs text-gray-400">
-              Use the toolbar to format your content. Minimum 100 characters required.
-            </p>
+            <div className="flex items-center justify-between">
+              {contentOverLimit ? (
+                <p className="text-xs text-red-500">Content exceeds {CONTENT_MAX} character limit</p>
+              ) : contentUnderMin ? (
+                <p className="text-xs text-red-500">Content must be at least {CONTENT_MIN} characters</p>
+              ) : (
+                <p className="text-xs text-gray-400">Min {CONTENT_MIN} · Max {CONTENT_MAX} characters</p>
+              )}
+              <span className={`text-xs tabular-nums font-medium ${contentOverLimit ? "text-red-500" : contentCharCount > CONTENT_MAX * 0.9 ? "text-amber-500" : contentCharCount >= CONTENT_MIN ? "text-[#008060]" : "text-gray-400"}`}>
+                {contentCharCount}/{CONTENT_MAX}
+              </span>
+            </div>
           </div>
 
           {/* Actions */}
@@ -610,7 +653,7 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
             <Button
               variant="outline"
               onClick={onSaveDraft}
-              disabled={saving || submitting}
+              disabled={saving || submitting || contentInvalid}
               className="border-gray-300"
             >
               <Save className="h-4 w-4 mr-2" />
@@ -618,7 +661,7 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
             </Button>
             <Button
               onClick={onSubmitForReview}
-              disabled={saving || submitting}
+              disabled={saving || submitting || contentInvalid}
               className="bg-[#008060] hover:bg-[#006b51]"
             >
               <Send className="h-4 w-4 mr-2" />

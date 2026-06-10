@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe, BookOpen } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'travel-chapters';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'travel-chapters' | 'blogs';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -48,6 +48,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       key: "users",
       color: "text-indigo-600",
       bgColor: "bg-indigo-50"
+    },
+    {
+      icon: BookOpen,
+      label: "Blogs",
+      path: "/admin/blogs",
+      key: "blogs",
+      color: "text-violet-600",
+      bgColor: "bg-violet-50"
     },
     {
       icon: FileText,

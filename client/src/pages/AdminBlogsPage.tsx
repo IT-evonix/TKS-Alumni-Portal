@@ -3,7 +3,7 @@ import { useLocation } from "wouter";
 import {
   CheckCircle, XCircle, Trash2, ExternalLink, Plus, Edit, Tag, BookOpen, AlertCircle
 } from "lucide-react";
-import { AppLayout } from "@/components/layout/AppLayout";
+import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -30,7 +30,7 @@ import { useAuth } from "@/contexts/AuthContext";
 import { clientConfig } from "@/lib/config";
 
 export function AdminBlogsPage() {
-  const { user } = useAuth();
+  const { user, adminUser } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
@@ -44,6 +44,9 @@ export function AdminBlogsPage() {
   const [rejectionReason, setRejectionReason] = useState("");
   const [moderating, setModerating] = useState(false);
 
+  // Blog detail dialog
+  const [detailPost, setDetailPost] = useState<any>(null);
+
   // Category management
   const [categoryDialogOpen, setCategoryDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<any>(null);
@@ -56,17 +59,19 @@ export function AdminBlogsPage() {
 
   const getHeaders = () => {
     const token = localStorage.getItem("auth_token") || "";
+    const userId = adminUser?.id || user?.id || localStorage.getItem("userId") || "";
     return {
       "Content-Type": "application/json",
-      "user-id": user?.id || localStorage.getItem("userId") || "",
+      "user-id": userId,
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   };
 
   useEffect(() => {
+    if (!adminUser?.id && !user?.id) return;
     fetchPosts(activeTab);
     fetchCategories();
-  }, []);
+  }, [adminUser?.id, user?.id]);
 
   const fetchPosts = async (status: string) => {
     setLoading(true);
@@ -216,8 +221,10 @@ export function AdminBlogsPage() {
   };
 
   return (
-    <AppLayout currentPage="blogs">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+    <div className="flex min-h-screen bg-white">
+      <AdminSidebar currentPage="blogs" />
+      <div className="flex-1 flex flex-col">
+      <div className="max-w-6xl mx-auto w-full px-4 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
@@ -326,7 +333,7 @@ export function AdminBlogsPage() {
                                   variant="ghost"
                                   size="sm"
                                   className="h-7 px-2 text-xs text-gray-500"
-                                  onClick={() => setLocation(`/blogs/${post.slug}`)}
+                                  onClick={() => setDetailPost(post)}
                                 >
                                   <ExternalLink className="h-3 w-3" />
                                 </Button>
@@ -409,6 +416,96 @@ export function AdminBlogsPage() {
         </Tabs>
       </div>
 
+      {/* Blog detail dialog */}
+      <Dialog open={!!detailPost} onOpenChange={(o) => !o && setDetailPost(null)}>
+        <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-lg font-semibold leading-snug pr-6">{detailPost?.title}</DialogTitle>
+          </DialogHeader>
+          {detailPost && (
+            <div className="space-y-4 pt-1">
+              {/* Meta row */}
+              <div className="flex flex-wrap items-center gap-3 text-sm text-gray-500">
+                <div className="flex items-center gap-2">
+                  <Avatar className="h-6 w-6">
+                    <AvatarImage src={detailPost.author?.profile_picture} />
+                    <AvatarFallback className="text-xs bg-[#008060]/10 text-[#008060]">
+                      {(detailPost.author
+                        ? `${detailPost.author.first_name || ""} ${detailPost.author.last_name || ""}`.trim() || detailPost.author.username
+                        : "?"
+                      ).split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <span className="font-medium text-gray-700">
+                    {detailPost.author
+                      ? `${detailPost.author.first_name || ""} ${detailPost.author.last_name || ""}`.trim() || detailPost.author.username
+                      : "Unknown"}
+                  </span>
+                </div>
+                <span>·</span>
+                <span>{new Date(detailPost.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}</span>
+                <span>·</span>
+                {statusBadge(detailPost.status)}
+                {detailPost.category && (
+                  <>
+                    <span>·</span>
+                    <Badge
+                      className="text-xs"
+                      style={{ backgroundColor: `${detailPost.category.color}20`, color: detailPost.category.color, border: `1px solid ${detailPost.category.color}40` }}
+                    >
+                      {detailPost.category.name}
+                    </Badge>
+                  </>
+                )}
+              </div>
+
+              {/* Cover image */}
+              {detailPost.cover_image_url && (
+                <img
+                  src={detailPost.cover_image_url}
+                  alt="Cover"
+                  className="w-full h-48 object-cover rounded-lg border border-gray-100"
+                />
+              )}
+
+              {/* Excerpt */}
+              {detailPost.excerpt && (
+                <p className="text-sm text-gray-600 italic border-l-4 border-[#008060]/30 pl-3">{detailPost.excerpt}</p>
+              )}
+
+              {/* Content */}
+              {detailPost.content && (
+                <div
+                  className="prose prose-sm max-w-none text-gray-700 text-sm leading-relaxed"
+                  dangerouslySetInnerHTML={{ __html: detailPost.content }}
+                />
+              )}
+
+              {/* Rejection reason */}
+              {detailPost.rejection_reason && (
+                <div className="rounded-lg bg-red-50 border border-red-200 p-3">
+                  <p className="text-xs font-semibold text-red-700 mb-1">Rejection Reason</p>
+                  <p className="text-sm text-red-600">{detailPost.rejection_reason}</p>
+                </div>
+              )}
+
+              {/* Footer actions */}
+              <div className="flex justify-between items-center pt-2 border-t border-gray-100">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => { const slug = detailPost.slug; setDetailPost(null); setLocation(`/blogs/${slug}`); }}
+                >
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  View Public Page
+                </Button>
+                <Button variant="outline" size="sm" onClick={() => setDetailPost(null)}>Close</Button>
+              </div>
+            </div>
+          )}
+        </DialogContent>
+      </Dialog>
+
       {/* Reject dialog */}
       <Dialog open={!!rejectDialogPost} onOpenChange={(o) => !o && setRejectDialogPost(null)}>
         <DialogContent>
@@ -474,6 +571,7 @@ export function AdminBlogsPage() {
           </div>
         </DialogContent>
       </Dialog>
-    </AppLayout>
+      </div>
+    </div>
   );
 }

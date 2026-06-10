@@ -3,6 +3,7 @@ import DOMPurify from "dompurify";
 import { useParams, useLocation } from "wouter";
 import { ArrowLeft, Heart, Bookmark, Share2, Clock, Eye, Calendar, CheckCircle, XCircle, Edit } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
+import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -17,7 +18,7 @@ import { clientConfig } from "@/lib/config";
 export function BlogDetailPage() {
   const { slug } = useParams<{ slug: string }>();
   const [, setLocation] = useLocation();
-  const { user } = useAuth();
+  const { user, adminUser } = useAuth();
   const { toast } = useToast();
 
   const [post, setPost] = useState<any>(null);
@@ -40,16 +41,17 @@ export function BlogDetailPage() {
 
   React.useEffect(() => {
     if (slug) {
+      setNotFound(false);
       fetchPost();
       fetchCategories();
     }
-  }, [slug]);
+  }, [slug, user?.id]); // re-fetch when auth resolves so user-id header is sent
 
   const getHeaders = () => {
     const token = localStorage.getItem("auth_token") || "";
     return {
       "Content-Type": "application/json",
-      "user-id": user?.id || localStorage.getItem("userId") || "",
+      "user-id": user?.id || adminUser?.id || localStorage.getItem("userId") || "",
       ...(token ? { Authorization: `Bearer ${token}` } : {}),
     };
   };
@@ -123,6 +125,24 @@ export function BlogDetailPage() {
     });
   };
 
+  const handleAdminDelete = async () => {
+    if (!confirm(`Delete "${post?.title}"? This cannot be undone.`)) return;
+    try {
+      const res = await fetch(`${clientConfig.apiUrl}/api/blogs/admin/${post.id}`, {
+        method: "DELETE",
+        headers: getHeaders(),
+      });
+      if (res.ok) {
+        toast({ title: "Post deleted." });
+        setLocation("/blogs");
+      } else {
+        toast({ title: "Failed to delete post", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Failed to delete post", variant: "destructive" });
+    }
+  };
+
   const handleApprove = async () => {
     setModerating(true);
     try {
@@ -180,9 +200,19 @@ export function BlogDetailPage() {
     });
   }, [post?.content]);
 
+  const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
+    adminUser ? (
+      <div className="flex min-h-screen bg-white">
+        <AdminSidebar currentPage="blogs" />
+        <div className="flex-1 overflow-auto">{children}</div>
+      </div>
+    ) : (
+      <AppLayout currentPage="blogs">{children}</AppLayout>
+    );
+
   if (loading) {
     return (
-      <AppLayout currentPage="blogs">
+      <PageLayout>
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 animate-pulse">
           <div className="h-5 bg-gray-200 rounded w-24" />
           <div className="h-64 bg-gray-200 rounded-xl" />
@@ -191,13 +221,13 @@ export function BlogDetailPage() {
             {[...Array(6)].map((_, i) => <div key={i} className="h-4 bg-gray-100 rounded" />)}
           </div>
         </div>
-      </AppLayout>
+      </PageLayout>
     );
   }
 
   if (notFound || !post) {
     return (
-      <AppLayout currentPage="blogs">
+      <PageLayout>
         <div className="max-w-3xl mx-auto px-4 py-16 text-center">
           <p className="text-2xl font-bold text-gray-700">Post not found</p>
           <p className="text-gray-400 mt-2">This post may have been removed or doesn't exist.</p>
@@ -205,12 +235,12 @@ export function BlogDetailPage() {
             Back to Blogs
           </Button>
         </div>
-      </AppLayout>
+      </PageLayout>
     );
   }
 
   return (
-    <AppLayout currentPage="blogs">
+    <PageLayout>
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Back button */}
         <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-800 -ml-2" onClick={() => setLocation("/blogs")}>
@@ -264,16 +294,41 @@ export function BlogDetailPage() {
           </div>
         )}
 
-        {/* Author edit button */}
-        {isAuthor && ["draft", "rejected"].includes(post.status) && (
-          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
+        {/* Author edit / admin delete banner */}
+        {(isAuthor || isAdmin) && (
+          <div className="flex items-center justify-between bg-blue-50 border border-blue-200 rounded-xl px-4 py-3 gap-3 flex-wrap">
             <p className="text-sm text-blue-700 font-medium">
-              Status: {post.status === "rejected" ? `Rejected${post.rejection_reason ? ` — ${post.rejection_reason}` : ""}` : "Draft"}
+              {isAuthor && post.status === "rejected"
+                ? `Rejected${post.rejection_reason ? ` — ${post.rejection_reason}` : ""}`
+                : isAuthor && post.status === "draft"
+                ? "Draft — not yet published"
+                : isAuthor && post.status === "pending_review"
+                ? "Pending review"
+                : isAuthor && post.status === "published"
+                ? "Your published post"
+                : isAdmin
+                ? `Admin view — status: ${post.status}`
+                : ""}
             </p>
-            <Button size="sm" variant="outline" className="text-blue-700 border-blue-300" onClick={() => setEditorOpen(true)}>
-              <Edit className="h-3.5 w-3.5 mr-1" />
-              Edit Post
-            </Button>
+            <div className="flex gap-2">
+              {isAuthor && (
+                <Button size="sm" variant="outline" className="text-blue-700 border-blue-300" onClick={() => setEditorOpen(true)}>
+                  <Edit className="h-3.5 w-3.5 mr-1" />
+                  Edit Post
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  size="sm"
+                  variant="outline"
+                  className="text-red-600 border-red-300 hover:bg-red-50"
+                  onClick={handleAdminDelete}
+                >
+                  <XCircle className="h-3.5 w-3.5 mr-1" />
+                  Delete Post
+                </Button>
+              )}
+            </div>
           </div>
         )}
 
@@ -285,7 +340,7 @@ export function BlogDetailPage() {
               alt={post.title}
               className="w-full h-full object-cover"
               style={{ maxHeight: "400px" }}
-              onError={(e) => { (e.target as HTMLImageElement).parentElement!.style.display = "none"; }}
+              onError={(e) => { (e.target as HTMLImageElement).style.display = "none"; }}
             />
           </div>
         )}
@@ -420,6 +475,6 @@ export function BlogDetailPage() {
         categories={categories}
         editPost={post}
       />
-    </AppLayout>
+    </PageLayout>
   );
 }

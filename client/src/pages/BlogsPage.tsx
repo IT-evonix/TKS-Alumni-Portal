@@ -42,12 +42,11 @@ export function BlogsPage() {
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<any>(null);
 
-  // Popular tags derived from posts
+  // Accumulated tags across all fetched pages so the tag filter bar stays populated when paginating
+  const [seenTagCounts, setSeenTagCounts] = useState<Record<string, number>>({});
   const popularTags = React.useMemo(() => {
-    const tagCounts: Record<string, number> = {};
-    posts.forEach((p) => (p.tags || []).forEach((t: string) => { tagCounts[t] = (tagCounts[t] || 0) + 1; }));
-    return Object.entries(tagCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t);
-  }, [posts]);
+    return Object.entries(seenTagCounts).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([t]) => t);
+  }, [seenTagCounts]);
 
   React.useEffect(() => { document.title = "Blogs - TKS Alumni Portal"; }, []);
 
@@ -106,8 +105,15 @@ export function BlogsPage() {
       const res = await fetch(`${clientConfig.apiUrl}/api/blogs?${params}`, { headers: getHeaders() });
       if (res.ok) {
         const data = await res.json();
-        setPosts(data.posts || []);
+        const newPosts: any[] = data.posts || [];
+        setPosts(newPosts);
         setTotal(data.total || 0);
+        // Accumulate tag counts; reset when returning to page 1 (filter change)
+        setSeenTagCounts((prev) => {
+          const counts = effectivePage === 1 ? {} : { ...prev };
+          newPosts.forEach((p: any) => (p.tags || []).forEach((t: string) => { counts[t] = (counts[t] || 0) + 1; }));
+          return counts;
+        });
       }
     } catch (e) {
       console.error("Failed to fetch blogs", e);
@@ -352,28 +358,26 @@ export function BlogsPage() {
                   {myPosts.map((post) => (
                     <div key={post.id} className="relative group">
                       <BlogCard post={post} showStatus />
-                      {/* Edit/Delete overlay for own posts in draft/rejected */}
-                      {["draft", "rejected"].includes(post.status) && (
-                        <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                          <Button
-                            size="sm"
-                            variant="secondary"
-                            className="h-7 px-2 text-xs shadow"
-                            onClick={() => handleEditPost(post)}
-                          >
-                            <Edit className="h-3 w-3 mr-1" />
-                            Edit
-                          </Button>
-                          <Button
-                            size="sm"
-                            variant="destructive"
-                            className="h-7 px-2 text-xs shadow"
-                            onClick={() => handleDeletePost(post.id)}
-                          >
-                            ✕
-                          </Button>
-                        </div>
-                      )}
+                      {/* Edit/Delete overlay for all own posts */}
+                      <div className="absolute top-2 right-2 flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          className="h-7 px-2 text-xs shadow"
+                          onClick={() => handleEditPost(post)}
+                        >
+                          <Edit className="h-3 w-3 mr-1" />
+                          Edit
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="destructive"
+                          className="h-7 px-2 text-xs shadow"
+                          onClick={() => handleDeletePost(post.id)}
+                        >
+                          ✕
+                        </Button>
+                      </div>
                       {/* Rejection reason */}
                       {post.status === "rejected" && post.rejection_reason && (
                         <div className="mt-2 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-2">

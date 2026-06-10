@@ -50,17 +50,25 @@ function escapeLike(value: string): string {
   return value.replace(/%/g, "\\%").replace(/_/g, "\\_");
 }
 
-// Helper: extract author fields from nested users→alumni join
-function extractAuthor(usersRow: any) {
+// Fetch author info: user row + alumni row separately (avoids unreliable nested join)
+async function fetchAuthor(authorId: string, includeExtended = false) {
+  const [userRes, alumniRes] = await Promise.all([
+    supabase.from("users").select("id, username").eq("id", authorId).maybeSingle(),
+    includeExtended
+      ? supabase.from("alumni").select("first_name, last_name, profile_picture, bio, current_role, company").eq("user_id", authorId).maybeSingle()
+      : supabase.from("alumni").select("first_name, last_name, profile_picture, current_role").eq("user_id", authorId).maybeSingle(),
+  ]);
+  const u = userRes.data;
+  const a = alumniRes.data;
   return {
-    id: usersRow?.id ?? null,
-    username: usersRow?.username ?? null,
-    first_name: usersRow?.alumni?.first_name ?? null,
-    last_name: usersRow?.alumni?.last_name ?? null,
-    profile_picture: usersRow?.alumni?.profile_picture ?? null,
-    bio: usersRow?.alumni?.bio ?? null,
-    current_role: usersRow?.alumni?.current_role ?? null,
-    company: usersRow?.alumni?.company ?? null,
+    id: u?.id ?? authorId,
+    username: u?.username ?? null,
+    first_name: a?.first_name ?? null,
+    last_name: a?.last_name ?? null,
+    profile_picture: a?.profile_picture ?? null,
+    bio: (a as any)?.bio ?? null,
+    current_role: a?.current_role ?? null,
+    company: (a as any)?.company ?? null,
   };
 }
 
@@ -165,25 +173,31 @@ router.get("/admin/pending", async (req, res) => {
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
     if (!(await isAdminUser(userId))) return res.status(403).json({ error: "Admin access required" });
 
-    // BUG 1 FIX: nested join users → alumni (correct Supabase/PostgREST pattern)
     const { data, error } = await supabase
       .from("blog_posts")
-      .select(`
-        *,
-        blog_categories(id, name, slug, color),
-        users!blog_posts_author_id_fkey(id, username, alumni(first_name, last_name, profile_picture, current_role))
-      `)
+      .select(`*, blog_categories(id, name, slug, color)`)
       .eq("status", "pending_review")
       .order("created_at", { ascending: true });
     if (error) throw error;
 
-    const posts = (data || []).map((p: any) => ({
-      ...p,
-      category: p.blog_categories ?? null,
-      author: extractAuthor(p.users),
-      blog_categories: undefined,
-      users: undefined,
-    }));
+    const authorIds = [...new Set((data || []).map((p: any) => p.author_id as string))];
+    const [usersRes, alumniRes] = await Promise.all([
+      supabase.from("users").select("id, username").in("id", authorIds),
+      supabase.from("alumni").select("user_id, first_name, last_name, profile_picture, current_role").in("user_id", authorIds),
+    ]);
+    const alumniByUserId = new Map((alumniRes.data || []).map((a: any) => [a.user_id, a]));
+    const userById = new Map((usersRes.data || []).map((u: any) => [u.id, u]));
+
+    const posts = (data || []).map((p: any) => {
+      const u = userById.get(p.author_id);
+      const a = alumniByUserId.get(p.author_id);
+      return {
+        ...p,
+        category: p.blog_categories ?? null,
+        author: { id: p.author_id, username: u?.username ?? null, first_name: a?.first_name ?? null, last_name: a?.last_name ?? null, profile_picture: a?.profile_picture ?? null, bio: null, current_role: a?.current_role ?? null, company: null },
+        blog_categories: undefined,
+      };
+    });
 
     res.json(posts);
   } catch (error) {
@@ -201,14 +215,9 @@ router.get("/admin/all", async (req, res) => {
 
     const status = (req.query.status as string) || "";
 
-    // BUG 1 FIX: nested join
     let query = supabase
       .from("blog_posts")
-      .select(`
-        *,
-        blog_categories(id, name, slug, color),
-        users!blog_posts_author_id_fkey(id, username, alumni(first_name, last_name, profile_picture, current_role))
-      `)
+      .select(`*, blog_categories(id, name, slug, color)`)
       .order("created_at", { ascending: false });
 
     if (status && status !== "all") query = query.eq("status", status);
@@ -216,13 +225,24 @@ router.get("/admin/all", async (req, res) => {
     const { data, error } = await query;
     if (error) throw error;
 
-    const posts = (data || []).map((p: any) => ({
-      ...p,
-      category: p.blog_categories ?? null,
-      author: extractAuthor(p.users),
-      blog_categories: undefined,
-      users: undefined,
-    }));
+    const authorIds = [...new Set((data || []).map((p: any) => p.author_id as string))];
+    const [usersRes2, alumniRes2] = await Promise.all([
+      supabase.from("users").select("id, username").in("id", authorIds),
+      supabase.from("alumni").select("user_id, first_name, last_name, profile_picture, current_role").in("user_id", authorIds),
+    ]);
+    const alumniByUserId2 = new Map((alumniRes2.data || []).map((a: any) => [a.user_id, a]));
+    const userById2 = new Map((usersRes2.data || []).map((u: any) => [u.id, u]));
+
+    const posts = (data || []).map((p: any) => {
+      const u = userById2.get(p.author_id);
+      const a = alumniByUserId2.get(p.author_id);
+      return {
+        ...p,
+        category: p.blog_categories ?? null,
+        author: { id: p.author_id, username: u?.username ?? null, first_name: a?.first_name ?? null, last_name: a?.last_name ?? null, profile_picture: a?.profile_picture ?? null, bio: null, current_role: a?.current_role ?? null, company: null },
+        blog_categories: undefined,
+      };
+    });
 
     res.json(posts);
   } catch (error) {
@@ -243,14 +263,9 @@ router.get("/", async (req, res) => {
     const featured = req.query.featured === "true";
     const offset = (page - 1) * limit;
 
-    // BUG 1 FIX: nested join
     let query = supabase
       .from("blog_posts")
-      .select(`
-        *,
-        blog_categories(id, name, slug, color),
-        users!blog_posts_author_id_fkey(id, username, alumni(first_name, last_name, profile_picture, current_role))
-      `, { count: "exact" })
+      .select(`*, blog_categories(id, name, slug, color)`, { count: "exact" })
       .eq("status", "published")
       .order("published_at", { ascending: false })
       .range(offset, offset + limit - 1);
@@ -279,27 +294,64 @@ router.get("/", async (req, res) => {
     const { data, error, count } = await query;
     if (error) throw error;
 
-    // Batch-fetch viewer likes/bookmarks
+    // Batch-fetch viewer likes/bookmarks and author alumni info
     let likedSet = new Set<string>();
     let bookmarkedSet = new Set<string>();
-    if (userId && data && data.length > 0) {
+    const authorMap = new Map<string, any>();
+
+    if (data && data.length > 0) {
       const postIds = data.map((p: any) => p.id);
-      const [likesRes, bookmarksRes] = await Promise.all([
-        supabase.from("blog_likes").select("post_id").eq("user_id", userId).in("post_id", postIds),
-        supabase.from("blog_bookmarks").select("post_id").eq("user_id", userId).in("post_id", postIds),
-      ]);
-      (likesRes.data || []).forEach((l: any) => likedSet.add(l.post_id));
-      (bookmarksRes.data || []).forEach((b: any) => bookmarkedSet.add(b.post_id));
+      const authorIds = [...new Set(data.map((p: any) => p.author_id as string))];
+
+      const fetchPromises: Promise<any>[] = [];
+      if (userId) {
+        fetchPromises.push(
+          supabase.from("blog_likes").select("post_id").eq("user_id", userId).in("post_id", postIds),
+          supabase.from("blog_bookmarks").select("post_id").eq("user_id", userId).in("post_id", postIds),
+        );
+      }
+      fetchPromises.push(
+        supabase.from("users").select("id, username").in("id", authorIds),
+        supabase.from("alumni").select("user_id, first_name, last_name, profile_picture, current_role").in("user_id", authorIds),
+      );
+
+      const results = await Promise.all(fetchPromises);
+      let usersData: any[], alumniData: any[];
+      if (userId) {
+        const [likesRes, bookmarksRes, usersRes, alumniRes] = results;
+        (likesRes.data || []).forEach((l: any) => likedSet.add(l.post_id));
+        (bookmarksRes.data || []).forEach((b: any) => bookmarkedSet.add(b.post_id));
+        usersData = usersRes.data || [];
+        alumniData = alumniRes.data || [];
+      } else {
+        const [usersRes, alumniRes] = results;
+        usersData = usersRes.data || [];
+        alumniData = alumniRes.data || [];
+      }
+
+      const alumniByUserId = new Map(alumniData.map((a: any) => [a.user_id, a]));
+      usersData.forEach((u: any) => {
+        const a = alumniByUserId.get(u.id);
+        authorMap.set(u.id, {
+          id: u.id,
+          username: u.username,
+          first_name: a?.first_name ?? null,
+          last_name: a?.last_name ?? null,
+          profile_picture: a?.profile_picture ?? null,
+          bio: null,
+          current_role: a?.current_role ?? null,
+          company: null,
+        });
+      });
     }
 
     const posts = (data || []).map((p: any) => ({
       ...p,
       category: p.blog_categories ?? null,
-      author: extractAuthor(p.users),
+      author: authorMap.get(p.author_id) ?? { id: p.author_id, username: null, first_name: null, last_name: null, profile_picture: null, bio: null, current_role: null, company: null },
       viewer_has_liked: likedSet.has(p.id),
       viewer_has_bookmarked: bookmarkedSet.has(p.id),
       blog_categories: undefined,
-      users: undefined,
     }));
 
     res.json({ posts, total: count || 0, page, limit });
@@ -315,14 +367,9 @@ router.get("/:slug", async (req, res) => {
     const userId = req.headers["user-id"] as string;
     const { slug } = req.params;
 
-    // BUG 1 FIX: nested join; also fetch bio+company for detail page author card
     const { data: post, error } = await supabase
       .from("blog_posts")
-      .select(`
-        *,
-        blog_categories(id, name, slug, color),
-        users!blog_posts_author_id_fkey(id, username, alumni(first_name, last_name, profile_picture, bio, current_role, company))
-      `)
+      .select(`*, blog_categories(id, name, slug, color)`)
       .eq("slug", slug)
       .maybeSingle();
 
@@ -339,29 +386,23 @@ router.get("/:slug", async (req, res) => {
     // Increment view count atomically (fire and forget)
     atomicCounter(post.id, "views_count", 1).catch(() => {});
 
-    let viewerHasLiked = false;
-    let viewerHasBookmarked = false;
-    if (userId) {
-      const [likeRes, bookmarkRes] = await Promise.all([
-        supabase.from("blog_likes").select("id").eq("post_id", post.id).eq("user_id", userId).maybeSingle(),
-        supabase.from("blog_bookmarks").select("id").eq("post_id", post.id).eq("user_id", userId).maybeSingle(),
-      ]);
-      viewerHasLiked = !!likeRes.data;
-      viewerHasBookmarked = !!bookmarkRes.data;
-    }
+    const [author, likeRes, bookmarkRes] = await Promise.all([
+      fetchAuthor(post.author_id, true),
+      userId ? supabase.from("blog_likes").select("id").eq("post_id", post.id).eq("user_id", userId).maybeSingle() : Promise.resolve({ data: null }),
+      userId ? supabase.from("blog_bookmarks").select("id").eq("post_id", post.id).eq("user_id", userId).maybeSingle() : Promise.resolve({ data: null }),
+    ]);
 
     res.json({
       ...post,
       category: post.blog_categories ?? null,
-      author: extractAuthor(post.users),
-      viewer_has_liked: viewerHasLiked,
-      viewer_has_bookmarked: viewerHasBookmarked,
+      author,
+      viewer_has_liked: !!likeRes.data,
+      viewer_has_bookmarked: !!bookmarkRes.data,
       blog_categories: undefined,
-      users: undefined,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Get blog post error:", error);
-    res.status(500).json({ error: "Failed to fetch post" });
+    res.status(500).json({ error: "Failed to fetch post", detail: error?.message || String(error) });
   }
 });
 
@@ -377,24 +418,31 @@ router.get("/:slug/comments", async (req, res) => {
       .maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
 
-    // BUG 1 FIX: nested join for author info on comments
     const { data, error } = await supabase
       .from("blog_comments")
-      .select(`
-        *,
-        users!blog_comments_author_id_fkey(id, username, alumni(first_name, last_name, profile_picture))
-      `)
+      .select("*")
       .eq("post_id", post.id)
       .eq("is_active", true)
       .order("created_at", { ascending: true });
     if (error) throw error;
 
-    const allComments = (data || []).map((c: any) => ({
-      ...c,
-      author: extractAuthor(c.users),
-      replies: [] as any[],
-      users: undefined,
-    }));
+    const commentAuthorIds = [...new Set((data || []).map((c: any) => c.author_id as string))];
+    const [cUsersRes, cAlumniRes] = await Promise.all([
+      supabase.from("users").select("id, username").in("id", commentAuthorIds),
+      supabase.from("alumni").select("user_id, first_name, last_name, profile_picture").in("user_id", commentAuthorIds),
+    ]);
+    const cAlumniMap = new Map((cAlumniRes.data || []).map((a: any) => [a.user_id, a]));
+    const cUserMap = new Map((cUsersRes.data || []).map((u: any) => [u.id, u]));
+
+    const allComments = (data || []).map((c: any) => {
+      const u = cUserMap.get(c.author_id);
+      const a = cAlumniMap.get(c.author_id);
+      return {
+        ...c,
+        author: { id: c.author_id, username: u?.username ?? null, first_name: a?.first_name ?? null, last_name: a?.last_name ?? null, profile_picture: a?.profile_picture ?? null },
+        replies: [] as any[],
+      };
+    });
 
     // Build two-level tree: top-level + nested replies
     const topLevel = allComments.filter((c: any) => !c.parent_id);
@@ -428,7 +476,13 @@ router.post("/", async (req, res) => {
     if (!title?.trim()) return res.status(400).json({ error: "Title is required" });
     if (title.trim().length < 5) return res.status(400).json({ error: "Title must be at least 5 characters" });
     if (!content?.trim()) return res.status(400).json({ error: "Content is required" });
-    if (content.trim().length < 100) return res.status(400).json({ error: "Content must be at least 100 characters" });
+    const contentText = content.replace(/<[^>]*>/g, "").trim();
+    if (contentText.length < 50) return res.status(400).json({ error: "Content must be at least 50 characters" });
+    if (contentText.length > 1000) return res.status(400).json({ error: "Content must be 1000 characters or fewer" });
+
+    if (excerpt && excerpt.trim().length > 50) {
+      return res.status(400).json({ error: "Excerpt must be 50 characters or fewer" });
+    }
 
     const slug = generateSlug(title.trim());
     const readingTimeMinutes = calculateReadingTime(content);
@@ -472,12 +526,15 @@ router.put("/:id", async (req, res) => {
       .maybeSingle();
     if (!existing) return res.status(404).json({ error: "Post not found" });
     if (existing.author_id !== userId) return res.status(403).json({ error: "Forbidden" });
-    if (!["draft", "rejected"].includes(existing.status)) {
-      return res.status(400).json({ error: "Only draft or rejected posts can be edited" });
-    }
 
     const { title, excerpt, content, cover_image, category_id, tags } = req.body;
-    const updates: any = { updated_at: new Date().toISOString() };
+    // Editing a published or pending_review post resets it to draft so it goes through review again
+    const updates: any = {
+      updated_at: new Date().toISOString(),
+      ...(["published", "pending_review"].includes(existing.status)
+        ? { status: "draft", published_at: null, rejection_reason: null }
+        : {}),
+    };
 
     if (title !== undefined) {
       if (!title?.trim() || title.trim().length < 5) {
@@ -485,10 +542,19 @@ router.put("/:id", async (req, res) => {
       }
       updates.title = title.trim();
     }
-    if (excerpt !== undefined) updates.excerpt = excerpt?.trim() || null;
+    if (excerpt !== undefined) {
+      if (excerpt && excerpt.trim().length > 50) {
+        return res.status(400).json({ error: "Excerpt must be 50 characters or fewer" });
+      }
+      updates.excerpt = excerpt?.trim() || null;
+    }
     if (content !== undefined) {
-      if (!content?.trim() || content.trim().length < 100) {
-        return res.status(400).json({ error: "Content must be at least 100 characters" });
+      const contentText = content?.replace(/<[^>]*>/g, "").trim() ?? "";
+      if (!contentText || contentText.length < 50) {
+        return res.status(400).json({ error: "Content must be at least 50 characters" });
+      }
+      if (contentText.length > 1000) {
+        return res.status(400).json({ error: "Content must be 1000 characters or fewer" });
       }
       updates.content = content.trim();
       updates.reading_time_minutes = calculateReadingTime(content.trim());
@@ -508,6 +574,48 @@ router.put("/:id", async (req, res) => {
   } catch (error) {
     console.error("Update blog post error:", error);
     res.status(500).json({ error: "Failed to update post" });
+  }
+});
+
+// DELETE /api/blogs/comments/:commentId — must come BEFORE /:id
+router.delete("/comments/:commentId", async (req, res) => {
+  try {
+    const userId = req.headers["user-id"] as string;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+    const { commentId } = req.params;
+
+    const { data: comment } = await supabase
+      .from("blog_comments")
+      .select("id, author_id, post_id, parent_id")
+      .eq("id", commentId)
+      .eq("is_active", true)
+      .maybeSingle();
+    if (!comment) return res.status(404).json({ error: "Comment not found" });
+
+    const adminFlag = await isAdminUser(userId);
+    if (comment.author_id !== userId && !adminFlag) return res.status(403).json({ error: "Forbidden" });
+
+    // Count active replies BEFORE any soft-delete
+    const { data: activeReplies } = await supabase
+      .from("blog_comments")
+      .select("id")
+      .eq("parent_id", commentId)
+      .eq("is_active", true);
+    const replyCount = (activeReplies || []).length;
+
+    // Soft-delete replies first (while their is_active is still true), then parent
+    if (replyCount > 0) {
+      await supabase.from("blog_comments").update({ is_active: false }).eq("parent_id", commentId);
+    }
+    await supabase.from("blog_comments").update({ is_active: false }).eq("id", commentId);
+
+    // Atomically decrement comments_count by parent + reply count
+    await atomicCounter(comment.post_id, "comments_count", -(1 + replyCount));
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error("Delete blog comment error:", error);
+    res.status(500).json({ error: "Failed to delete comment" });
   }
 });
 
@@ -590,7 +698,10 @@ router.post("/:id/like", async (req, res) => {
     }
 
     const { error: insErr } = await supabase.from("blog_likes").insert({ post_id: id, user_id: userId });
-    if (insErr) throw insErr;
+    if (insErr) {
+      if ((insErr as any).code === "23505") return res.json({ liked: true }); // concurrent duplicate
+      throw insErr;
+    }
     await atomicCounter(id, "likes_count", 1);
     res.json({ liked: true });
   } catch (error) {
@@ -620,7 +731,10 @@ router.post("/:id/bookmark", async (req, res) => {
     }
 
     const { error: insErr } = await supabase.from("blog_bookmarks").insert({ post_id: id, user_id: userId });
-    if (insErr) throw insErr;
+    if (insErr) {
+      if ((insErr as any).code === "23505") return res.json({ bookmarked: true }); // concurrent duplicate
+      throw insErr;
+    }
     await atomicCounter(id, "bookmarks_count", 1);
     res.json({ bookmarked: true });
   } catch (error) {
@@ -672,67 +786,15 @@ router.post("/:id/comments", async (req, res) => {
 
     await atomicCounter(id, "comments_count", 1);
 
-    // BUG 1 FIX: nested join for author info
-    const { data: fullComment } = await supabase
-      .from("blog_comments")
-      .select(`
-        *,
-        users!blog_comments_author_id_fkey(id, username, alumni(first_name, last_name, profile_picture))
-      `)
-      .eq("id", comment.id)
-      .maybeSingle();
-
+    const [newCommentAuthor] = await Promise.all([fetchAuthor(userId)]);
     res.status(201).json({
-      ...fullComment,
-      author: extractAuthor((fullComment as any)?.users),
+      ...comment,
+      author: newCommentAuthor,
       replies: [],
-      users: undefined,
     });
   } catch (error) {
     console.error("Add blog comment error:", error);
     res.status(500).json({ error: "Failed to add comment" });
-  }
-});
-
-// DELETE /api/blogs/comments/:commentId
-router.delete("/comments/:commentId", async (req, res) => {
-  try {
-    const userId = req.headers["user-id"] as string;
-    if (!userId) return res.status(401).json({ error: "Unauthorized" });
-    const { commentId } = req.params;
-
-    const { data: comment } = await supabase
-      .from("blog_comments")
-      .select("id, author_id, post_id, parent_id")
-      .eq("id", commentId)
-      .eq("is_active", true)
-      .maybeSingle();
-    if (!comment) return res.status(404).json({ error: "Comment not found" });
-
-    const adminFlag = await isAdminUser(userId);
-    if (comment.author_id !== userId && !adminFlag) return res.status(403).json({ error: "Forbidden" });
-
-    // Count active replies BEFORE any soft-delete
-    const { data: activeReplies } = await supabase
-      .from("blog_comments")
-      .select("id")
-      .eq("parent_id", commentId)
-      .eq("is_active", true);
-    const replyCount = (activeReplies || []).length;
-
-    // Soft-delete replies first (while their is_active is still true), then parent
-    if (replyCount > 0) {
-      await supabase.from("blog_comments").update({ is_active: false }).eq("parent_id", commentId);
-    }
-    await supabase.from("blog_comments").update({ is_active: false }).eq("id", commentId);
-
-    // Atomically decrement comments_count by parent + reply count
-    await atomicCounter(comment.post_id, "comments_count", -(1 + replyCount));
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error("Delete blog comment error:", error);
-    res.status(500).json({ error: "Failed to delete comment" });
   }
 });
 
@@ -748,6 +810,9 @@ router.put("/admin/:id/approve", async (req, res) => {
     const { id } = req.params;
     const { data: existing } = await supabase.from("blog_posts").select("status").eq("id", id).maybeSingle();
     if (!existing) return res.status(404).json({ error: "Post not found" });
+    if (existing.status !== "pending_review") {
+      return res.status(400).json({ error: "Only posts pending review can be approved" });
+    }
 
     const { data, error } = await supabase
       .from("blog_posts")

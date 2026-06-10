@@ -36,11 +36,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
                         return <Redirect to={`/admin/login?redirect=${encodeURIComponent(path)}`} />;
                     }
                 } else {
-                    if (!user) {
-                        // If they are a logged in admin but not a normal user, send to admin dashboard
-                        if (isAdministrator) {
-                            return <Redirect to="/admin/dashboard" />;
-                        }
+                    if (!user && !isAdministrator) {
                         return <Redirect to={`/login?redirect=${encodeURIComponent(path)}`} />;
                     }
                 }
