@@ -1019,9 +1019,24 @@ export const insertTravelChapterSchema = createInsertSchema(travelChapters).omit
   updatedAt: true,
 });
 
+export const travelChapterMessages = pgTable("travel_chapter_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  chapterId: varchar("chapter_id").references(() => travelChapters.id, { onDelete: 'cascade' }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
+  content: text("content").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
 export const insertTravelChapterMemberSchema = createInsertSchema(travelChapterMembers).omit({
   id: true,
   joinedAt: true,
+});
+
+export const insertTravelChapterMessageSchema = createInsertSchema(travelChapterMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
 });
 
 // Travel Chapters Types
@@ -1029,3 +1044,5 @@ export type TravelChapter = typeof travelChapters.$inferSelect;
 export type InsertTravelChapter = z.infer<typeof insertTravelChapterSchema>;
 export type TravelChapterMember = typeof travelChapterMembers.$inferSelect;
 export type InsertTravelChapterMember = z.infer<typeof insertTravelChapterMemberSchema>;
+export type TravelChapterMessage = typeof travelChapterMessages.$inferSelect;
+export type InsertTravelChapterMessage = z.infer<typeof insertTravelChapterMessageSchema>;

@@ -11,6 +11,7 @@ const proposeChapterSchema = z.object({
   country: z.string().min(1, "Country is required"),
   description: z.string().optional(),
   cover_image: z.string().optional(),
+  coordinates: z.string().optional(),
 });
 
 // GET /api/travel-chapters - Fetch all approved chapters with member count
@@ -233,6 +234,7 @@ router.post("/", requireAuth, async (req, res) => {
         country: validatedData.country,
         description: validatedData.description,
         cover_image: finalCoverImageUrl,
+        coordinates: validatedData.coordinates,
         created_by: userId,
         status: "pending"
       })
@@ -339,6 +341,88 @@ router.delete("/:id/leave", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Error leaving chapter:", error);
     res.status(500).json({ error: "Failed to leave chapter" });
+  }
+});
+
+// GET messages for a chapter
+router.get("/api/travel-chapters/:id/messages", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.headers["user-id"] as string;
+
+    // Optional: check if user is member
+    const { data: memberCheck } = await supabase
+      .from("travel_chapter_members")
+      .select("id")
+      .eq("chapter_id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (!memberCheck) {
+      return res.status(403).json({ error: "Must be a member to view messages" });
+    }
+
+    const { data: messages, error } = await supabase
+      .from("travel_chapter_messages")
+      .select(`
+        *,
+        user:users!travel_chapter_messages_user_id_fkey(firstName, lastName, profilePicture)
+      `)
+      .eq("chapter_id", id)
+      .order("created_at", { ascending: true });
+
+    if (error) {
+      // Gracefully handle table missing
+      if (error.code === '42P01') return res.json([]);
+      throw error;
+    }
+    res.json(messages || []);
+  } catch (error: any) {
+    console.error("Error fetching chapter messages:", error);
+    res.status(500).json({ error: error.message || "Server Error" });
+  }
+});
+
+// POST a message to a chapter
+router.post("/api/travel-chapters/:id/messages", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { content } = req.body;
+    const userId = req.headers["user-id"] as string;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+
+    const { data: memberCheck } = await supabase
+      .from("travel_chapter_members")
+      .select("id")
+      .eq("chapter_id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (!memberCheck) {
+      return res.status(403).json({ error: "Must be a member to post messages" });
+    }
+
+    const { data: message, error } = await supabase
+      .from("travel_chapter_messages")
+      .insert({
+        chapter_id: id,
+        user_id: userId,
+        content: content.trim()
+      })
+      .select(`
+        *,
+        user:users!travel_chapter_messages_user_id_fkey(firstName, lastName, profilePicture)
+      `)
+      .single();
+
+    if (error) throw error;
+    res.json(message);
+  } catch (error: any) {
+    console.error("Error posting chapter message:", error);
+    res.status(500).json({ error: error.message || "Server Error" });
   }
 });
 

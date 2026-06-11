@@ -21,6 +21,7 @@ export function generateCoordinatesForCity(city: string): [number, number] {
     'San Francisco': [-122.4194, 37.7749],
     'Cape Town': [18.4232, -33.9249],
     'Sydney': [151.2093, -33.8688],
+    'Bondi Beach': [151.2743, -33.8915],
     'Singapore': [103.8198, 1.3521],
     'Toronto': [-79.3832, 43.6532],
     'Pimpri-Chinchwad': [73.7868, 18.6298],
@@ -33,6 +34,15 @@ export function generateCoordinatesForCity(city: string): [number, number] {
     'Barcelona': [2.1734, 41.3851],
     'Chicago': [-87.6298, 41.8781],
     'Los Angeles': [-118.2437, 34.0522],
+    'Hyderabad': [78.4867, 17.3850],
+    'Chennai': [80.2707, 13.0827],
+    'Kolkata': [88.3639, 22.5726],
+    'Ahmedabad': [72.5714, 23.0225],
+    'Seattle': [-122.3321, 47.6062],
+    'Austin': [-97.7431, 30.2672],
+    'Vancouver': [-123.1207, 49.2827],
+    'Montreal': [-73.5673, 45.5017],
+    'Melbourne': [144.9631, -37.8136],
   };
 
   if (known[city]) return known[city];
@@ -85,13 +95,25 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
           overflow: hidden;
           border-radius: inherit;
         }
+        
+        /* Light Theme Popup */
         .chapter-popup .maplibregl-popup-content {
-          border-radius: 16px !important;
+          border-radius: 12px !important;
           padding: 16px !important;
-          box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1), 0 8px 10px -6px rgba(0, 0, 0, 0.1) !important;
-          border: 1px solid #e2e8f0;
+          background: white !important;
+          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
+          border: 1px solid #f3f4f6;
           box-sizing: border-box;
+          color: #111827 !important;
         }
+        
+        .chapter-popup .maplibregl-popup-tip {
+          border-top-color: white !important;
+        }
+        .maplibregl-popup-anchor-bottom .maplibregl-popup-tip {
+          border-top-color: white !important;
+        }
+        
         @media (max-width: 640px) {
           .chapter-popup .maplibregl-popup-content {
             padding: 12px !important;
@@ -102,9 +124,10 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
             z-index: 50;
           }
         }
+        
         .chapter-popup .maplibregl-popup-close-button {
           font-size: 20px !important;
-          color: #94a3b8 !important;
+          color: #6b7280 !important;
           top: 10px !important;
           right: 10px !important;
           padding: 0 !important;
@@ -118,8 +141,8 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
           transition: all 0.2s ease;
         }
         .chapter-popup .maplibregl-popup-close-button:hover {
-          background-color: #f1f5f9 !important;
-          color: #0f172a !important;
+          background-color: #f3f4f6 !important;
+          color: #111827 !important;
         }
       `;
       document.head.appendChild(style);
@@ -200,7 +223,17 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
     // Group chapters by location to show carousel for multiple chapters at same location
     const groupedChapters: Record<string, any[]> = {};
     chapters.forEach(chap => {
-      const [lng, lat] = generateCoordinatesForCity(chap.city);
+      let lng: number, lat: number;
+      if (chap.coordinates) {
+        const parts = chap.coordinates.split(',');
+        lng = parseFloat(parts[0]);
+        lat = parseFloat(parts[1]);
+      } else {
+        const coords = generateCoordinatesForCity(chap.city);
+        lng = coords[0];
+        lat = coords[1];
+      }
+      
       const key = `${lng},${lat}`;
       if (!groupedChapters[key]) {
         groupedChapters[key] = [];
@@ -213,7 +246,7 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
       const lng = parseFloat(lngStr);
       const lat = parseFloat(latStr);
 
-      // Use default MapLibre marker (reliable, known to work)
+      // Default standard marker with brand green color
       const marker = new maplibregl.Marker({ color: '#008060', scale: 0.85 })
         .setLngLat([lng, lat])
         .addTo(map);
@@ -280,14 +313,14 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
               <div style="display: flex; gap: 12px; align-items: center; margin-bottom: 12px; padding-right: 24px; word-wrap: break-word;">
                 ${coverImageHtml}
                 <div style="min-width: 0;">
-                  <h3 style="margin: 0; font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: -0.01em; line-height: 1.2; word-wrap: break-word; overflow-wrap: break-word;">${chap.name || `${chap.city} Chapter`}</h3>
-                  <p style="margin: 0; font-size: 12px; color: #64748b; font-weight: 500; margin-top: 2px;">${chap.country}</p>
+                  <h3 style="margin: 0; font-size: 15px; font-weight: 800; color: #111827; letter-spacing: -0.01em; line-height: 1.2; word-wrap: break-word; overflow-wrap: break-word;">${chap.name || `${chap.city} Chapter`}</h3>
+                  <p style="margin: 0; font-size: 12px; color: #6b7280; font-weight: 500; margin-top: 2px;">${chap.country}</p>
                 </div>
               </div>
 
-              <div style="display: flex; justify-content: space-between; margin-bottom: 12px; gap: 8px; align-items: center; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; transition: all 0.2s ease; box-sizing: border-box; width: 100%;">
+              <div style="display: flex; justify-content: space-between; margin-bottom: 12px; gap: 8px; align-items: center; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6; transition: all 0.2s ease; box-sizing: border-box; width: 100%;">
                 <div style="display: flex; flex-direction: column; min-width: 0;">
-                  <span style="font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Host: Active</span>
+                  <span style="font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Host: Active</span>
                 </div>
                 <div style="display: flex; gap: 6px; flex-shrink: 0;">
                   <a href="/profile/${chap.created_by}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #ecfdf5; color: #10b981; border-radius: 50%; text-decoration: none; border: 1px solid #d1fae5;" title="Connect with Host" onmouseover="this.style.background='#d1fae5'" onmouseout="this.style.background='#ecfdf5'">
@@ -302,7 +335,7 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
               <button
                 onclick="window.__openTravelChapter && window.__openTravelChapter('${chap.id}')"
                 style="width: 100%; margin-top: 2px; padding: 10px 12px; background: #008060; color: white; border: none; border-radius: 8px; font-size: 13px; font-weight: 700; cursor: pointer; transition: background 0.15s;"
-                onmouseover="this.style.background='#005c46'"
+                onmouseover="this.style.background='#00664c'"
                 onmouseout="this.style.background='#008060'"
               >
                 View Chapter &rarr;
