@@ -26,13 +26,13 @@ export default function TravelChaptersDirectoryPage() {
       {/* 
         Container for the page
       */}
-      <div className="w-full max-w-[1600px] mx-auto flex flex-col bg-white min-h-[calc(100vh-64px)]">
+      <div className="w-full h-[calc(100vh-64px)] overflow-hidden bg-white text-gray-900 relative">
         
         {/* Split View Container */}
-        <div className="flex flex-col lg:flex-row w-full h-auto lg:h-[calc(100vh-64px)] lg:overflow-hidden">
+        <div className="flex flex-col lg:flex-row w-full h-full relative">
           
           {/* Left Side: Directory (Cards & Search) */}
-          <div className="w-full lg:w-[45%] xl:w-[40%] flex-1 h-auto lg:h-full lg:overflow-y-auto bg-white lg:border-r border-gray-200 shadow-[2px_0_10px_-4px_rgba(0,0,0,0.1)] z-40 relative custom-scrollbar order-last lg:order-none">
+          <div className="w-full lg:w-[400px] xl:w-[450px] flex-none h-auto lg:h-full lg:overflow-y-auto bg-gray-50 border-r border-gray-200 shadow-lg z-40 relative custom-scrollbar order-last lg:order-none lg:absolute lg:left-0 lg:top-0 lg:bottom-0">
             <div className="pb-20">
               <TravelChapterSection 
                 hideHeader 
@@ -47,7 +47,7 @@ export default function TravelChaptersDirectoryPage() {
           </div>
 
           {/* Right Side: Interactive Map */}
-          <div className="w-full lg:w-[55%] xl:w-[60%] h-[40vh] sm:h-[45vh] lg:h-full relative z-50 lg:z-10 bg-slate-100 order-first lg:order-none">
+          <div className="w-full h-[50vh] lg:h-full lg:absolute lg:inset-0 z-10 bg-slate-100 order-first lg:order-none">
             <TravelChaptersMap chapters={chapters} onBoundsChange={setMapBounds} onChapterClick={setSelectedChapter} />
           </div>
 

@@ -53,7 +53,8 @@ CREATE TABLE IF NOT EXISTS public.user_scores (
     connection_score INTEGER DEFAULT 0,
     job_score INTEGER DEFAULT 0,
     current_streak_days INTEGER DEFAULT 0,
-    last_login_date DATE,
+    highest_streak INTEGER DEFAULT 0,
+    last_active_date TIMESTAMP WITH TIME ZONE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     UNIQUE(user_id)

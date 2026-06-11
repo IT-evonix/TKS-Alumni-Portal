@@ -132,9 +132,22 @@ export function TravelChapterSection({
       if (coverPreview) {
         cover_image_url = coverPreview;
       }
+      
+      let coordinatesStr = undefined;
+      try {
+        const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city + ', ' + country)}&limit=1`);
+        if (nomRes.ok) {
+          const nomData = await nomRes.json();
+          if (nomData && nomData.length > 0) {
+            coordinatesStr = `${nomData[0].lon},${nomData[0].lat}`;
+          }
+        }
+      } catch (err) {
+        console.warn("Geocoding failed during proposal:", err);
+      }
 
       const res = await apiRequest('POST', '/api/travel-chapters', {
-        city, country, description, cover_image: cover_image_url
+        city, country, description, cover_image: cover_image_url, coordinates: coordinatesStr
       });
       if (!res.ok) {
         const err = await res.json();
@@ -491,16 +504,62 @@ export function TravelChapterSection({
       </div>
 
       {/* Chapter Detail Modal */}
-      <Dialog open={!!selectedChapter} onOpenChange={(open) => !open && setSelectedChapter(null)}>
-        <DialogContent className="w-[92vw] max-w-[600px] rounded-3xl p-0 overflow-hidden bg-white border-0 shadow-2xl">
-          {selectedChapter && (
-            <>
-              {/* Image Header */}
-              <div className="h-48 sm:h-64 w-full relative bg-gray-100">
+      <ChapterDetailModal 
+        selectedChapter={selectedChapter} 
+        onClose={() => setSelectedChapter(null)} 
+        setLocation={setLocation} 
+      />
+    </div>
+  );
+};
+
+// Extracted Modal Component to handle individual chapter query
+function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selectedChapter: any, onClose: () => void, setLocation: any }) {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: chapterDetails, isLoading } = useQuery({
+    queryKey: ['travel-chapter', selectedChapter?.id],
+    queryFn: async () => {
+      const res = await apiRequest('GET', `/api/travel-chapters/${selectedChapter.id}`);
+      if (!res.ok) throw new Error("Failed to fetch chapter details");
+      return res.json();
+    },
+    enabled: !!selectedChapter,
+  });
+
+  const joinMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest('POST', `/api/travel-chapters/${selectedChapter.id}/join`);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to join chapter");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Joined!", description: "You are now a member of this travel chapter." });
+      queryClient.invalidateQueries({ queryKey: ['travel-chapter', selectedChapter.id] });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  });
+
+  const isMember = chapterDetails?.isMember;
+  const memberCount = chapterDetails?.members?.length || selectedChapter?.memberCount || 0;
+
+  return (
+    <Dialog open={!!selectedChapter} onOpenChange={(open) => !open && onClose()}>
+      <DialogContent className="w-[92vw] max-w-[600px] rounded-3xl p-0 overflow-hidden bg-white border border-gray-100 shadow-2xl">
+        {selectedChapter && (
+          <>
+            {/* Image Header */}
+            <div className="h-48 sm:h-64 w-full relative bg-gray-100">
                 {selectedChapter.cover_image ? (
                   <img src={selectedChapter.cover_image} alt={selectedChapter.city} className="w-full h-full object-cover" />
                 ) : (
-                  <div className="absolute inset-0 bg-gradient-to-br from-emerald-600 to-teal-800 opacity-80" />
+                  <div className="absolute inset-0 bg-gradient-to-br from-[#008060] to-emerald-800 opacity-90" />
                 )}
                 <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
@@ -516,48 +575,57 @@ export function TravelChapterSection({
               </div>
 
               {/* Content Body */}
-              <div className="p-6 sm:p-8 max-h-[50vh] overflow-y-auto">
-                <div className="mb-6">
-                  <h4 className="text-sm font-bold text-gray-400 uppercase tracking-wider mb-3">About this chapter</h4>
-                  <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
-                    {selectedChapter.description || "A growing community of TKS alumni in this area. Connect with like-minded individuals, share resources, and help build our global network."}
-                  </p>
+              <div className="p-6 sm:p-8 max-h-[50vh] overflow-y-auto text-gray-800">
+                <div className="mb-6 flex justify-between items-center">
+                  <div>
+                    <h4 className="text-sm font-bold text-gray-500 uppercase tracking-wider mb-1">About this chapter</h4>
+                    <p className="text-gray-700 leading-relaxed whitespace-pre-wrap">
+                      {selectedChapter.description || "A growing community of TKS alumni in this area. Connect with like-minded individuals, share resources, and help build our global network."}
+                    </p>
+                  </div>
+                  <div className="text-right">
+                    <span className="text-3xl font-black text-[#008060] block">{memberCount}</span>
+                    <span className="text-xs text-gray-500 font-bold uppercase tracking-wider">Members</span>
+                  </div>
                 </div>
               </div>
               
               {/* Footer Actions */}
-              <div className="p-6 border-t border-gray-100 flex gap-4 bg-gray-50/50">
+              <div className="p-6 border-t border-gray-100 flex flex-col sm:flex-row gap-3 bg-gray-50">
                 <Button 
-                  className="flex-1 h-12 bg-[#008060] hover:bg-[#006b51] text-white shadow-sm font-bold rounded-xl"
-                  onClick={() => {
-                    if (selectedChapter.created_by) {
-                      setLocation(`/profile/${selectedChapter.created_by}`);
-                    } else {
-                      setLocation('/connections');
-                    }
-                  }}
+                  className="flex-1 h-12 bg-[#008060] hover:bg-[#006b51] text-white shadow-sm font-bold rounded-xl border-0"
+                  onClick={() => setLocation(`/travel-chapters/${selectedChapter.id}`)}
                 >
-                  <UserPlus className="w-4 h-4 mr-2" /> Connect
+                  <Users className="w-4 h-4 mr-2" /> Open Group Chat
                 </Button>
-                <Button 
-                  variant="outline" 
-                  className="flex-1 h-12 border-gray-200 text-gray-700 hover:bg-gray-100 font-bold rounded-xl"
-                  onClick={() => {
-                    if (selectedChapter.created_by) {
-                      const prefillMsg = encodeURIComponent(`Hi! I noticed your ${selectedChapter.city} Travel Chapter on the TKS Alumni Portal. It's great to see alumni building communities globally — would be happy to connect and exchange thoughts! 🌐`);
-                      setLocation(`/inbox?user=${selectedChapter.created_by}&msg=${prefillMsg}`);
-                    } else {
-                      setLocation('/inbox');
-                    }
-                  }}
-                >
-                  <MessageSquare className="w-4 h-4 mr-2" /> Message
-                </Button>
+
+                {!isMember ? (
+                  <Button 
+                    className="flex-1 h-12 bg-white hover:bg-emerald-50 border border-emerald-200 text-[#008060] shadow-sm font-bold rounded-xl"
+                    onClick={() => joinMutation.mutate()}
+                    disabled={joinMutation.isPending || isLoading}
+                  >
+                    {joinMutation.isPending ? "Joining..." : <><Plus className="w-4 h-4 mr-2" /> Join Chapter</>}
+                  </Button>
+                ) : (
+                  <Button 
+                    className="flex-1 h-12 bg-white hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm"
+                    onClick={() => {
+                      if (selectedChapter.created_by) {
+                        const prefillMsg = encodeURIComponent(`Hi! I noticed your ${selectedChapter.city} Travel Chapter on the TKS Alumni Portal. It's great to see alumni building communities globally — would be happy to connect and exchange thoughts! 🌐`);
+                        setLocation(`/inbox?user=${selectedChapter.created_by}&msg=${prefillMsg}`);
+                      } else {
+                        setLocation('/inbox');
+                      }
+                    }}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" /> Message Host
+                  </Button>
+                )}
               </div>
             </>
           )}
         </DialogContent>
       </Dialog>
-    </div>
-  );
-};
+    );
+}
