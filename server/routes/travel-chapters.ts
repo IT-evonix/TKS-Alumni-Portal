@@ -345,7 +345,7 @@ router.delete("/:id/leave", requireAuth, async (req, res) => {
 });
 
 // GET messages for a chapter
-router.get("/api/travel-chapters/:id/messages", requireAuth, async (req, res) => {
+router.get("/:id/messages", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const userId = req.headers["user-id"] as string;
@@ -366,7 +366,11 @@ router.get("/api/travel-chapters/:id/messages", requireAuth, async (req, res) =>
       .from("travel_chapter_messages")
       .select(`
         *,
-        user:users!travel_chapter_messages_user_id_fkey(firstName, lastName, profilePicture)
+        user:users!travel_chapter_messages_user_id_fkey(
+          id,
+          username,
+          alumni(first_name, last_name, profile_picture)
+        )
       `)
       .eq("chapter_id", id)
       .order("created_at", { ascending: true });
@@ -376,7 +380,23 @@ router.get("/api/travel-chapters/:id/messages", requireAuth, async (req, res) =>
       if (error.code === '42P01') return res.json([]);
       throw error;
     }
-    res.json(messages || []);
+    
+    const formattedMessages = messages?.map((msg: any) => {
+      const u = Array.isArray(msg.user) ? msg.user[0] : msg.user;
+      const al = Array.isArray(u?.alumni) ? u?.alumni[0] : u?.alumni;
+      return {
+        ...msg,
+        user: {
+          id: u?.id,
+          username: u?.username,
+          firstName: al?.first_name,
+          lastName: al?.last_name,
+          profilePicture: al?.profile_picture
+        }
+      };
+    });
+    
+    res.json(formattedMessages || []);
   } catch (error: any) {
     console.error("Error fetching chapter messages:", error);
     res.status(500).json({ error: error.message || "Server Error" });
@@ -384,7 +404,7 @@ router.get("/api/travel-chapters/:id/messages", requireAuth, async (req, res) =>
 });
 
 // POST a message to a chapter
-router.post("/api/travel-chapters/:id/messages", requireAuth, async (req, res) => {
+router.post("/:id/messages", requireAuth, async (req, res) => {
   try {
     const { id } = req.params;
     const { content } = req.body;
@@ -414,15 +434,230 @@ router.post("/api/travel-chapters/:id/messages", requireAuth, async (req, res) =
       })
       .select(`
         *,
-        user:users!travel_chapter_messages_user_id_fkey(firstName, lastName, profilePicture)
+        user:users!travel_chapter_messages_user_id_fkey(
+          id,
+          username,
+          alumni(first_name, last_name, profile_picture)
+        )
       `)
       .single();
 
     if (error) throw error;
-    res.json(message);
+    
+    const u = Array.isArray(message.user) ? message.user[0] : message.user;
+    const al = Array.isArray(u?.alumni) ? u?.alumni[0] : u?.alumni;
+    const formattedMessage = {
+      ...message,
+      user: {
+        id: u?.id,
+        username: u?.username,
+        firstName: al?.first_name,
+        lastName: al?.last_name,
+        profilePicture: al?.profile_picture
+      }
+    };
+    
+    res.json(formattedMessage);
   } catch (error: any) {
     console.error("Error posting chapter message:", error);
     res.status(500).json({ error: error.message || "Server Error" });
+  }
+});
+
+// PATCH edit a message
+router.patch("/:id/messages/:msgId", requireAuth, async (req, res) => {
+  try {
+    const { id, msgId } = req.params;
+    const { content } = req.body;
+    const userId = req.headers["user-id"] as string;
+
+    if (!content || !content.trim()) {
+      return res.status(400).json({ error: "Content is required" });
+    }
+
+    // Verify message exists and requester is the author
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from("travel_chapter_messages")
+      .select("user_id")
+      .eq("id", msgId)
+      .eq("chapter_id", id)
+      .single();
+
+    if (fetchError || !existingMessage) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    if (existingMessage.user_id !== userId) {
+      return res.status(403).json({ error: "Only the author can edit this message" });
+    }
+
+    const { data: message, error } = await supabase
+      .from("travel_chapter_messages")
+      .update({
+        content: content.trim(),
+        updated_at: new Date().toISOString()
+      })
+      .eq("id", msgId)
+      .select(`
+        *,
+        user:users!travel_chapter_messages_user_id_fkey(
+          id,
+          username,
+          alumni(first_name, last_name, profile_picture)
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+
+    const u = Array.isArray(message.user) ? message.user[0] : message.user;
+    const al = Array.isArray(u?.alumni) ? u?.alumni[0] : u?.alumni;
+    const formattedMessage = {
+      ...message,
+      user: {
+        id: u?.id,
+        username: u?.username,
+        firstName: al?.first_name,
+        lastName: al?.last_name,
+        profilePicture: al?.profile_picture
+      }
+    };
+
+    res.json(formattedMessage);
+  } catch (error: any) {
+    console.error("Error editing chapter message:", error);
+    res.status(500).json({ error: error.message || "Server Error" });
+  }
+});
+
+// DELETE a message
+router.delete("/:id/messages/:msgId", requireAuth, async (req, res) => {
+  try {
+    const { id, msgId } = req.params;
+    const userId = req.headers["user-id"] as string;
+
+    // Verify message exists
+    const { data: existingMessage, error: fetchError } = await supabase
+      .from("travel_chapter_messages")
+      .select("user_id")
+      .eq("id", msgId)
+      .eq("chapter_id", id)
+      .single();
+
+    if (fetchError || !existingMessage) {
+      return res.status(404).json({ error: "Message not found" });
+    }
+
+    // Check if requester is author or admin
+    let isAuthorized = existingMessage.user_id === userId;
+
+    if (!isAuthorized) {
+      const { data: user } = await supabase
+        .from("users")
+        .select("user_role")
+        .eq("id", userId)
+        .single();
+      
+      if (user?.user_role === "administrator") {
+        isAuthorized = true;
+      }
+    }
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: "Not authorized to delete this message" });
+    }
+
+    const { error } = await supabase
+      .from("travel_chapter_messages")
+      .delete()
+      .eq("id", msgId);
+
+    if (error) throw error;
+
+    res.json({ message: "Message deleted successfully" });
+  } catch (error: any) {
+    console.error("Error deleting chapter message:", error);
+    res.status(500).json({ error: error.message || "Server Error" });
+  }
+});
+
+// PATCH /api/travel-chapters/:id - Edit a travel chapter
+router.patch("/:id", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.headers["user-id"] as string;
+    const userRole = (req as any).user?.role;
+
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    // Fetch existing chapter
+    const { data: chapter, error: fetchError } = await supabase
+      .from("travel_chapters")
+      .select("created_by, status")
+      .eq("id", id)
+      .single();
+
+    if (fetchError || !chapter) {
+      return res.status(404).json({ error: "Chapter not found" });
+    }
+
+    // Verify ownership or admin status
+    if (chapter.created_by !== userId && userRole !== 'administrator') {
+      return res.status(403).json({ error: "Forbidden: You can only edit your own proposed chapters" });
+    }
+
+    const validatedData = proposeChapterSchema.partial().parse(req.body);
+    const updates: any = { ...validatedData, updated_at: new Date().toISOString() };
+
+    // Handle base64 cover image if provided
+    if (validatedData.cover_image && validatedData.cover_image.startsWith('data:image/')) {
+      const base64Data = validatedData.cover_image.replace(/^data:image\/\w+;base64,/, "");
+      const buffer = Buffer.from(base64Data, 'base64');
+      const fileExt = validatedData.cover_image.substring(
+          "data:image/".length, 
+          validatedData.cover_image.indexOf(";base64")
+      );
+      const fileName = `${Date.now()}-${Math.random().toString(36).substring(7)}.${fileExt}`;
+      
+      const { error: uploadError } = await supabase.storage
+        .from('event_covers')
+        .upload(`travel-chapters/${fileName}`, buffer, {
+          contentType: `image/${fileExt}`
+        });
+        
+      if (uploadError) {
+        console.error("Storage upload error:", uploadError);
+        throw new Error("Failed to upload cover image.");
+      }
+      
+      const { data: { publicUrl } } = supabase.storage
+        .from('event_covers')
+        .getPublicUrl(`travel-chapters/${fileName}`);
+        
+      updates.cover_image = publicUrl;
+    }
+
+    // Reset rejected status to pending if updated
+    if (chapter.status === 'rejected') {
+      updates.status = 'pending';
+    }
+
+    const { data: updatedChapter, error: updateError } = await supabase
+      .from("travel_chapters")
+      .update(updates)
+      .eq("id", id)
+      .select()
+      .single();
+
+    if (updateError) throw updateError;
+
+    res.json({ message: "Chapter updated successfully", chapter: updatedChapter });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
+    console.error("Error updating chapter:", error);
+    res.status(500).json({ error: "Failed to update chapter" });
   }
 });
 
