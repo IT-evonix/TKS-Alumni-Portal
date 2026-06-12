@@ -1,7 +1,7 @@
 -- Atomic podcast view tracking: inserts a unique view row and conditionally
 -- increments the views_count counter in a single transaction to prevent
 -- race conditions when multiple concurrent requests view the same episode.
-CREATE OR REPLACE FUNCTION increment_podcast_view(p_podcast_id uuid, p_user_id uuid)
+CREATE OR REPLACE FUNCTION increment_podcast_view(p_podcast_id text, p_user_id text)
 RETURNS integer AS $$
 DECLARE
   v_inserted integer;
