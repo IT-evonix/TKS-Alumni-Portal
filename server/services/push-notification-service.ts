@@ -60,7 +60,7 @@ export async function sendPushNotification(
 
     // Get all push subscriptions for the user
     const { data: subscriptions, error } = await supabase
-      .from('push_subscriptions')
+      .from('push_notification_subscriptions')
       .select('*')
       .eq('alumni_id', alumniData.id)
       .eq('is_active', true);
@@ -99,7 +99,7 @@ export async function sendPushNotification(
           // If subscription is invalid, mark it as inactive
           if (error.statusCode === 410 || error.statusCode === 404) {
             await supabase
-              .from('push_subscriptions')
+              .from('push_notification_subscriptions')
               .update({ is_active: false })
               .eq('id', subscription.id);
           }

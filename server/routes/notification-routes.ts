@@ -133,7 +133,7 @@ router.put("/notification-preferences", async (req, res) => {
         // If push notifications were disabled, clean up subscriptions
         if (!pushNotifications) {
             await supabase
-                .from("push_subscriptions")
+                .from("push_notification_subscriptions")
                 .update({ is_active: false })
                 .eq("alumni_id", alumniId);
         }
@@ -206,7 +206,7 @@ router.post("/subscribe", async (req, res) => {
 
         // Insert or update subscription (upsert)
         const { data: pushSub, error: pushError } = await supabase
-            .from("push_subscriptions")
+            .from("push_notification_subscriptions")
             .upsert({
                 alumni_id: alumniId,
                 endpoint: subscription.endpoint,
@@ -266,7 +266,7 @@ router.delete("/unsubscribe", async (req, res) => {
 
         // Delete subscription
         const { error: deleteError } = await supabase
-            .from("push_subscriptions")
+            .from("push_notification_subscriptions")
             .delete()
             .eq("alumni_id", alumniData.id)
             .eq("endpoint", endpoint);
@@ -308,7 +308,7 @@ router.get("/subscriptions", async (req, res) => {
 
         // Get active subscriptions
         const { data: subscriptions, error: subError } = await supabase
-            .from("push_subscriptions")
+            .from("push_notification_subscriptions")
             .select("id, endpoint, user_agent, created_at")
             .eq("alumni_id", alumniData.id)
             .eq("is_active", true)

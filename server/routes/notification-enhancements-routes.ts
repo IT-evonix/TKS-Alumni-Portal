@@ -115,7 +115,7 @@ export function registerNotificationEnhancementRoutes(app: Express) {
       }
 
       const { error } = await supabase
-        .from("push_subscriptions")
+        .from("push_notification_subscriptions")
         .upsert(
           {
             alumni_id: alumniData.id,
@@ -164,7 +164,7 @@ export function registerNotificationEnhancementRoutes(app: Express) {
       }
 
       const { error } = await supabase
-        .from("push_subscriptions")
+        .from("push_notification_subscriptions")
         .update({ is_active: false })
         .eq("alumni_id", alumniData.id)
         .eq("endpoint", endpoint);
