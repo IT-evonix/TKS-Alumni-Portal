@@ -391,19 +391,32 @@ router.get("/:id/viewers", async (req: any, res: any) => {
   try {
     const { data, error } = await supabase
       .from("podcast_views")
-      .select("viewed_at, users:user_id(id, name, email, avatar_url)")
+      .select("viewed_at, user_id, users:user_id(id, username, email)")
       .eq("podcast_id", id)
       .order("viewed_at", { ascending: false });
 
     if (error) return res.status(500).json({ error: error.message });
 
-    const viewers = (data || []).map((row: any) => ({
-      userId: row.users?.id,
-      name: row.users?.name,
-      email: row.users?.email,
-      avatarUrl: row.users?.avatar_url,
-      viewedAt: row.viewed_at,
-    }));
+    const userIds = (data || []).map((row: any) => row.user_id).filter(Boolean);
+    let alumniMap: Record<string, any> = {};
+    if (userIds.length > 0) {
+      const { data: alumniData } = await supabase
+        .from("alumni")
+        .select("user_id, profile_picture_url, first_name, last_name")
+        .in("user_id", userIds);
+      (alumniData || []).forEach((a: any) => { alumniMap[a.user_id] = a; });
+    }
+
+    const viewers = (data || []).map((row: any) => {
+      const alumni = alumniMap[row.user_id];
+      return {
+        userId: row.users?.id,
+        name: alumni ? `${alumni.first_name || ""} ${alumni.last_name || ""}`.trim() : row.users?.username,
+        email: row.users?.email,
+        avatarUrl: alumni?.profile_picture_url || null,
+        viewedAt: row.viewed_at,
+      };
+    });
 
     return res.json({ viewers, total: viewers.length });
   } catch (err: any) {
