@@ -1,6 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { supabase } from "../supabase";
+import { broadcastNotificationToAllAlumni, NotificationType, NotificationRedirectUrl } from "../services/notification-helper";
 
 const router = Router();
 
@@ -477,8 +478,8 @@ router.post("/", async (req, res) => {
     if (title.trim().length < 5) return res.status(400).json({ error: "Title must be at least 5 characters" });
     if (!content?.trim()) return res.status(400).json({ error: "Content is required" });
     const contentText = content.replace(/<[^>]*>/g, "").trim();
-    if (contentText.length < 50) return res.status(400).json({ error: "Content must be at least 50 characters" });
-    if (contentText.length > 1000) return res.status(400).json({ error: "Content must be 1000 characters or fewer" });
+    if (contentText.length < 50) return res.status(400).json({ error: "Content must be at least 50 characters (excluding formatting)" });
+    if (contentText.length > 1000) return res.status(400).json({ error: "Content must be 1000 characters or fewer (excluding formatting)" });
 
     if (excerpt && excerpt.trim().length > 50) {
       return res.status(400).json({ error: "Excerpt must be 50 characters or fewer" });
@@ -551,10 +552,10 @@ router.put("/:id", async (req, res) => {
     if (content !== undefined) {
       const contentText = content?.replace(/<[^>]*>/g, "").trim() ?? "";
       if (!contentText || contentText.length < 50) {
-        return res.status(400).json({ error: "Content must be at least 50 characters" });
+        return res.status(400).json({ error: "Content must be at least 50 characters (excluding formatting)" });
       }
       if (contentText.length > 1000) {
-        return res.status(400).json({ error: "Content must be 1000 characters or fewer" });
+        return res.status(400).json({ error: "Content must be 1000 characters or fewer (excluding formatting)" });
       }
       updates.content = content.trim();
       updates.reading_time_minutes = calculateReadingTime(content.trim());
@@ -697,12 +698,13 @@ router.post("/:id/like", async (req, res) => {
       return res.json({ liked: false });
     }
 
-    const { error: insErr } = await supabase.from("blog_likes").insert({ post_id: id, user_id: userId });
-    if (insErr) {
-      if ((insErr as any).code === "23505") return res.json({ liked: true }); // concurrent duplicate
-      throw insErr;
-    }
-    await atomicCounter(id, "likes_count", 1);
+    const { data: inserted, error: insErr } = await supabase
+      .from("blog_likes")
+      .upsert({ post_id: id, user_id: userId }, { onConflict: "post_id,user_id", ignoreDuplicates: true })
+      .select("id")
+      .maybeSingle();
+    if (insErr) throw insErr;
+    if (inserted) await atomicCounter(id, "likes_count", 1); // only increment if row was actually new
     res.json({ liked: true });
   } catch (error) {
     console.error("Toggle blog like error:", error);
@@ -730,12 +732,13 @@ router.post("/:id/bookmark", async (req, res) => {
       return res.json({ bookmarked: false });
     }
 
-    const { error: insErr } = await supabase.from("blog_bookmarks").insert({ post_id: id, user_id: userId });
-    if (insErr) {
-      if ((insErr as any).code === "23505") return res.json({ bookmarked: true }); // concurrent duplicate
-      throw insErr;
-    }
-    await atomicCounter(id, "bookmarks_count", 1);
+    const { data: inserted, error: insErr } = await supabase
+      .from("blog_bookmarks")
+      .upsert({ post_id: id, user_id: userId }, { onConflict: "post_id,user_id", ignoreDuplicates: true })
+      .select("id")
+      .maybeSingle();
+    if (insErr) throw insErr;
+    if (inserted) await atomicCounter(id, "bookmarks_count", 1); // only increment if row was actually new
     res.json({ bookmarked: true });
   } catch (error) {
     console.error("Toggle blog bookmark error:", error);
@@ -760,15 +763,18 @@ router.post("/:id/comments", async (req, res) => {
       .maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
 
-    // If replying, verify parent comment belongs to this post
+    // If replying, verify parent comment belongs to this post and is top-level (no deeper nesting)
     if (parent_id) {
       const { data: parentComment } = await supabase
         .from("blog_comments")
-        .select("id, post_id")
+        .select("id, post_id, parent_id")
         .eq("id", parent_id)
         .maybeSingle();
       if (!parentComment || parentComment.post_id !== id) {
         return res.status(400).json({ error: "Invalid parent comment" });
+      }
+      if (parentComment.parent_id) {
+        return res.status(400).json({ error: "Replies cannot be nested more than one level deep" });
       }
     }
 
@@ -826,6 +832,19 @@ router.put("/admin/:id/approve", async (req, res) => {
       .select()
       .single();
     if (error) throw error;
+
+    broadcastNotificationToAllAlumni({
+      type: NotificationType.NEW_BLOG,
+      title: "New Blog Post",
+      content: `A new blog post has been published: "${data.title}"`,
+      relatedId: data.id,
+      redirectUrl: `${NotificationRedirectUrl.BLOGS}/${data.slug}`,
+      actorId: data.author_id,
+    }).catch(() => {});
+
+    const io = (global as any).io;
+    if (io) io.emit("new_blog", { blog: data });
+
     res.json(data);
   } catch (error) {
     console.error("Approve blog post error:", error);

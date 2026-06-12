@@ -1,10 +1,10 @@
 import React from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
-import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe, BookOpen } from "lucide-react";
+import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe, BookOpen, Mic2 } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'travel-chapters' | 'blogs';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'travel-chapters' | 'blogs' | 'podcasts';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -56,6 +56,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       key: "blogs",
       color: "text-violet-600",
       bgColor: "bg-violet-50"
+    },
+    {
+      icon: Mic2,
+      label: "Podcasts",
+      path: "/admin/podcasts",
+      key: "podcasts",
+      color: "text-pink-600",
+      bgColor: "bg-pink-50"
     },
     {
       icon: FileText,

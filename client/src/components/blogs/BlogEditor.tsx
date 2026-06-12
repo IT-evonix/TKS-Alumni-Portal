@@ -360,8 +360,8 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
     const content = editor?.getHTML() ?? "";
     const textContent = editor?.getText().trim() ?? "";
     setContentTouched(true);
-    if (textContent.length < CONTENT_MIN) throw new Error(`Content must be at least ${CONTENT_MIN} characters (currently ${textContent.length})`);
-    if (textContent.length > CONTENT_MAX) throw new Error(`Content must be ${CONTENT_MAX} characters or fewer (currently ${textContent.length})`);
+    if (textContent.length < CONTENT_MIN) throw new Error(`Content must be at least ${CONTENT_MIN} characters excluding formatting (currently ${textContent.length})`);
+    if (textContent.length > CONTENT_MAX) throw new Error(`Content must be ${CONTENT_MAX} characters or fewer excluding formatting (currently ${textContent.length})`);
 
     const body = {
       ...data,

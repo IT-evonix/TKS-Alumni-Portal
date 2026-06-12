@@ -89,6 +89,7 @@ const AdminBlogsPage = lazy(() => import("@/pages/AdminBlogsPage").then(m => ({ 
 const TravelChaptersDirectoryPage = lazy(() => import("@/pages/TravelChaptersDirectoryPage").then(m => ({ default: m.default })));
 const TravelChapterPage = lazy(() => import("@/pages/TravelChapterPage").then(m => ({ default: m.default })));
 const PodcastPage = lazy(() => import("@/pages/PodcastPage").then(m => ({ default: m.PodcastPage })));
+const AdminPodcastsPage = lazy(() => import("@/pages/AdminPodcastsPage").then(m => ({ default: m.AdminPodcastsPage })));
 
 // Admin pages - lazy loaded (rarely accessed by most users)
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
@@ -151,6 +152,7 @@ function Router() {
           <ProtectedRoute path="/blogs/:slug" component={BlogDetailPage} />
           <ProtectedRoute path="/travel-chapters" component={TravelChaptersDirectoryPage} />
           <ProtectedRoute path="/podcast" component={PodcastPage} />
+          <ProtectedRoute path="/podcasts/:slug" component={PodcastPage} />
           <ProtectedRoute path="/travel-chapters/:id" component={TravelChapterPage} />
 
           {/* Protected Admin Routes */}
@@ -168,6 +170,7 @@ function Router() {
           <ProtectedRoute path="/admin/gamification" component={AdminGamificationPage} adminOnly />
           <ProtectedRoute path="/admin/location-export" component={AdminLocationExportPage} adminOnly />
           <ProtectedRoute path="/admin/blogs" component={AdminBlogsPage} adminOnly />
+          <ProtectedRoute path="/admin/podcasts" component={AdminPodcastsPage} adminOnly />
           <ProtectedRoute path="/admin/travel-chapters" component={AdminTravelChaptersPage} adminOnly />
 
           {/* Fallback to 404 */}

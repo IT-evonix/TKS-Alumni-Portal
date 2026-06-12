@@ -14,6 +14,8 @@ export interface RealtimeUpdateHandlers {
   onNewPost?: (data: { post: any }) => void;
   onPostDeleted?: (data: { postId: string }) => void;
   onMessageReceived?: (data: { message: any }) => void;
+  onNewBlog?: (data: { blog: any }) => void;
+  onNewPodcast?: (data: { podcast: any }) => void;
 }
 
 /**
@@ -81,6 +83,22 @@ export function useRealtimeUpdates(handlers: RealtimeUpdateHandlers) {
       socket.on('new_message', handleMessageReceived);
     }
 
+    // New blog published
+    if (handlers.onNewBlog) {
+      const handleNewBlog = (data: any) => {
+        handlers.onNewBlog?.(data);
+      };
+      socket.on('new_blog', handleNewBlog);
+    }
+
+    // New podcast published
+    if (handlers.onNewPodcast) {
+      const handleNewPodcast = (data: any) => {
+        handlers.onNewPodcast?.(data);
+      };
+      socket.on('new_podcast', handleNewPodcast);
+    }
+
     return () => {
       // Cleanup listeners
       if (handlers.onPostLike) socket.off('post_like');
@@ -90,6 +108,8 @@ export function useRealtimeUpdates(handlers: RealtimeUpdateHandlers) {
       if (handlers.onNewPost) socket.off('new_post');
       if (handlers.onPostDeleted) socket.off('post_deleted');
       if (handlers.onMessageReceived) socket.off('new_message');
+      if (handlers.onNewBlog) socket.off('new_blog');
+      if (handlers.onNewPodcast) socket.off('new_podcast');
     };
   }, [handlers]);
 }

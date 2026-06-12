@@ -20,6 +20,7 @@ import { CertificationManager } from "@/components/profile/CertificationManager"
 import { AchievementManager } from "@/components/profile/AchievementManager";
 import { LanguageManager } from "@/components/profile/LanguageManager";
 import { ResumeUpload } from "@/components/profile/ResumeUpload";
+import { InterestPicker } from "@/components/profile/InterestPicker";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { BackButton } from "@/components/common/BackButton";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
@@ -117,6 +118,7 @@ export const UserProfilePage = (): JSX.Element => {
     expertiseAreas: '[]',
     volunteerInterests: '[]',
     keywords: '[]',
+    interestAreas: '[]',
     timezone: 'Asia/Kolkata',
     resumeUrl: '',
     // New startup-related fields
@@ -229,6 +231,7 @@ export const UserProfilePage = (): JSX.Element => {
             certifications: data.alumni.certifications || '[]',
             languagesKnown: data.alumni.languages_known || '[]',
             expertiseAreas: data.alumni.expertise_areas || '[]',
+            interestAreas: data.alumni.interest_areas || '[]',
             keywords: data.alumni.keywords || '[]',
             timezone: data.alumni.timezone || 'Asia/Kolkata',
             achievements: data.alumni.achievements || '[]',
@@ -437,7 +440,7 @@ export const UserProfilePage = (): JSX.Element => {
         'firstName', 'lastName', 'email', 'phone', 'batch', 'gender',
         'currentCompany', 'currentRole', 'location', 'linkedinUrl', 'bio', 'githubUrl', 'twitterUrl',
         'personalWebsite', 'showEmail', 'showPhone', 'employmentStatus', 'yearsOfExperience',
-        'expertiseAreas', 'volunteerInterests', 'keywords', 'timezone', 'resumeUrl',
+        'expertiseAreas', 'volunteerInterests', 'keywords', 'interestAreas', 'timezone', 'resumeUrl',
         'isStartupFounder', 'startupName', 'startupRole', 'fundingStage', 'foundingYear',
         'linkedin_photo_url', 'currentCity', 'currentState', 'currentCountry', 'latitude', 'longitude', 'locationLabel'
       ];
@@ -504,6 +507,7 @@ export const UserProfilePage = (): JSX.Element => {
           expertiseAreas: profile.expertiseAreas,
           volunteerInterests: profile.volunteerInterests,
           keywords: profile.keywords,
+          interestAreas: profile.interestAreas,
           timezone: profile.timezone,
           isStartupFounder: profile.isStartupFounder,
           startupName: profile.startupName,
@@ -745,6 +749,7 @@ export const UserProfilePage = (): JSX.Element => {
           expertiseAreas: profile.expertiseAreas,
           volunteerInterests: profile.volunteerInterests,
           keywords: profile.keywords,
+          interestAreas: profile.interestAreas,
           timezone: profile.timezone,
           isStartupFounder: profile.isStartupFounder,
           startupName: profile.startupName,
@@ -1951,6 +1956,23 @@ export const UserProfilePage = (): JSX.Element => {
                     <Button type="button" variant="outline" className="h-11" onClick={() => handleAddTag('keywords', 'keyword')}>Add</Button>
                   </div>
                 )}
+              </div>
+
+              {/* Mentorship Interest Areas */}
+              <div className="space-y-3">
+                <div>
+                  <Label className="text-base font-semibold">Mentorship Interest Areas</Label>
+                  <p className="text-sm text-gray-500 mt-0.5">What you want to learn (mentee) or help others with (mentor)</p>
+                </div>
+                <InterestPicker
+                  value={(() => {
+                    try {
+                      const parsed = typeof profile.interestAreas === 'string' ? JSON.parse(profile.interestAreas || '[]') : profile.interestAreas;
+                      return Array.isArray(parsed) ? parsed : [];
+                    } catch { return []; }
+                  })()}
+                  onChange={(v) => setProfile({ ...profile, interestAreas: JSON.stringify(v) })}
+                />
               </div>
             </CardContent>
           </Card>

@@ -309,6 +309,10 @@ export const NotificationType = {
     BADGE_EARNED: "badge_earned",
     /** Sent when a user loses a competitive badge */
     BADGE_LOST: "badge_lost",
+    /** Sent to all alumni when a new podcast episode is published */
+    NEW_PODCAST: "new_podcast",
+    /** Sent to all alumni when a new blog post is published */
+    NEW_BLOG: "new_blog",
 } as const;
 
 /**
@@ -324,4 +328,56 @@ export const NotificationRedirectUrl = {
     PROFILE: "/profile",
     ADMIN_USERS: "/admin/users",
     ADMIN_FEED: "/admin/feed",
+    PODCASTS: "/podcasts",
+    BLOGS: "/blogs",
 } as const;
+
+/**
+ * Broadcasts a notification to all approved, non-blocked alumni users.
+ * Errors for individual users are logged but do not stop the broadcast.
+ */
+export async function broadcastNotificationToAllAlumni(
+    params: Omit<CreateNotificationParams, "userId">
+): Promise<void> {
+    try {
+        // Fetch all active, approved alumni user IDs in batches
+        let from = 0;
+        const batchSize = 200;
+        const userIds: string[] = [];
+
+        while (true) {
+            const { data, error } = await supabase
+                .from("users")
+                .select("id")
+                .eq("account_approved", true)
+                .eq("account_blocked", false)
+                .range(from, from + batchSize - 1);
+
+            if (error) {
+                console.error("[Notification] Failed to fetch alumni for broadcast:", error);
+                break;
+            }
+
+            if (!data || data.length === 0) break;
+            userIds.push(...data.map((u: any) => u.id));
+            if (data.length < batchSize) break;
+            from += batchSize;
+        }
+
+        console.log(`[Notification] Broadcasting ${params.type} to ${userIds.length} alumni`);
+
+        // Send notifications concurrently, capped at 10 at a time to avoid overwhelming the DB
+        const concurrency = 10;
+        for (let i = 0; i < userIds.length; i += concurrency) {
+            await Promise.all(
+                userIds.slice(i, i + concurrency).map((userId) =>
+                    createAndEmitNotification({ ...params, userId }).catch((err) =>
+                        console.error(`[Notification] Broadcast failed for user ${userId}:`, err)
+                    )
+                )
+            );
+        }
+    } catch (error) {
+        console.error("[Notification] Exception in broadcastNotificationToAllAlumni:", error);
+    }
+}

@@ -98,6 +98,9 @@ export const alumni = pgTable("alumni", {
   isActive: boolean("is_active").default(true),
 
 
+  // Interest areas — JSON-encoded string array, used for mentor-mentee matching
+  interestAreas: text("interest_areas"),
+
   // Timestamps
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
@@ -523,6 +526,26 @@ export const signupRateLimits = pgTable("signup_rate_limits", {
   attemptedAt: timestamp("attempted_at").defaultNow().notNull(),
 });
 
+// ==================== MENTORSHIP ====================
+
+export const mentorshipRequests = pgTable("mentorship_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  menteeId: varchar("mentee_id").notNull(),
+  mentorId: varchar("mentor_id").notNull(),
+  status: text("status").default("pending"), // pending | accepted | rejected
+  message: text("message"),
+  goalText: text("goal_text"),
+  matchScore: integer("match_score"), // 0–100
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const insertMentorshipRequestSchema = createInsertSchema(mentorshipRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
@@ -683,6 +706,55 @@ export type InsertPostComment = z.infer<typeof insertPostCommentSchema>;
 // Types for comment replies
 export type PostCommentReply = typeof postCommentReplies.$inferSelect;
 export type InsertPostCommentReply = z.infer<typeof insertPostCommentReplySchema>;
+
+// ==================== PODCAST MODULE ====================
+
+export const podcasts = pgTable("podcasts", {
+  id:            varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  createdBy:     varchar("created_by").notNull(),
+  title:         text("title").notNull(),
+  slug:          text("slug").notNull().unique(),
+  description:   text("description"),
+  showNotes:     text("show_notes"),
+  videoUrl:      text("video_url").notNull(),
+  embedUrl:      text("embed_url"),
+  links:         text("links").default("[]"),
+  tags:          text("tags").array().default(sql`'{}'::text[]`),
+  episodeNumber: integer("episode_number"),
+  status:        text("status").notNull().default("draft"),
+  scheduledAt:   timestamp("scheduled_at", { withTimezone: true }),
+  publishedAt:   timestamp("published_at", { withTimezone: true }),
+  isFeatured:    boolean("is_featured").default(false),
+  viewsCount:    integer("views_count").default(0),
+  createdAt:     timestamp("created_at", { withTimezone: true }).defaultNow(),
+  updatedAt:     timestamp("updated_at", { withTimezone: true }).defaultNow(),
+});
+
+export const insertPodcastSchema = createInsertSchema(podcasts).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  viewsCount: true,
+  embedUrl: true,
+}).extend({
+  links: z.array(z.object({ label: z.string(), url: z.string() })).default([]),
+  status: z.enum(["draft", "scheduled", "published"]).default("draft"),
+  scheduledAt: z.string().datetime({ offset: true }).optional().nullable(),
+  tags: z.array(z.string()).default([]),
+  episodeNumber: z.number().int().positive().optional().nullable(),
+});
+
+export type Podcast = typeof podcasts.$inferSelect;
+export type InsertPodcast = z.infer<typeof insertPodcastSchema>;
+
+export const podcastViews = pgTable("podcast_views", {
+  id:        varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  podcastId: varchar("podcast_id").notNull(),
+  userId:    varchar("user_id").notNull(),
+  viewedAt:  timestamp("viewed_at").defaultNow().notNull(),
+});
+
+export type PodcastView = typeof podcastViews.$inferSelect;
 
 // Types for signup requests
 export type SignupRequest = typeof signupRequests.$inferSelect;

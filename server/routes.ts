@@ -26,6 +26,7 @@ import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
 import { aggregateAdminDashboardMetrics } from "./services/admin-metrics-service";
 import gamificationRoutes from "./routes/gamification-routes";
 import blogRoutes from "./routes/blog-routes";
+import podcastRoutes from "./routes/podcast-routes";
 import travelChaptersRoutes from "./routes/travel-chapters";
 import { ensureDefaultPointRulesExist, ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
 import {
@@ -178,6 +179,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/resume", requireAuth, resumeRoutes);
   app.use("/api/gamification", gamificationRoutes);
   app.use("/api/blogs", blogRoutes);
+  app.use("/api/podcasts", podcastRoutes);
   app.use("/api/travel-chapters", travelChaptersRoutes);
   ensureDefaultPointRulesExist().catch(err =>
     console.error("[Gamification] Point rules auto-seed failed:", err)
@@ -10890,31 +10892,235 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // ==================== MENTORSHIPROUTES ====================
 
-  // Get available mentors
+  // --- Scoring helper ---
+  function scoreMentor(mentee: any, mentor: any): { score: number; breakdown: Record<string, number> } {
+    const breakdown: Record<string, number> = {
+      interestOverlap: 0,
+      skillOverlap: 0,
+      industryMatch: 0,
+      careerStageGap: 0,
+      availability: 0,
+      timezone: 0,
+    };
+
+    // Interest overlap (25%) — Jaccard similarity between mentee and mentor interest_areas
+    const parseInterests = (raw: any): string[] => {
+      try {
+        if (Array.isArray(raw)) return raw.map((s: string) => s.toLowerCase());
+        if (typeof raw === "string" && raw.trim()) return JSON.parse(raw).map((s: string) => s.toLowerCase());
+      } catch { /* */ }
+      return [];
+    };
+    const menteeInterests = parseInterests(mentee.interest_areas);
+    const mentorInterests = parseInterests(mentor.interest_areas);
+    if (menteeInterests.length > 0 && mentorInterests.length > 0) {
+      const intersection = menteeInterests.filter(i => mentorInterests.includes(i));
+      const unionSize = new Set([...menteeInterests, ...mentorInterests]).size;
+      const jaccard = intersection.length / unionSize;
+      breakdown.interestOverlap = Math.round(jaccard * 25);
+    } else {
+      breakdown.interestOverlap = 8; // partial credit when interest data missing
+    }
+
+    // Skill overlap (25%) — weighted by proficiency
+    const proficiencyWeight: Record<string, number> = { beginner: 1, intermediate: 2, advanced: 3, expert: 4 };
+    const menteeSkills: string[] = (() => {
+      try {
+        const raw = mentee.skills;
+        if (Array.isArray(raw)) return raw.map((s: any) => s.toLowerCase());
+        if (typeof raw === "string") return JSON.parse(raw).map((s: string) => s.toLowerCase());
+      } catch { /* */ }
+      return [];
+    })();
+    const mentorSkillRows: any[] = mentor.alumni_skills || [];
+    if (menteeSkills.length > 0 && mentorSkillRows.length > 0) {
+      let weightedMatches = 0;
+      for (const ms of mentorSkillRows) {
+        if (menteeSkills.includes((ms.skill_name || "").toLowerCase())) {
+          weightedMatches += proficiencyWeight[ms.proficiency_level] || 1;
+        }
+      }
+      const maxPossible = menteeSkills.length * 4;
+      breakdown.skillOverlap = Math.round((weightedMatches / maxPossible) * 25);
+    } else {
+      breakdown.skillOverlap = 8; // partial credit when no skill data
+    }
+
+    // Industry match (20%)
+    const relatedIndustries: Record<string, string[]> = {
+      technology: ["software", "it", "tech", "engineering", "data"],
+      business: ["finance", "consulting", "management", "operations"],
+      healthcare: ["medicine", "pharma", "biotech", "health"],
+      education: ["academia", "research", "teaching"],
+    };
+    const mi = (mentee.industry || "").toLowerCase();
+    const ri = (mentor.industry || "").toLowerCase();
+    if (mi && ri) {
+      if (mi === ri) {
+        breakdown.industryMatch = 20;
+      } else {
+        const related = Object.values(relatedIndustries).find(group => group.includes(mi));
+        breakdown.industryMatch = related && related.includes(ri) ? 10 : 0;
+      }
+    } else {
+      breakdown.industryMatch = 5;
+    }
+
+    // Career stage gap (15%) — ideal 5–15 yrs ahead
+    const menteeYrs = mentee.years_of_experience ?? (mentee.graduation_year ? new Date().getFullYear() - mentee.graduation_year : null);
+    const mentorYrs = mentor.years_of_experience ?? (mentor.graduation_year ? new Date().getFullYear() - mentor.graduation_year : null);
+    if (menteeYrs !== null && mentorYrs !== null) {
+      const diff = mentorYrs - menteeYrs;
+      if (diff >= 5 && diff <= 15) breakdown.careerStageGap = 15;
+      else if (diff >= 3 && diff <= 20) breakdown.careerStageGap = 9;
+      else if (diff > 0) breakdown.careerStageGap = 4;
+    } else {
+      breakdown.careerStageGap = 6;
+    }
+
+    // Availability (10%)
+    const slots = (mentor.max_mentees ?? 3) - (mentor.mentee_count ?? 0);
+    if (mentor.mentor_available !== false && slots > 0) {
+      breakdown.availability = Math.min(10, 5 + slots * 2);
+    }
+
+    // Timezone proximity (5%)
+    const parseOffset = (tz: string): number | null => {
+      const m = tz?.match(/UTC([+-]\d+)/i);
+      return m ? parseInt(m[1]) : null;
+    };
+    const mo = parseOffset(mentee.timezone || "");
+    const ro = parseOffset(mentor.timezone || "");
+    if (mo !== null && ro !== null) {
+      const diff = Math.abs(mo - ro);
+      if (diff <= 3) breakdown.timezone = 5;
+      else if (diff <= 6) breakdown.timezone = 3;
+    } else {
+      breakdown.timezone = 2;
+    }
+
+    const score = Math.min(100, Object.values(breakdown).reduce((a, b) => a + b, 0));
+    return { score, breakdown };
+  }
+
+  // Get all distinct interest tags that active mentors have declared
+  app.get("/api/mentorship/available-interests", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from("alumni")
+        .select("interest_areas")
+        .eq("is_mentor", true)
+        .eq("is_active", true)
+        .not("interest_areas", "is", null);
+
+      if (error) {
+        console.error("Get available interests error:", error);
+        return res.status(500).json({ error: "Failed to fetch interests" });
+      }
+
+      const tagSet = new Set<string>();
+      for (const row of data || []) {
+        try {
+          const tags: string[] = JSON.parse(row.interest_areas || "[]");
+          if (Array.isArray(tags)) tags.forEach(t => { if (t) tagSet.add(t); });
+        } catch { /* skip malformed rows */ }
+      }
+
+      res.json({ interests: Array.from(tagSet).sort() });
+    } catch (error) {
+      console.error("Get available interests error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get available mentors (with scoring)
   app.get("/api/mentorship/mentors", async (req, res) => {
     try {
-      const { expertise } = req.query;
+      const { expertise, goal, interests } = req.query;
+      const userId = req.headers["user-id"] as string;
+
+      // Fetch mentee profile for scoring (include interest_areas)
+      let menteeProfile: any = null;
+      if (userId) {
+        const { data } = await supabase
+          .from("alumni")
+          .select("*, alumni_skills(skill_name, proficiency_level)")
+          .eq("user_id", userId)
+          .single();
+        menteeProfile = data;
+      }
 
       let query = supabase
         .from("alumni")
-        .select("*")
+        .select("*, alumni_skills(skill_name, proficiency_level, category, is_primary)")
         .eq("is_mentor", true)
         .eq("is_active", true);
 
-      if (expertise) {
-        query = query.contains("expertise", [expertise]);
+      if (expertise && expertise !== "all") {
+        query = query.ilike("expertise_areas", `%${expertise}%`);
       }
 
-      const { data: mentors, error } = await query.limit(20);
+      const { data: mentors, error } = await query.limit(50);
 
       if (error) {
         console.error("Get mentors error:", error);
         return res.status(500).json({ error: "Failed to fetch mentors" });
       }
 
-      res.json({ mentors: mentors || [] });
+      // Filter by selected interest tags (post-fetch JS filter — interest_areas is a JSON array)
+      const selectedInterests: string[] = typeof interests === "string" && interests.trim()
+        ? interests.split(",").map(s => s.trim().toLowerCase()).filter(Boolean)
+        : [];
+
+      let result = (mentors || []).filter((mentor: any) => {
+        if (selectedInterests.length === 0) return true;
+        try {
+          const mentorInterests: string[] = JSON.parse(mentor.interest_areas || "[]").map((s: string) => s.toLowerCase());
+          return selectedInterests.some(i => mentorInterests.includes(i));
+        } catch { return false; }
+      }).map((mentor: any) => {
+        if (menteeProfile) {
+          const { score, breakdown } = scoreMentor(menteeProfile, mentor);
+          return { ...mentor, match_score: score, score_breakdown: breakdown };
+        }
+        return mentor;
+      });
+
+      // Keyword boost from goal text
+      if (goal && typeof goal === "string" && goal.trim()) {
+        const keywords = goal.toLowerCase().split(/\s+/).filter(w => w.length > 3);
+        result = result.map((m: any) => {
+          const text = `${m.bio || ""} ${m.expertise_areas || ""} ${m.interest_areas || ""} ${m.industry || ""}`.toLowerCase();
+          const boost = keywords.filter(k => text.includes(k)).length * 3;
+          return { ...m, match_score: Math.min(100, (m.match_score || 0) + boost) };
+        });
+      }
+
+      // Sort by match_score descending
+      result.sort((a: any, b: any) => (b.match_score || 0) - (a.match_score || 0));
+
+      res.json({ mentors: result.slice(0, 20) });
     } catch (error) {
       console.error("Get mentors error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get current user's mentor/mentee status
+  app.get("/api/mentorship/my-status", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data } = await supabase
+        .from("alumni")
+        .select("is_mentor, mentor_available, max_mentees, mentee_count, interest_areas")
+        .eq("user_id", userId)
+        .single();
+
+      res.json(data || { is_mentor: false, mentor_available: true, max_mentees: 3, mentee_count: 0, interest_areas: '[]' });
+    } catch (error) {
+      console.error("My status error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -10964,7 +11170,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
-  // Request mentorship
+  // Request mentorship (with duplicate guard + goal text)
   app.post("/api/mentorship/request", async (req, res) => {
     try {
       const userId = req.headers["user-id"] as string;
@@ -10972,12 +11178,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No user ID provided" });
       }
 
-      const { mentorId } = req.body;
+      const { mentorId, message, goalText, matchScore } = req.body;
+
+      // Prevent duplicate pending requests
+      const { data: existing } = await supabase
+        .from("mentorship_requests")
+        .select("id")
+        .eq("mentee_id", userId)
+        .eq("mentor_id", mentorId)
+        .eq("status", "pending")
+        .maybeSingle();
+
+      if (existing) {
+        return res.status(409).json({ error: "You already have a pending request with this mentor." });
+      }
 
       const { error } = await supabase.from("mentorship_requests").insert({
         mentee_id: userId,
         mentor_id: mentorId,
         status: "pending",
+        message: message || null,
+        goal_text: goalText || null,
+        match_score: matchScore || null,
       });
 
       if (error) {
@@ -10985,19 +11207,174 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Failed to send request" });
       }
 
-      // Send real-time notification
+      // Fetch mentee name for notification
+      const { data: menteeAlumni } = await supabase
+        .from("alumni")
+        .select("first_name, last_name")
+        .eq("user_id", userId)
+        .single();
+      const menteeName = menteeAlumni
+        ? `${menteeAlumni.first_name} ${menteeAlumni.last_name}`
+        : "Someone";
+
+      // Send real-time notification to mentor
       const io = (global as any).io;
       if (io) {
         io.to(`user:${mentorId}`).emit("notification", {
           type: "mentorship_request",
           title: "New Mentorship Request",
-          content: "Someone wants you as their mentor!",
+          content: goalText
+            ? `${menteeName}: "${goalText.slice(0, 80)}${goalText.length > 80 ? "…" : ""}"`
+            : `${menteeName} wants you as their mentor!`,
         });
       }
 
       res.json({ message: "Request sent" });
     } catch (error) {
       console.error("Request mentorship error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get mentee's outgoing requests
+  app.get("/api/mentorship/my-requests", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data: requests, error } = await supabase
+        .from("mentorship_requests")
+        .select("*")
+        .eq("mentee_id", userId)
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("My requests error:", error);
+        return res.status(500).json({ error: "Failed to fetch requests" });
+      }
+
+      // Enrich with mentor name/picture
+      const enriched = await Promise.all(
+        (requests || []).map(async (req: any) => {
+          const { data: mentor } = await supabase
+            .from("alumni")
+            .select("first_name, last_name, profile_picture, current_role, current_company")
+            .eq("user_id", req.mentor_id)
+            .single();
+          return { ...req, mentor };
+        })
+      );
+
+      res.json({ requests: enriched });
+    } catch (error) {
+      console.error("My requests error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get mentor's incoming requests
+  app.get("/api/mentorship/incoming", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data: requests, error } = await supabase
+        .from("mentorship_requests")
+        .select("*")
+        .eq("mentor_id", userId)
+        .eq("status", "pending")
+        .order("created_at", { ascending: false });
+
+      if (error) {
+        console.error("Incoming requests error:", error);
+        return res.status(500).json({ error: "Failed to fetch requests" });
+      }
+
+      // Enrich with mentee name/picture
+      const enriched = await Promise.all(
+        (requests || []).map(async (req: any) => {
+          const { data: mentee } = await supabase
+            .from("alumni")
+            .select("first_name, last_name, profile_picture, current_role, current_company, graduation_year")
+            .eq("user_id", req.mentee_id)
+            .single();
+          return { ...req, mentee };
+        })
+      );
+
+      res.json({ requests: enriched });
+    } catch (error) {
+      console.error("Incoming requests error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Accept or reject a mentorship request (mentor action)
+  app.patch("/api/mentorship/request/:id", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { id } = req.params;
+      const { status } = req.body; // "accepted" | "rejected"
+
+      if (!["accepted", "rejected"].includes(status)) {
+        return res.status(400).json({ error: "Invalid status" });
+      }
+
+      // Fetch request to verify mentor ownership and get mentee_id
+      const { data: mentorshipReq } = await supabase
+        .from("mentorship_requests")
+        .select("mentor_id, mentee_id")
+        .eq("id", id)
+        .single();
+
+      if (!mentorshipReq || mentorshipReq.mentor_id !== userId) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+
+      const { error } = await supabase
+        .from("mentorship_requests")
+        .update({ status, updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      if (error) {
+        console.error("Update request error:", error);
+        return res.status(500).json({ error: "Failed to update request" });
+      }
+
+      // Update mentee_count on mentor's alumni record
+      if (status === "accepted") {
+        await supabase.rpc("increment_mentee_count", { mentor_user_id: userId }).catch(() => {
+          // RPC may not exist; best-effort
+        });
+      }
+
+      // Fetch mentor name for notification
+      const { data: mentorAlumni } = await supabase
+        .from("alumni")
+        .select("first_name, last_name")
+        .eq("user_id", userId)
+        .single();
+      const mentorName = mentorAlumni
+        ? `${mentorAlumni.first_name} ${mentorAlumni.last_name}`
+        : "Your mentor";
+
+      // Notify mentee
+      const io = (global as any).io;
+      if (io) {
+        io.to(`user:${mentorshipReq.mentee_id}`).emit("notification", {
+          type: "mentorship_response",
+          title: status === "accepted" ? "Mentorship Request Accepted!" : "Mentorship Request Declined",
+          content: status === "accepted"
+            ? `${mentorName} accepted your mentorship request.`
+            : `${mentorName} declined your mentorship request.`,
+        });
+      }
+
+      res.json({ message: `Request ${status}` });
+    } catch (error) {
+      console.error("Update request error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

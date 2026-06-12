@@ -105,6 +105,13 @@ export interface Alumni {
   show_phone: boolean
   is_verified: boolean
   is_active: boolean
+  is_mentor?: boolean
+  mentor_available?: boolean
+  max_mentees?: number
+  mentee_count?: number
+  years_of_experience?: number
+  timezone?: string
+  expertise_areas?: string
   created_at: string
   updated_at: string
 }

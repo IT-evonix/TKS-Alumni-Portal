@@ -1,0 +1,140 @@
+import React from "react";
+import { useLocation } from "wouter";
+import { Clock, Eye, ArrowRight, BookOpen } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import type { FeedBlog } from "@/types/feed";
+
+interface FeedBlogCardProps {
+  blog: FeedBlog;
+}
+
+function formatDate(date: string) {
+  return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+}
+
+export function FeedBlogCard({ blog }: FeedBlogCardProps) {
+  const [, setLocation] = useLocation();
+  const [coverError, setCoverError] = React.useState(false);
+
+  const authorName = blog.author
+    ? `${blog.author.first_name || ""} ${blog.author.last_name || ""}`.trim() || blog.author.username || "TKS Alumni"
+    : "TKS Alumni";
+  const authorInitials = authorName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) || "TK";
+
+  const navigate = () => setLocation(`/blogs/${blog.slug}`);
+
+  return (
+    <Card
+      className="group overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200"
+      style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)" }}
+      onClick={navigate}
+    >
+      {/* Cover image */}
+      {blog.cover_image && !coverError ? (
+        <div className="relative w-full bg-gray-100 overflow-hidden" style={{ paddingTop: "40%" }}>
+          <img
+            src={blog.cover_image}
+            alt={blog.title}
+            className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+            onError={() => setCoverError(true)}
+          />
+        </div>
+      ) : (
+        <div
+          className="w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center"
+          style={{ height: "120px" }}
+        >
+          <BookOpen className="w-10 h-10 text-[#008060]/25" />
+        </div>
+      )}
+
+      <CardContent className="p-4 space-y-3">
+        {/* Type badge + category */}
+        <div className="flex items-center gap-2 flex-wrap">
+          <Badge className="bg-[#008060]/10 text-[#008060] border border-[#008060]/20 text-xs font-semibold hover:bg-[#008060]/10">
+            Blog Post
+          </Badge>
+          {blog.category && (
+            <Badge
+              className="text-xs font-medium px-2 py-0.5"
+              style={{
+                backgroundColor: `${blog.category.color}20`,
+                color: blog.category.color,
+                border: `1px solid ${blog.category.color}40`,
+              }}
+            >
+              {blog.category.name}
+            </Badge>
+          )}
+        </div>
+
+        {/* Title */}
+        <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2 group-hover:text-[#008060] transition-colors">
+          {blog.title}
+        </h3>
+
+        {/* Excerpt */}
+        {blog.excerpt && (
+          <p className="text-sm text-gray-500 line-clamp-2">{blog.excerpt}</p>
+        )}
+
+        {/* Tags */}
+        {blog.tags && blog.tags.length > 0 && (
+          <div className="flex flex-wrap gap-1">
+            {blog.tags.slice(0, 3).map((tag) => (
+              <span key={tag} className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded-full">
+                #{tag}
+              </span>
+            ))}
+            {blog.tags.length > 3 && (
+              <span className="text-xs text-gray-400">+{blog.tags.length - 3} more</span>
+            )}
+          </div>
+        )}
+
+        {/* Footer */}
+        <div
+          className="flex items-center justify-between pt-2 border-t border-gray-100"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Avatar className="h-6 w-6 flex-shrink-0">
+              <AvatarImage src={blog.author?.profile_picture ?? undefined} />
+              <AvatarFallback className="text-xs bg-[#008060]/10 text-[#008060]">{authorInitials}</AvatarFallback>
+            </Avatar>
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-gray-700 truncate">{authorName}</p>
+              <p className="text-xs text-gray-400">{formatDate(blog.published_at)}</p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3 flex-shrink-0">
+            {blog.reading_time_minutes && (
+              <span className="flex items-center gap-1 text-xs text-gray-400">
+                <Clock className="h-3 w-3" />
+                {blog.reading_time_minutes}m
+              </span>
+            )}
+            {(blog.views_count ?? 0) > 0 && (
+              <span className="flex items-center gap-1 text-xs text-gray-400">
+                <Eye className="h-3 w-3" />
+                {blog.views_count}
+              </span>
+            )}
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-7 text-xs gap-1 border-[#008060]/30 text-[#008060] hover:bg-[#008060] hover:text-white hover:border-[#008060]"
+              onClick={(e) => { e.stopPropagation(); navigate(); }}
+            >
+              Read <ArrowRight className="h-3 w-3" />
+            </Button>
+          </div>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}

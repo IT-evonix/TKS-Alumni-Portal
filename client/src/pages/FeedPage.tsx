@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useMemo } from "react";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +21,9 @@ import { validateTextLength } from "@/utils/validation";
 import { SkeletonPostCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
 import { PageHeading } from "@/components/common/PageHeading";
+import { FeedBlogCard } from "@/components/feed/FeedBlogCard";
+import { FeedPodcastCard } from "@/components/feed/FeedPodcastCard";
+import type { FeedItem } from "@/types/feed";
 
 export const FeedPage = (): JSX.Element => {
   const [postText, setPostText] = useState("");
@@ -80,6 +83,18 @@ export const FeedPage = (): JSX.Element => {
 
   // Posts data
   const [posts, setPosts] = useState<any[]>([]);
+  const [blogs, setBlogs] = useState<any[]>([]);
+  const [podcasts, setPodcasts] = useState<any[]>([]);
+
+  // Merged, chronologically sorted feed items
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const taggedPosts = posts.map((p: any) => ({ ...p, _type: "post" as const, _sortDate: p.created_at }));
+    const taggedBlogs = blogs.map((b: any) => ({ ...b, _type: "blog" as const, _sortDate: b.published_at }));
+    const taggedPodcasts = podcasts.map((p: any) => ({ ...p, _type: "podcast" as const, _sortDate: p.published_at ?? p.created_at }));
+    return [...taggedPosts, ...taggedBlogs, ...taggedPodcasts]
+      .sort((a, b) => new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime())
+      .slice(0, 30);
+  }, [posts, blogs, podcasts]);
 
   // Post creation states
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -131,9 +146,9 @@ export const FeedPage = (): JSX.Element => {
     }
   }, [isPosting, postText, attachedFiles]);
 
-  // Fetch posts on mount
+  // Fetch all feed content on mount
   useEffect(() => {
-    fetchPosts();
+    fetchFeedContent();
   }, []);
 
   // Real-time updates
@@ -177,6 +192,12 @@ export const FeedPage = (): JSX.Element => {
         }
         return prev;
       });
+    },
+    onNewBlog: (data) => {
+      setBlogs(prev => prev.some(b => b.id === data.blog.id) ? prev : [data.blog, ...prev]);
+    },
+    onNewPodcast: (data) => {
+      setPodcasts(prev => prev.some(p => p.id === data.podcast.id) ? prev : [data.podcast, ...prev]);
     },
   });
 
@@ -229,53 +250,45 @@ export const FeedPage = (): JSX.Element => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const fetchPosts = async (isRefresh = false) => {
+  const fetchFeedContent = async (isRefresh = false) => {
     try {
-      if (!isRefresh) {
-        setIsLoadingPosts(true);
-      }
+      if (!isRefresh) setIsLoadingPosts(true);
       setError(null);
 
-      const data = await optimizedFetch('/api/posts?limit=20&offset=0', {
-        method: 'GET',
-        headers: {
-          'user-id': localStorage.getItem('userId') || '',
-        },
-        ttl: 20000, // Cache for 20 seconds
-        dedupe: true
-      }).catch(async () => {
-        // Fallback to regular fetch if optimized fetch fails
-        const response = await fetch('/api/posts?limit=20&offset=0', {
-          headers: {
-            'user-id': localStorage.getItem('userId') || '',
-          }
-        });
-        if (!response.ok) {
-          const errorInfo = await handleAPIError(response);
-          throw errorInfo;
-        }
-        return response.json();
-      });
-      const apiPosts = data.posts || [];
+      const headers = getAuthHeaders();
 
-      // Set posts from API
-      setPosts(apiPosts);
+      const [postsRes, blogsRes, podcastsRes] = await Promise.allSettled([
+        optimizedFetch('/api/posts?limit=20&offset=0', { method: 'GET', headers, ttl: 20000, dedupe: true }),
+        optimizedFetch('/api/blogs?limit=20&page=1',   { method: 'GET', headers, ttl: 30000, dedupe: true }),
+        optimizedFetch('/api/podcasts?limit=20&page=1', { method: 'GET', headers: {}, ttl: 30000, dedupe: true }),
+      ]);
+
+      if (postsRes.status === 'fulfilled') {
+        setPosts(postsRes.value.posts || []);
+      } else {
+        // Posts fetch failed — surface error but still show other content
+        logError(postsRes.reason, 'FeedPage.fetchFeedContent.posts');
+        const errorMessage = getUserFriendlyError(postsRes.reason);
+        setError(errorMessage);
+        toast({ title: "Error", description: errorMessage, variant: "destructive" });
+      }
+
+      if (blogsRes.status === 'fulfilled') {
+        setBlogs(blogsRes.value.posts || []);
+      }
+
+      if (podcastsRes.status === 'fulfilled') {
+        setPodcasts(podcastsRes.value.episodes || []);
+      }
 
       if (isRefresh) {
-        toast({
-          title: "Refreshed",
-          description: "Feed updated successfully",
-        });
+        toast({ title: "Refreshed", description: "Feed updated successfully" });
       }
     } catch (err) {
-      logError(err, 'FeedPage.fetchPosts');
+      logError(err, 'FeedPage.fetchFeedContent');
       const errorMessage = getUserFriendlyError(err);
       setError(errorMessage);
-      toast({
-        title: "Error",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      toast({ title: "Error", description: errorMessage, variant: "destructive" });
     } finally {
       setIsLoadingPosts(false);
     }
@@ -1121,7 +1134,7 @@ export const FeedPage = (): JSX.Element => {
                         <p className="text-red-600 text-sm">We couldn't load your feed. Please try again.</p>
                         <div className="flex gap-3 justify-center">
                           <Button
-                            onClick={() => fetchPosts()}
+                            onClick={() => fetchFeedContent()}
                             className="bg-red-600 hover:bg-red-700 text-white"
                           >
                             Try Again
@@ -1129,7 +1142,7 @@ export const FeedPage = (): JSX.Element => {
                           <Button
                             onClick={() => {
                               setError(null);
-                              fetchPosts();
+                              fetchFeedContent();
                             }}
                             variant="outline"
                             className="border-red-300 text-red-600 hover:bg-red-50"
@@ -1142,7 +1155,7 @@ export const FeedPage = (): JSX.Element => {
                   </Card>
                 )}
 
-                {!isLoadingPosts && !error && posts.length === 0 && (
+                {!isLoadingPosts && !error && feedItems.length === 0 && (
                   <Card className="border-dashed border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50">
                     <CardContent className="p-12 text-center">
                       <div className="max-w-md mx-auto space-y-6">
@@ -1174,27 +1187,35 @@ export const FeedPage = (): JSX.Element => {
                   </Card>
                 )}
 
-                {/* Posts Feed */}
+                {/* Feed — posts, blogs, and podcasts interleaved by date */}
                 <div className="space-y-8">
-                  {posts.map((post) => (
-                    <PostCard
-                      key={post.id}
-                      post={post}
-                      isLiked={post.isLikedByUser || likedPosts.has(post.id)}
-                      isExpanded={expandedPosts.has(post.id)}
-                      showComments={showComments.has(post.id)}
-                      commentText={commentTexts[post.id] || ''}
-                      onLike={() => handleLike(post.id)}
-                      onComment={() => handleComment(post.id)}
-                      onReadMore={() => handleReadMore(post.id)}
-                      onPostComment={() => handlePostComment(post.id)}
-                      onCommentTextChange={(text) => handleCommentTextChange(post.id, text)}
-                      onOptionsClick={() => handlePostOptions(post.id)}
-                      onEdit={() => console.log('Edit post', post.id)}
-                      onDelete={() => handleDeletePost(post.id)}
-                      showOptions={showPostOptions.has(post.id)}
-                    />
-                  ))}
+                  {feedItems.map((item) => {
+                    if (item._type === "blog") {
+                      return <FeedBlogCard key={`blog-${item.id}`} blog={item} />;
+                    }
+                    if (item._type === "podcast") {
+                      return <FeedPodcastCard key={`podcast-${item.id}`} podcast={item} />;
+                    }
+                    return (
+                      <PostCard
+                        key={`post-${item.id}`}
+                        post={item}
+                        isLiked={item.isLikedByUser || likedPosts.has(item.id)}
+                        isExpanded={expandedPosts.has(item.id)}
+                        showComments={showComments.has(item.id)}
+                        commentText={commentTexts[item.id] || ''}
+                        onLike={() => handleLike(item.id)}
+                        onComment={() => handleComment(item.id)}
+                        onReadMore={() => handleReadMore(item.id)}
+                        onPostComment={() => handlePostComment(item.id)}
+                        onCommentTextChange={(text) => handleCommentTextChange(item.id, text)}
+                        onOptionsClick={() => handlePostOptions(item.id)}
+                        onEdit={() => console.log('Edit post', item.id)}
+                        onDelete={() => handleDeletePost(item.id)}
+                        showOptions={showPostOptions.has(item.id)}
+                      />
+                    );
+                  })}
                 </div>
               </div>
 

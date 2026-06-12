@@ -149,13 +149,10 @@ export function BlogsPage() {
       });
       if (res.ok) {
         const { liked } = await res.json();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId
-              ? { ...p, viewer_has_liked: liked, likes_count: p.likes_count + (liked ? 1 : -1) }
-              : p
-          )
-        );
+        const updater = (p: any) =>
+          p.id === postId ? { ...p, viewer_has_liked: liked, likes_count: p.likes_count + (liked ? 1 : -1) } : p;
+        setPosts((prev) => prev.map(updater));
+        setMyPosts((prev) => prev.map(updater));
       }
     } catch {}
   };
@@ -169,20 +166,17 @@ export function BlogsPage() {
       });
       if (res.ok) {
         const { bookmarked } = await res.json();
-        setPosts((prev) =>
-          prev.map((p) =>
-            p.id === postId
-              ? { ...p, viewer_has_bookmarked: bookmarked, bookmarks_count: p.bookmarks_count + (bookmarked ? 1 : -1) }
-              : p
-          )
-        );
+        const updater = (p: any) =>
+          p.id === postId ? { ...p, viewer_has_bookmarked: bookmarked, bookmarks_count: p.bookmarks_count + (bookmarked ? 1 : -1) } : p;
+        setPosts((prev) => prev.map(updater));
+        setMyPosts((prev) => prev.map(updater));
       }
     } catch {}
   };
 
   const handleEditorSaved = (post: any) => {
     fetchPosts();
-    if (activeTab === "mine") fetchMyPosts();
+    fetchMyPosts(); // always refresh so "My Blogs" tab is up-to-date regardless of active tab
     setEditingPost(null);
   };
 

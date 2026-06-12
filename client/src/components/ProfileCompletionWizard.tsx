@@ -8,6 +8,7 @@ import { useToast } from '@/hooks/use-toast';
 import { X, ChevronRight, Check } from 'lucide-react';
 import { PhoneInput } from '@/components/ui/phone-input';
 import { getGraduationYearOptions } from '@/constants/graduationYear';
+import { InterestPicker } from '@/components/profile/InterestPicker';
 
 interface WizardProps {
   profile: any;
@@ -67,6 +68,12 @@ export const ProfileCompletionWizard: React.FC<WizardProps> = ({
         return Array.isArray(parsed) ? parsed.join('\n') : '';
       } catch { return ''; }
     })(),
+    interestAreas: (() => {
+      try {
+        const parsed = JSON.parse(profile.interestAreas || '[]');
+        return Array.isArray(parsed) ? parsed : [];
+      } catch { return [] as string[]; }
+    })(),
   });
 
   const steps = [
@@ -116,6 +123,11 @@ export const ProfileCompletionWizard: React.FC<WizardProps> = ({
         { key: 'languagesKnown', label: 'Languages Known (comma-separated)', type: 'text', required: false },
         { key: 'certifications', label: 'Certifications (one per line)', type: 'textarea', required: false },
       ]
+    },
+    {
+      id: 'interests',
+      title: 'What are you interested in?',
+      fields: [],
     },
     {
       id: 'achievements',
@@ -234,6 +246,7 @@ export const ProfileCompletionWizard: React.FC<WizardProps> = ({
         // Convert comma/newline separated fields to JSON arrays
         const dataToSave = {
           ...formData,
+          interestAreas: JSON.stringify(formData.interestAreas),
           expertiseAreas: formData.expertiseAreas
             ? JSON.stringify(formData.expertiseAreas.split(',').map(s => s.trim()).filter(Boolean))
             : '[]',
@@ -477,15 +490,23 @@ export const ProfileCompletionWizard: React.FC<WizardProps> = ({
         </CardHeader>
 
         <CardContent className="pt-6 space-y-4 bg-white">
-          {currentStepData.fields.map((field) => (
-            <div key={field.key}>
-              <Label>
-                {field.label}
-                {field.required && <span className="text-red-500 ml-1">*</span>}
-              </Label>
-              {renderField(field)}
-            </div>
-          ))}
+          {currentStepData.id === 'interests' ? (
+            <InterestPicker
+              value={formData.interestAreas as unknown as string[]}
+              onChange={(v) => setFormData({ ...formData, interestAreas: v as any })}
+              label="Select topics you want to learn or help others with"
+            />
+          ) : (
+            currentStepData.fields.map((field) => (
+              <div key={field.key}>
+                <Label>
+                  {field.label}
+                  {field.required && <span className="text-red-500 ml-1">*</span>}
+                </Label>
+                {renderField(field)}
+              </div>
+            ))
+          )}
 
           {missingFields.length > 0 && (
             <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3 text-sm text-yellow-800">

@@ -1,6 +1,7 @@
 import { startEventRemindersJob } from './jobs/event-reminders-job';
 import { startWeeklyDigestJob, startDailyJobAlertsJob } from './jobs/digest-jobs';
 import { scheduleAdminDigest } from './services/admin-digest-scheduler';
+import { startPodcastSchedulerJob } from './jobs/podcast-scheduler-job';
 
 /**
  * Initialize all cron jobs
@@ -30,12 +31,16 @@ export function initializeScheduler() {
         console.log('📧 Initializing admin digest scheduler...');
         scheduleAdminDigest();
 
+        // Start podcast scheduler (runs every minute to auto-publish scheduled episodes)
+        startPodcastSchedulerJob();
+
         console.log('✅ All cron jobs initialized successfully');
         console.log('📅 Scheduled jobs:');
         console.log('   - Event Reminders: Every hour');
         console.log('   - Weekly Digest: Monday at 8:00 AM');
         console.log('   - Job Alerts Digest: Daily at 9:00 AM');
         console.log('   - Admin Digest: Daily at 9:00 AM IST');
+        console.log('   - Podcast Auto-Publish: Every minute');
     } catch (error) {
         console.error('❌ Error initializing scheduler:', error);
     }
