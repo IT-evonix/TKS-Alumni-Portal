@@ -7,11 +7,21 @@ import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogDescription } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Edit } from "lucide-react";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeading } from "@/components/common/PageHeading";
 import maplibregl from 'maplibre-gl';
@@ -65,6 +75,8 @@ export function TravelChapterSection({
   const queryClient = useQueryClient();
   const { user } = useAuth();
 
+  const [activeTab, setActiveTab] = useState<'all' | 'my' | 'admin'>('all');
+
   const { data: myProposals = [] } = useQuery({
     queryKey: ['my-travel-chapters'],
     queryFn: async () => {
@@ -72,6 +84,16 @@ export function TravelChapterSection({
       if (!res.ok) return [];
       return res.json();
     }
+  });
+
+  const { data: adminProposals = [] } = useQuery({
+    queryKey: ['admin-travel-chapters'],
+    queryFn: async () => {
+      const res = await apiRequest('GET', '/api/travel-chapters/admin');
+      if (!res.ok) return [];
+      return res.json();
+    },
+    enabled: user?.user_role === 'administrator'
   });
 
   const [activeRegion, setActiveRegion] = useState("All");
@@ -83,7 +105,36 @@ export function TravelChapterSection({
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
   const [isUploading, setIsUploading] = useState(false);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [isMyProposalsOpen, setIsMyProposalsOpen] = useState(false);
+
+  const [editingChapter, setEditingChapter] = useState<any | null>(null);
+  const [editCity, setEditCity] = useState("");
+  const [editCountry, setEditCountry] = useState("");
+  const [editDescription, setEditDescription] = useState("");
+  const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null);
+  const [chapterToDelete, setChapterToDelete] = useState<any | null>(null);
+
+  const fileInputEditRef = useRef<HTMLInputElement>(null);
+
+  React.useEffect(() => {
+    if (editingChapter) {
+      setEditCity(editingChapter.city || "");
+      setEditCountry(editingChapter.country || "");
+      setEditDescription(editingChapter.description || "");
+      setEditCoverPreview(editingChapter.cover_image || null);
+    }
+  }, [editingChapter]);
+
+  const handleEditFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Image must be under 5MB", variant: "destructive" });
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = (e) => setEditCoverPreview(e.target?.result as string);
+    reader.readAsDataURL(file);
+  };
 
   // Use external state if provided, otherwise fallback to internal
   const [internalSelectedChapter, setInternalSelectedChapter] = useState<any | null>(null);
@@ -118,10 +169,9 @@ export function TravelChapterSection({
   }, [chapters, mapBounds, isDesktop]);
 
   // Separate out current user's own chapters — only show in My Travel Chapters, not in directory
-  const currentUserId = user?.id;
   const directoryChapters = useMemo(() =>
-    visibleChapters.filter(chap => chap.created_by !== currentUserId),
-    [visibleChapters, currentUserId]
+    visibleChapters,
+    [visibleChapters]
   );
 
   const proposeMutation = useMutation({
@@ -191,11 +241,41 @@ export function TravelChapterSection({
     }
   });
 
-  const handleDelete = (id: string) => {
-    if (window.confirm("Are you sure you want to delete this chapter proposal?")) {
-      deleteMutation.mutate(id);
+  const updateStatusMutation = useMutation({
+    mutationFn: async ({ id, status }: { id: string, status: string }) => {
+      const res = await apiRequest('PUT', `/api/travel-chapters/${id}/status`, { status });
+      if (!res.ok) throw new Error("Failed to update status");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Success", description: data.message });
+      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
     }
-  };
+  });
+
+  const editChapterMutation = useMutation({
+    mutationFn: async ({ id, updates }: { id: string, updates: any }) => {
+      const res = await apiRequest('PATCH', `/api/travel-chapters/${id}`, updates);
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error || "Failed to edit chapter");
+      }
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Success", description: "Chapter updated successfully." });
+      setEditingChapter(null);
+      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+    },
+    onError: (err) => {
+      toast({ title: "Error", description: err.message, variant: "destructive" });
+    }
+  });
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -217,103 +297,17 @@ export function TravelChapterSection({
   };
 
   return (
-    <div ref={containerRef} className="relative h-full flex flex-col">
-
-      {/* ── Header & Filters ──────────────────────────────────────────────────── */}
-      <div className={`lg:sticky lg:top-0 lg:z-50 bg-white pt-6 flex ${sidebarMode ? 'flex-col gap-4 items-start px-6' : 'flex-col xl:flex-row xl:items-center px-4 sm:px-6'} justify-between mb-6 border-b border-gray-100 pb-6`}>
+    <div ref={containerRef} className="relative h-full flex flex-col">      {/* ── Header & Filters ──────────────────────────────────────────────────── */}
+      <div className={`lg:sticky lg:top-0 lg:z-50 ${sidebarMode ? 'bg-white pt-6 px-6' : 'bg-transparent pt-0 px-0'} flex ${sidebarMode ? 'flex-col gap-4 items-start' : 'flex-col xl:flex-row xl:items-center'} justify-between mb-6 border-b border-gray-100 pb-6`}>
         <div>
           <PageHeading firstWord="Travel" secondWord="Chapters" className="mb-0" />
         </div>
 
         <div className={`flex flex-col sm:flex-row items-center gap-3 w-full ${sidebarMode ? 'sm:flex-col items-stretch' : 'xl:w-auto justify-end'}`}>
-          <div className={`flex gap-3 w-full ${sidebarMode ? 'flex-col sm:flex-row sm:w-full' : ''}`}>
-            <Dialog open={isMyProposalsOpen} onOpenChange={setIsMyProposalsOpen}>
-              <DialogTrigger asChild>
-                <Button variant="outline" className={`px-5 rounded-md shadow-sm h-10 text-sm font-semibold border-gray-200 ${sidebarMode ? 'w-full flex-1' : 'w-full sm:w-auto'}`}>
-                My Travel Chapters
-                {myProposals.length > 0 && (
-                  <span className="ml-2 bg-[#008060] text-white text-[10px] px-2 py-0.5 rounded-full">
-                    {myProposals.length}
-                  </span>
-                )}
-              </Button>
-            </DialogTrigger>
-            <DialogContent className="w-[92vw] max-w-[600px] rounded-3xl p-0 max-h-[90vh] overflow-y-auto bg-white border-0 shadow-2xl">
-              <div className="bg-gray-50 border-b border-gray-100 p-6">
-                <DialogTitle className="text-xl font-bold text-gray-900">
-                  My Travel Chapters
-                </DialogTitle>
-                <DialogDescription className="text-gray-500 mt-1">
-                  Track the status of your travel chapter submissions.
-                </DialogDescription>
-              </div>
-              <div className="p-6">
-                {myProposals.length === 0 ? (
-                  <div className="flex flex-col items-center justify-center text-center py-12 px-4">
-                    <div className="w-16 h-16 bg-gray-50 rounded-full flex items-center justify-center mb-4 border border-gray-100">
-                      <Globe className="w-8 h-8 text-gray-400" />
-                    </div>
-                    <h3 className="text-lg font-bold text-gray-900 mb-2">No Submissions Yet</h3>
-                    <p className="text-gray-500 text-sm max-w-[250px]">
-                      You haven't proposed any travel chapters. Click "Propose Chapter" to start a community in your city!
-                    </p>
-                  </div>
-                ) : (
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead>Location</TableHead>
-                        <TableHead>Status</TableHead>
-                        <TableHead className="w-[80px] text-right">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {myProposals.map((prop: any) => (
-                        <TableRow key={prop.id}>
-                          <TableCell>
-                            <div className="flex items-center gap-3">
-                              <div className="w-10 h-10 rounded-md bg-gray-100 overflow-hidden flex-shrink-0">
-                                {prop.cover_image ? (
-                                  <img src={prop.cover_image} alt={prop.city} className="w-full h-full object-cover" />
-                                ) : (
-                                  <div className="w-full h-full bg-gradient-to-br from-emerald-500 to-teal-600 opacity-80" />
-                                )}
-                              </div>
-                              <div>
-                                <div className="font-bold text-gray-900">{prop.city}</div>
-                                <div className="text-xs text-gray-500">{prop.country}</div>
-                              </div>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            {prop.status === 'pending' && <span className="px-2.5 py-1 bg-amber-100 text-amber-700 text-[10px] font-bold rounded-md uppercase tracking-wider">Pending</span>}
-                            {prop.status === 'approved' && <span className="px-2.5 py-1 bg-emerald-100 text-emerald-700 text-[10px] font-bold rounded-md uppercase tracking-wider">Approved</span>}
-                            {prop.status === 'rejected' && <span className="px-2.5 py-1 bg-red-100 text-red-700 text-[10px] font-bold rounded-md uppercase tracking-wider">Rejected</span>}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-8 w-8 text-red-500 hover:text-red-700 hover:bg-red-50"
-                              onClick={() => handleDelete(prop.id)}
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="w-4 h-4" />
-                            </Button>
-                          </TableCell>
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                )}
-              </div>
-            </DialogContent>
-          </Dialog>
-
           <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
             <DialogTrigger asChild>
               <Button className={`whitespace-nowrap px-5 rounded-md bg-[#008060] hover:bg-[#006b51] text-white shadow-sm h-10 text-sm font-semibold flex items-center justify-center ${sidebarMode ? 'w-full flex-1' : 'w-full sm:w-auto'}`}>
-                <Plus className="w-4 h-4 mr-1.5" /> Add Chapter
+                <Plus className="w-4 h-4 mr-1.5" /> Propose Chapter
               </Button>
             </DialogTrigger>
             <DialogContent className="w-[92vw] max-w-[500px] rounded-3xl p-0 max-h-[90vh] overflow-y-auto bg-white border-0 shadow-2xl">
@@ -403,31 +397,94 @@ export function TravelChapterSection({
           </Dialog>
           </div>
         </div>
-      </div>
 
       {/* ── Location Cards ──────────────────────────────────────────────────── */}
       <div className="px-4 sm:px-6">
+      {/* Tab Switcher */}
+      {!sidebarMode && (
+        <div className="flex border-b border-gray-200 mb-8 w-fit gap-2">
+          <button
+            onClick={() => setActiveTab('all')}
+            className={`pb-3 text-sm font-bold border-b-2 px-6 transition-all duration-300 ${
+              activeTab === 'all'
+                ? 'border-[#008060] text-[#008060]'
+                : 'border-transparent text-gray-400 hover:text-gray-700'
+            }`}
+          >
+            All Approved Chapters
+          </button>
+          <button
+            onClick={() => setActiveTab('my')}
+            className={`pb-3 text-sm font-bold border-b-2 px-6 transition-all duration-300 flex items-center gap-2 ${
+              activeTab === 'my'
+                ? 'border-[#008060] text-[#008060]'
+                : 'border-transparent text-gray-400 hover:text-gray-700'
+            }`}
+          >
+            <span>My Proposed Chapters</span>
+            {myProposals.length > 0 && (
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                activeTab === 'my' ? 'bg-[#008060] text-white' : 'bg-gray-100 text-gray-500'
+              }`}>
+                {myProposals.length}
+              </span>
+            )}
+          </button>
+          {user?.user_role === 'administrator' && (
+            <button
+              onClick={() => setActiveTab('admin')}
+              className={`pb-3 text-sm font-bold border-b-2 px-6 transition-all duration-300 flex items-center gap-2 ${
+                activeTab === 'admin'
+                  ? 'border-[#008060] text-[#008060]'
+                  : 'border-transparent text-gray-400 hover:text-gray-700'
+              }`}
+            >
+              <span>Review Proposals</span>
+              {adminProposals.length > 0 && (
+                <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
+                  activeTab === 'admin' ? 'bg-[#008060] text-white' : 'bg-gray-100 text-gray-500'
+                }`}>
+                  {adminProposals.length}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      )}
+
       {isLoading ? (
         <div className="py-20">
           <LoadingState message="Discovering travel chapters..." size="lg" />
         </div>
-      ) : directoryChapters.length === 0 ? (
-        <div className="flex-1 flex flex-col items-center justify-center py-20 text-center">
+      ) : (activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).length === 0 ? (
+        <div className="flex flex-col items-center justify-center py-20 text-center w-full">
           <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            <MapPin className="w-8 h-8 text-gray-400" />
+            {activeTab === 'all' ? <MapPin className="w-8 h-8 text-gray-400" /> : <Globe className="w-8 h-8 text-gray-400" />}
           </div>
-          <h3 className="text-lg font-bold text-gray-900">No Chapters in View</h3>
-          <p className="text-gray-500 mt-2 max-w-sm">Pan or zoom the map to discover chapters in other areas, or propose a new one!</p>
+          <h3 className="text-lg font-bold text-gray-900">
+            {activeTab === 'all' 
+              ? "No Chapters in View" 
+              : activeTab === 'my'
+                ? "No Proposed Chapters"
+                : "No Proposals to Review"}
+          </h3>
+          <p className="text-gray-500 mt-2 max-w-sm">
+            {activeTab === 'all' 
+              ? "Pan or zoom the map to discover chapters in other areas, or propose a new one!"
+              : activeTab === 'my'
+                ? "You haven't proposed any travel chapters yet. Click 'Propose Chapter' to start a local community!"
+                : "All submitted travel chapter proposals have been reviewed."}
+          </p>
         </div>
       ) : (
         <motion.div
           variants={containerVariants}
           initial="hidden"
           animate="visible"
-          className={`grid ${sidebarMode ? 'grid-cols-1 gap-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-3 gap-6'} pb-10 px-2`}
+          className={`grid ${sidebarMode ? 'grid-cols-1 gap-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6'} pb-10 px-2`}
         >
           <AnimatePresence>
-            {directoryChapters.map((chap: any, i: number) => (
+            {(activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).map((chap: any, i: number) => (
               <motion.div
                 key={chap.id}
                 variants={cardVariants}
@@ -452,11 +509,23 @@ export function TravelChapterSection({
                     <div className="flex-1 min-w-0 flex flex-col justify-center">
                       <div className="flex items-center gap-2 mb-0.5">
                         <h3 className="text-base sm:text-lg font-bold text-gray-900 truncate tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>{chap.city}</h3>
-                        {chap.status !== "pending" && (
+                        {chap.status === "approved" && (
                           <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" title="Active"></div>
                         )}
+                        {chap.status === "pending" && (
+                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-500" title="Pending"></div>
+                        )}
+                        {chap.status === "rejected" && (
+                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500" title="Rejected"></div>
+                        )}
                       </div>
-                      <p className="text-xs font-medium text-gray-500 truncate mb-3">{chap.country}</p>
+                      <p className="text-xs font-medium text-gray-500 truncate mb-1">{chap.country}</p>
+                      
+                      {/* Members Count Badge */}
+                      <p className="text-xs text-gray-400 mb-2 flex items-center gap-1 font-medium">
+                        <Users className="w-3.5 h-3.5 text-[#008060]" />
+                        <span>{chap.memberCount || 0} {chap.memberCount === 1 ? 'member' : 'members'}</span>
+                      </p>
                       
                       <div className="inline-flex items-center text-xs font-bold text-[#008060]">
                         <span>View Chapter</span>
@@ -475,9 +544,19 @@ export function TravelChapterSection({
                       ) : (
                         <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${getAccent(i)} opacity-80`} />
                       )}
-                      {chap.status !== "pending" && (
+                      {chap.status === "approved" && (
                         <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center">
                           <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Active
+                        </div>
+                      )}
+                      {chap.status === "pending" && (
+                        <div className="absolute top-3 right-3 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">
+                          Pending
+                        </div>
+                      )}
+                      {chap.status === "rejected" && (
+                        <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">
+                          Rejected
                         </div>
                       )}
                     </div>
@@ -490,9 +569,61 @@ export function TravelChapterSection({
                         </div>
                       </div>
 
-                      <div className="w-full mt-auto py-2 rounded-md border border-gray-200 text-center text-gray-800 font-bold text-xs group-hover:border-[#008060] group-hover:bg-[#008060] group-hover:text-white transition-all">
-                        View Chapter
-                      </div>
+                      {/* Members Count Badge */}
+                      {chap.status === 'approved' && (
+                        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-4 bg-gray-50 px-2.5 py-1.5 rounded-lg w-fit">
+                          <Users className="w-3.5 h-3.5 text-[#008060]" />
+                          <span className="font-semibold text-gray-700">{chap.memberCount || 0}</span>
+                          <span>{chap.memberCount === 1 ? 'Member' : 'Members'}</span>
+                        </div>
+                      )}
+
+                      {activeTab !== 'all' && chap.status !== 'approved' ? (
+                        <div className="flex flex-col gap-2 mt-auto w-full" onClick={e => e.stopPropagation()}>
+                          <div className="flex gap-2 items-center w-full">
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="flex-1 text-gray-600 hover:bg-gray-50 text-xs h-9 rounded-xl flex items-center justify-center gap-1 border-gray-200 font-semibold"
+                              onClick={() => setEditingChapter(chap)}
+                            >
+                              <Edit className="w-3.5 h-3.5" /> Edit
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0 rounded-xl flex-shrink-0"
+                              onClick={() => setChapterToDelete(chap)}
+                              disabled={deleteMutation.isPending}
+                            >
+                              <Trash2 className="w-4.5 h-4.5" />
+                            </Button>
+                          </div>
+                          {activeTab === 'admin' && chap.status === 'pending' && (
+                            <div className="flex gap-2 pt-2 border-t border-gray-100 w-full">
+                              <Button
+                                size="sm"
+                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-8 rounded-lg font-bold"
+                                onClick={() => updateStatusMutation.mutate({ id: chap.id, status: 'approved' })}
+                              >
+                                Approve
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="flex-1 text-red-600 hover:bg-red-50 border-red-200 text-[10px] h-8 rounded-lg font-bold"
+                                onClick={() => updateStatusMutation.mutate({ id: chap.id, status: 'rejected' })}
+                              >
+                                Reject
+                              </Button>
+                            </div>
+                          )}
+                        </div>
+                      ) : (
+                        <div className="w-full mt-auto py-2.5 rounded-xl bg-emerald-50 text-center text-[#008060] font-bold text-xs group-hover:bg-[#008060] group-hover:text-white transition-all duration-300 shadow-sm">
+                          View Chapter
+                        </div>
+                      )}
                     </div>
                   </>
                 )}
@@ -509,9 +640,134 @@ export function TravelChapterSection({
         onClose={() => setSelectedChapter(null)} 
         setLocation={setLocation} 
       />
+
+      {/* Delete Confirmation Alert Dialog */}
+      <AlertDialog open={!!chapterToDelete} onOpenChange={(open) => !open && setChapterToDelete(null)}>
+        <AlertDialogContent className="rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Chapter Proposal</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete the proposed chapter for {chapterToDelete?.city}? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-red-600 hover:bg-red-700 text-white"
+              onClick={() => {
+                if (chapterToDelete) {
+                  deleteMutation.mutate(chapterToDelete.id);
+                  setChapterToDelete(null);
+                }
+              }}
+            >
+              Delete
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Edit Travel Chapter Dialog */}
+      <Dialog open={!!editingChapter} onOpenChange={(open) => !open && setEditingChapter(null)}>
+        <DialogContent className="w-[92vw] max-w-[500px] rounded-3xl p-0 max-h-[90vh] overflow-y-auto bg-white border-0 shadow-2xl">
+          <div className="bg-gradient-to-br from-[#008060] to-emerald-800 p-6 text-white rounded-t-3xl relative overflow-hidden">
+            <DialogHeader className="text-left relative z-10">
+              <DialogTitle className="text-xl sm:text-2xl font-extrabold text-white">Edit Travel Chapter</DialogTitle>
+              <DialogDescription className="text-emerald-100 mt-2 text-sm">
+                Update the details for {editingChapter?.city} Chapter.
+              </DialogDescription>
+            </DialogHeader>
+          </div>
+
+          <div className="p-6 sm:p-8 space-y-5">
+            <div className="space-y-2 relative z-50">
+              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider text-xs">City Location</label>
+              <CityAutocomplete
+                city={editCity}
+                onCityChange={setEditCity}
+                onLocationSelect={(selCity, selState, selCountry) => {
+                  setEditCity(selCity);
+                  setEditCountry(selCountry);
+                }}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider text-xs">Cover Image</label>
+              {!editCoverPreview ? (
+                <div
+                  onClick={() => fileInputEditRef.current?.click()}
+                  className="border-2 border-dashed border-gray-300 rounded-xl p-8 flex flex-col items-center justify-center cursor-pointer hover:border-[#008060] hover:bg-[#008060]/5 transition-all group"
+                >
+                  <div className="w-12 h-12 bg-emerald-50 rounded-full flex items-center justify-center mb-3 group-hover:scale-110 transition-transform">
+                    <ImageIcon className="w-6 h-6 text-emerald-600" />
+                  </div>
+                  <p className="text-sm font-medium text-gray-900">Click to upload cover image</p>
+                  <p className="text-xs text-gray-500 mt-1">High quality image of your city (Max 5MB)</p>
+                </div>
+              ) : (
+                <div className="relative rounded-xl overflow-hidden shadow-sm group">
+                  <img src={editCoverPreview || undefined} alt="Cover preview" className="w-full h-40 object-cover" />
+                  <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button 
+                      variant="secondary" 
+                      size="sm" 
+                      onClick={(e) => { 
+                        e.stopPropagation(); 
+                        setEditCoverPreview(null); 
+                        if (fileInputEditRef.current) fileInputEditRef.current.value = '';
+                      }} 
+                      className="absolute top-2 right-2 bg-white/95 hover:bg-white text-red-600 shadow-md"
+                    >
+                      <X className="w-4 h-4 mr-1.5" /> Remove
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <input
+                type="file"
+                ref={fileInputEditRef}
+                className="hidden"
+                accept="image/jpeg,image/png,image/webp"
+                onChange={handleEditFileSelect}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-sm font-bold text-gray-700 uppercase tracking-wider text-xs">Description</label>
+              <Textarea
+                value={editDescription}
+                onChange={e => setEditDescription(e.target.value)}
+                placeholder="Tell us about the growing number of alumni in this area..."
+                className="min-h-[100px] bg-gray-50/50 resize-none rounded-xl border-gray-200 focus:border-[#008060] focus:ring-[#008060]"
+              />
+            </div>
+
+            <Button
+              onClick={() => {
+                if (editingChapter) {
+                  editChapterMutation.mutate({
+                    id: editingChapter.id,
+                    updates: {
+                      city: editCity,
+                      country: editCountry,
+                      description: editDescription,
+                      cover_image: editCoverPreview || undefined
+                    }
+                  });
+                }
+              }}
+              disabled={editChapterMutation.isPending || !editCity || !editCountry}
+              className="w-full h-12 bg-gray-900 hover:bg-black text-white rounded-xl shadow-lg font-bold text-base mt-4 transition-all hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
+            >
+              {editChapterMutation.isPending ? "Saving..." : "Save Changes"}
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   );
-};
+}
 
 // Extracted Modal Component to handle individual chapter query
 function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selectedChapter: any, onClose: () => void, setLocation: any }) {

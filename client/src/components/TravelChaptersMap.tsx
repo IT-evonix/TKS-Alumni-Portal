@@ -4,6 +4,7 @@ import 'maplibre-gl/dist/maplibre-gl.css';
 
 interface TravelChaptersMapProps {
   chapters: any[];
+  selectedChapter?: any;
   onBoundsChange?: (bounds: maplibregl.LngLatBounds) => void;
   onChapterClick?: (chapter: any) => void;
 }
@@ -58,7 +59,7 @@ export function generateCoordinatesForCity(city: string): [number, number] {
   return [lng, lat];
 }
 
-export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: TravelChaptersMapProps) {
+export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, onChapterClick }: TravelChaptersMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
@@ -397,6 +398,35 @@ export function TravelChaptersMap({ chapters, onBoundsChange, onChapterClick }: 
     }
 
   }, [chapters, onChapterClick, onBoundsChange]);
+
+  // 3. Zoom/center on selectedChapter when it changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || !selectedChapter) return;
+
+    let lng: number, lat: number;
+    if (selectedChapter.coordinates) {
+      const parts = selectedChapter.coordinates.split(',');
+      lng = parseFloat(parts[0]);
+      lat = parseFloat(parts[1]);
+    } else {
+      const coords = generateCoordinatesForCity(selectedChapter.city);
+      lng = coords[0];
+      lat = coords[1];
+    }
+
+    const isMobile = window.innerWidth < 640;
+    const mapHeight = map.getContainer().clientHeight;
+    const yOffset = isMobile ? Math.floor(mapHeight * 0.25) : 0;
+
+    map.flyTo({
+      center: [lng, lat],
+      offset: [0, yOffset],
+      zoom: Math.max(map.getZoom(), 6),
+      duration: 1200,
+      essential: true
+    });
+  }, [selectedChapter]);
 
   return (
     <div className="relative w-full h-full bg-slate-50 overflow-visible z-50 lg:z-10">
