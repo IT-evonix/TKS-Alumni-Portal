@@ -108,6 +108,11 @@ export const FeedPage = (): JSX.Element => {
   // Per-post in-flight lock: prevents multiple simultaneous like requests for the same post
   const likingInFlight = useRef<Set<string>>(new Set());
 
+  // Podcast like/comment states
+  const podcastLikingInFlight = useRef<Set<string>>(new Set());
+  const [showPodcastComments, setShowPodcastComments] = useState<Set<string>>(new Set());
+  const [podcastCommentTexts, setPodcastCommentTexts] = useState<{ [key: string]: string }>({});
+
   // Job interest states
   const [interestedJobs, setInterestedJobs] = useState<Set<number>>(new Set());
   const [appliedJobs, setAppliedJobs] = useState<Set<string>>(new Set());
@@ -260,7 +265,7 @@ export const FeedPage = (): JSX.Element => {
       const [postsRes, blogsRes, podcastsRes] = await Promise.allSettled([
         optimizedFetch('/api/posts?limit=20&offset=0', { method: 'GET', headers, ttl: 20000, dedupe: true }),
         optimizedFetch('/api/blogs?limit=20&page=1',   { method: 'GET', headers, ttl: 30000, dedupe: true }),
-        optimizedFetch('/api/podcasts?limit=20&page=1', { method: 'GET', headers: {}, ttl: 30000, dedupe: true }),
+        optimizedFetch('/api/podcasts?limit=20&page=1', { method: 'GET', headers, ttl: 30000, dedupe: true }),
       ]);
 
       if (postsRes.status === 'fulfilled') {
@@ -1047,6 +1052,76 @@ export const FeedPage = (): JSX.Element => {
     }
   };
 
+  const handlePodcastLike = async (podcastId: string) => {
+    if (podcastLikingInFlight.current.has(podcastId)) return;
+    podcastLikingInFlight.current.add(podcastId);
+
+    const podcast = podcasts.find((p: any) => p.id === podcastId);
+    if (!podcast) { podcastLikingInFlight.current.delete(podcastId); return; }
+
+    const wasLiked = podcast.isLikedByUser ?? false;
+    const origCount = podcast.likes_count ?? 0;
+
+    setPodcasts((prev: any[]) => prev.map((p: any) =>
+      p.id === podcastId
+        ? { ...p, isLikedByUser: !wasLiked, likes_count: wasLiked ? Math.max(0, origCount - 1) : origCount + 1 }
+        : p
+    ));
+
+    try {
+      const userId = localStorage.getItem('userId') || '';
+      const res = await fetch(`/api/podcasts/${podcastId}/like`, {
+        method: 'POST',
+        headers: { 'user-id': userId },
+      });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setPodcasts((prev: any[]) => prev.map((p: any) =>
+        p.id === podcastId ? { ...p, isLikedByUser: data.isLiked, likes_count: data.likes_count } : p
+      ));
+    } catch {
+      setPodcasts((prev: any[]) => prev.map((p: any) =>
+        p.id === podcastId ? { ...p, isLikedByUser: wasLiked, likes_count: origCount } : p
+      ));
+      toast({ title: "Error", description: "Failed to update like.", variant: "destructive" });
+    } finally {
+      podcastLikingInFlight.current.delete(podcastId);
+    }
+  };
+
+  const handlePodcastComment = (podcastId: string) => {
+    setShowPodcastComments(prev => {
+      const s = new Set(prev);
+      if (s.has(podcastId)) { s.delete(podcastId); } else { s.add(podcastId); }
+      return s;
+    });
+  };
+
+  const handlePostPodcastComment = async (podcastId: string) => {
+    const text = podcastCommentTexts[podcastId]?.trim();
+    if (!text) return;
+    const userId = localStorage.getItem('userId') || '';
+    if (!userId) {
+      toast({ title: "Authentication required", description: "Please log in to comment.", variant: "destructive" });
+      return;
+    }
+    try {
+      const res = await fetch(`/api/podcasts/${podcastId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'user-id': userId },
+        body: JSON.stringify({ content: text }),
+      });
+      if (!res.ok) throw new Error('Failed');
+      setPodcastCommentTexts(prev => ({ ...prev, [podcastId]: '' }));
+      setPodcasts((prev: any[]) => prev.map((p: any) =>
+        p.id === podcastId ? { ...p, comments_count: (p.comments_count ?? 0) + 1 } : p
+      ));
+      toast({ title: "Comment posted", description: "Your comment has been added." });
+    } catch {
+      toast({ title: "Error", description: "Failed to post comment.", variant: "destructive" });
+    }
+  };
+
   // This function is called when a post is created by the PostCreator component
   // It's not currently used but is kept here in case it's needed in the future
   const handlePostCreated = (newPost: any) => {
@@ -1194,7 +1269,19 @@ export const FeedPage = (): JSX.Element => {
                       return <FeedBlogCard key={`blog-${item.id}`} blog={item} />;
                     }
                     if (item._type === "podcast") {
-                      return <FeedPodcastCard key={`podcast-${item.id}`} podcast={item} />;
+                      return (
+                        <FeedPodcastCard
+                          key={`podcast-${item.id}`}
+                          podcast={item}
+                          isLiked={item.isLikedByUser ?? false}
+                          showComments={showPodcastComments.has(item.id)}
+                          commentText={podcastCommentTexts[item.id] || ''}
+                          onLike={() => handlePodcastLike(item.id)}
+                          onComment={() => handlePodcastComment(item.id)}
+                          onPostComment={() => handlePostPodcastComment(item.id)}
+                          onCommentTextChange={(text) => setPodcastCommentTexts(prev => ({ ...prev, [item.id]: text }))}
+                        />
+                      );
                     }
                     return (
                       <PostCard

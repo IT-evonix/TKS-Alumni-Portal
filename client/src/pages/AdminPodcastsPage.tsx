@@ -94,7 +94,7 @@ const EMPTY_FORM = {
   videoUrl: "",
   description: "",
   showNotes: "",
-  tags: "",
+  tags: [] as string[],
   status: "draft" as "draft" | "scheduled" | "published",
   scheduledAt: "",
   links: [] as PodcastLink[],
@@ -113,6 +113,7 @@ export function AdminPodcastsPage() {
   const [saving, setSaving] = useState(false);
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [form, setForm] = useState(EMPTY_FORM);
+  const [tagInput, setTagInput] = useState("");
 
   // Viewers panel
   interface Viewer { userId: string; name: string; email: string; avatarUrl: string | null; viewedAt: string; }
@@ -148,11 +149,10 @@ export function AdminPodcastsPage() {
     }
   };
 
-  const fetchEpisodes = async (status?: string) => {
+  const fetchEpisodes = async () => {
     setLoading(true);
     try {
-      const params = new URLSearchParams({ limit: "50" });
-      if (status && status !== "all") params.set("status", status);
+      const params = new URLSearchParams({ limit: "200" });
       const res = await fetch(`/api/podcasts/admin/all?${params}`, { headers: getHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error);
@@ -166,12 +166,13 @@ export function AdminPodcastsPage() {
 
   useEffect(() => {
     if (!adminUser?.id && !user?.id) return;
-    fetchEpisodes(activeTab === "all" ? undefined : activeTab);
-  }, [adminUser?.id, user?.id, activeTab]);
+    fetchEpisodes();
+  }, [adminUser?.id, user?.id]);
 
   const openCreate = () => {
     setEditingId(null);
     setForm(EMPTY_FORM);
+    setTagInput("");
     setFormOpen(true);
   };
 
@@ -183,11 +184,12 @@ export function AdminPodcastsPage() {
       videoUrl: ep.video_url,
       description: ep.description || "",
       showNotes: ep.show_notes || "",
-      tags: ep.tags.join(", "),
+      tags: ep.tags || [],
       status: ep.status,
       scheduledAt: ep.scheduled_at ? utcToISTLocal(ep.scheduled_at) : "",
       links: ep.links || [],
     });
+    setTagInput("");
     setFormOpen(true);
   };
 
@@ -212,7 +214,7 @@ export function AdminPodcastsPage() {
         videoUrl: form.videoUrl.trim(),
         description: form.description.trim() || null,
         showNotes: form.showNotes.trim() || null,
-        tags: form.tags.split(",").map(t => t.trim()).filter(Boolean),
+        tags: form.tags,
         status: form.status,
         scheduledAt: form.status === "scheduled" ? istLocalToUTC(form.scheduledAt) : null,
         links: form.links.filter(l => l.url.trim()),
@@ -224,7 +226,7 @@ export function AdminPodcastsPage() {
       if (!res.ok) throw new Error(data.error);
       toast({ title: editingId ? "Episode updated" : "Episode created" });
       setFormOpen(false);
-      fetchEpisodes(activeTab === "all" ? undefined : activeTab);
+      fetchEpisodes();
     } catch (err: any) {
       toast({ title: "Save failed", description: err.message, variant: "destructive" });
     } finally {
@@ -237,7 +239,7 @@ export function AdminPodcastsPage() {
       const res = await fetch(`/api/podcasts/${id}/publish`, { method: "PUT", headers: getHeaders() });
       if (!res.ok) throw new Error((await res.json()).error);
       toast({ title: "Episode published" });
-      fetchEpisodes(activeTab === "all" ? undefined : activeTab);
+      fetchEpisodes();
     } catch (err: any) {
       toast({ title: "Failed to publish", description: err.message, variant: "destructive" });
     }
@@ -248,7 +250,7 @@ export function AdminPodcastsPage() {
       const res = await fetch(`/api/podcasts/${ep.id}/feature`, { method: "PUT", headers: getHeaders() });
       if (!res.ok) throw new Error((await res.json()).error);
       toast({ title: ep.is_featured ? "Removed from featured" : "Marked as featured" });
-      fetchEpisodes(activeTab === "all" ? undefined : activeTab);
+      fetchEpisodes();
     } catch (err: any) {
       toast({ title: "Failed", description: err.message, variant: "destructive" });
     }
@@ -260,7 +262,7 @@ export function AdminPodcastsPage() {
       if (!res.ok) throw new Error((await res.json()).error);
       toast({ title: "Episode deleted" });
       setDeleteConfirmId(null);
-      fetchEpisodes(activeTab === "all" ? undefined : activeTab);
+      fetchEpisodes();
     } catch (err: any) {
       toast({ title: "Delete failed", description: err.message, variant: "destructive" });
     }
@@ -419,7 +421,6 @@ export function AdminPodcastsPage() {
                             <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Title</TableHead>
                             <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide hidden md:table-cell">Status</TableHead>
                             <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide hidden lg:table-cell">Date</TableHead>
-                            <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide hidden xl:table-cell text-right pr-4">Views</TableHead>
                             <TableHead className="text-xs font-semibold text-gray-500 uppercase tracking-wide text-right pr-4">Actions</TableHead>
                           </TableRow>
                         </TableHeader>
@@ -464,16 +465,6 @@ export function AdminPodcastsPage() {
                                     <span className="text-gray-400">{fmt(ep.created_at)}</span>
                                   )}
                                 </div>
-                              </TableCell>
-                              <TableCell className="hidden xl:table-cell text-right pr-4">
-                                <button
-                                  onClick={() => loadViewers(ep)}
-                                  className="flex items-center gap-1 justify-end text-xs text-gray-400 hover:text-purple-600 transition-colors ml-auto"
-                                  title="See who viewed"
-                                >
-                                  <Eye className="w-3 h-3" />
-                                  {ep.views_count}
-                                </button>
                               </TableCell>
                               <TableCell className="text-right pr-4">
                                 <div className="flex items-center gap-0.5 justify-end">
@@ -617,12 +608,61 @@ export function AdminPodcastsPage() {
             {/* Tags */}
             <div className="space-y-1.5">
               <Label className="text-sm font-medium text-gray-700">Tags</Label>
-              <Input
-                placeholder="Career, Entrepreneurship, Global (comma separated)"
-                value={form.tags}
-                onChange={e => setForm(f => ({ ...f, tags: e.target.value }))}
-                className="focus:border-[#008060] focus:ring-[#008060]/20"
-              />
+              <div className="flex flex-wrap gap-1.5 min-h-[38px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-within:border-[#008060] focus-within:ring-2 focus-within:ring-[#008060]/20">
+                {form.tags.map((tag, i) => (
+                  <span key={i} className="inline-flex items-center gap-1 bg-gray-100 text-gray-700 rounded px-2 py-0.5 text-xs font-medium">
+                    {tag}
+                    <button
+                      type="button"
+                      onClick={() => setForm(f => ({ ...f, tags: f.tags.filter((_, idx) => idx !== i) }))}
+                      className="text-gray-400 hover:text-gray-700 leading-none"
+                    >
+                      <X className="w-3 h-3" />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  type="text"
+                  placeholder={form.tags.length === 0 ? "Type a tag and press Enter or comma" : "Add another tag..."}
+                  value={tagInput}
+                  onChange={e => {
+                    const val = e.target.value;
+                    if (val.includes(",")) {
+                      const parts = val.split(",").map(t => t.trim()).filter(Boolean);
+                      const newTags = parts.slice(0, -1);
+                      const remaining = parts[parts.length - 1] ?? "";
+                      if (newTags.length > 0) {
+                        setForm(f => ({ ...f, tags: [...f.tags, ...newTags.filter(t => !f.tags.includes(t))] }));
+                      }
+                      setTagInput(val.endsWith(",") ? "" : remaining);
+                    } else {
+                      setTagInput(val);
+                    }
+                  }}
+                  onKeyDown={e => {
+                    if ((e.key === "Enter" || e.key === ",") && tagInput.trim()) {
+                      e.preventDefault();
+                      const newTag = tagInput.trim();
+                      if (newTag && !form.tags.includes(newTag)) {
+                        setForm(f => ({ ...f, tags: [...f.tags, newTag] }));
+                      }
+                      setTagInput("");
+                    } else if (e.key === "Backspace" && !tagInput && form.tags.length > 0) {
+                      setForm(f => ({ ...f, tags: f.tags.slice(0, -1) }));
+                    }
+                  }}
+                  onBlur={() => {
+                    if (tagInput.trim()) {
+                      const newTag = tagInput.trim();
+                      if (!form.tags.includes(newTag)) {
+                        setForm(f => ({ ...f, tags: [...f.tags, newTag] }));
+                      }
+                      setTagInput("");
+                    }
+                  }}
+                  className="flex-1 min-w-[120px] outline-none bg-transparent text-sm placeholder:text-muted-foreground"
+                />
+              </div>
             </div>
 
             {/* External Links */}

@@ -21,4 +21,4 @@ BEGIN
 
   RETURN (SELECT views_count FROM podcasts WHERE id = p_podcast_id);
 END;
-$$ LANGUAGE plpgsql;
+$$ LANGUAGE plpgsql SECURITY DEFINER;

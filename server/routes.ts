@@ -11345,7 +11345,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update mentee_count on mentor's alumni record
       if (status === "accepted") {
-        await supabase.rpc("increment_mentee_count", { mentor_user_id: userId }).catch(() => {
+        await Promise.resolve(supabase.rpc("increment_mentee_count", { mentor_user_id: userId })).catch(() => {
           // RPC may not exist; best-effort
         });
       }

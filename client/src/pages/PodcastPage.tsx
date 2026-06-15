@@ -58,6 +58,19 @@ export function PodcastPage({ slug }: PodcastPageProps) {
     return () => clearTimeout(t);
   }, [search]);
 
+  // Fetch all tags once (unfiltered) so the tag bar never collapses when a filter is active
+  useEffect(() => {
+    fetch("/api/podcasts?limit=200")
+      .then(r => r.ok ? r.json() : null)
+      .then(data => {
+        if (data?.episodes) {
+          const tags = Array.from(new Set<string>(data.episodes.flatMap((e: Episode) => e.tags)));
+          setAllTags(tags);
+        }
+      })
+      .catch(() => {});
+  }, []);
+
   const fetchEpisodes = useCallback(async (pg: number, reset = false) => {
     setLoading(true);
     try {
@@ -69,12 +82,6 @@ export function PodcastPage({ slug }: PodcastPageProps) {
       if (res.ok) {
         setEpisodes(prev => reset ? (data.episodes || []) : [...prev, ...(data.episodes || [])]);
         setTotalPages(data.totalPages || 1);
-        // Collect tags: clear on reset (filter change), accumulate on load-more
-        const newTags = Array.from(new Set<string>((data.episodes || []).flatMap((e: Episode) => e.tags)));
-        setAllTags(prev => {
-          const base = reset ? [] : prev;
-          return Array.from(new Set([...base, ...newTags]));
-        });
       }
     } catch {
       // silently fail — empty state shown
@@ -121,8 +128,11 @@ export function PodcastPage({ slug }: PodcastPageProps) {
 
     if (!viewedRef.current.has(ep.id)) {
       viewedRef.current.add(ep.id);
+      const adminUserRaw = localStorage.getItem("adminUser");
+      const adminUserId = adminUserRaw ? JSON.parse(adminUserRaw)?.id : null;
       const userId =
         localStorage.getItem("userId") ||
+        adminUserId ||
         localStorage.getItem("auth_user_id") ||
         "";
       if (userId) {
@@ -349,16 +359,10 @@ export function PodcastPage({ slug }: PodcastPageProps) {
 
                 {/* Meta row */}
                 <div className="flex items-center gap-4 text-xs text-gray-400 pt-1 border-t border-gray-100">
-                  {selectedEpisode.views_count > 0 && (
-                    <span className="flex items-center gap-1">
-                      <Eye className="w-3 h-3" />
-                      {selectedEpisode.views_count.toLocaleString()} views
-                    </span>
-                  )}
                   {selectedEpisode.published_at && (
                     <span className="flex items-center gap-1">
                       <Calendar className="w-3 h-3" />
-                      {new Date(selectedEpisode.published_at).toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" })}
+                      {new Date(selectedEpisode.published_at).toLocaleString(undefined, { year: "numeric", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" })}
                     </span>
                   )}
                 </div>
@@ -457,12 +461,6 @@ function EpisodeCard({ episode, onOpen }: { episode: Episode; onOpen: (ep: Episo
               <Play className="w-3 h-3" />
               Watch episode
             </span>
-            {episode.views_count > 0 && (
-              <span className="flex items-center gap-1 text-[10px] text-gray-400">
-                <Eye className="w-3 h-3" />
-                {episode.views_count.toLocaleString()}
-              </span>
-            )}
           </div>
         </div>
       </CardContent>

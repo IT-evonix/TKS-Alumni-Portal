@@ -359,6 +359,141 @@ router.delete("/:id", async (req: any, res: any) => {
   }
 });
 
+// ==================== LIKE / COMMENT ROUTES ====================
+
+// POST /api/podcasts/:id/like — toggle like for the authenticated user
+router.post("/:id/like", async (req: any, res: any) => {
+  const userId = req.headers["user-id"] as string;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const podcastId = req.params.id;
+  try {
+    const { data: existing } = await supabase
+      .from("podcast_likes")
+      .select("id")
+      .eq("podcast_id", podcastId)
+      .eq("user_id", userId)
+      .maybeSingle();
+
+    if (existing) {
+      await supabase.from("podcast_likes").delete().eq("id", existing.id);
+
+      const { data: pod } = await supabase
+        .from("podcasts")
+        .select("likes_count")
+        .eq("id", podcastId)
+        .maybeSingle();
+
+      const newCount = Math.max(0, (pod?.likes_count ?? 1) - 1);
+      await supabase
+        .from("podcasts")
+        .update({ likes_count: newCount, updated_at: new Date().toISOString() })
+        .eq("id", podcastId);
+
+      return res.json({ isLiked: false, likes_count: newCount });
+    } else {
+      await supabase.from("podcast_likes").insert({ podcast_id: podcastId, user_id: userId });
+
+      const { data: pod } = await supabase
+        .from("podcasts")
+        .select("likes_count")
+        .eq("id", podcastId)
+        .maybeSingle();
+
+      const newCount = (pod?.likes_count ?? 0) + 1;
+      await supabase
+        .from("podcasts")
+        .update({ likes_count: newCount, updated_at: new Date().toISOString() })
+        .eq("id", podcastId);
+
+      return res.json({ isLiked: true, likes_count: newCount });
+    }
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// GET /api/podcasts/:id/comments — list comments for an episode
+router.get("/:id/comments", async (req: any, res: any) => {
+  const podcastId = req.params.id;
+  try {
+    const { data, error } = await supabase
+      .from("podcast_comments")
+      .select("id, content, user_id, created_at, users:user_id(id, username)")
+      .eq("podcast_id", podcastId)
+      .eq("is_active", true)
+      .order("created_at", { ascending: true });
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    const userIds = (data || []).map((c: any) => c.user_id).filter(Boolean);
+    let alumniMap: Record<string, any> = {};
+    if (userIds.length > 0) {
+      const { data: alumniData } = await supabase
+        .from("alumni")
+        .select("user_id, profile_picture_url, first_name, last_name")
+        .in("user_id", userIds);
+      (alumniData || []).forEach((a: any) => { alumniMap[a.user_id] = a; });
+    }
+
+    const comments = (data || []).map((c: any) => {
+      const alumni = alumniMap[c.user_id];
+      return {
+        id: c.id,
+        content: c.content,
+        createdAt: c.created_at,
+        author: {
+          id: c.users?.id,
+          username: c.users?.username,
+          firstName: alumni?.first_name || null,
+          lastName: alumni?.last_name || null,
+          avatarUrl: alumni?.profile_picture_url || null,
+        },
+      };
+    });
+
+    return res.json({ comments });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
+// POST /api/podcasts/:id/comments — add a comment to an episode
+router.post("/:id/comments", async (req: any, res: any) => {
+  const userId = req.headers["user-id"] as string;
+  if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+  const podcastId = req.params.id;
+  const { content } = req.body;
+  if (!content?.trim()) return res.status(400).json({ error: "Content is required" });
+
+  try {
+    const { data, error } = await supabase
+      .from("podcast_comments")
+      .insert({ podcast_id: podcastId, user_id: userId, content: content.trim(), is_active: true })
+      .select()
+      .single();
+
+    if (error) return res.status(500).json({ error: error.message });
+
+    // Increment comments_count
+    const { data: pod } = await supabase
+      .from("podcasts")
+      .select("comments_count")
+      .eq("id", podcastId)
+      .maybeSingle();
+
+    await supabase
+      .from("podcasts")
+      .update({ comments_count: (pod?.comments_count ?? 0) + 1, updated_at: new Date().toISOString() })
+      .eq("id", podcastId);
+
+    return res.status(201).json({ comment: data });
+  } catch (err: any) {
+    return res.status(500).json({ error: err.message });
+  }
+});
+
 // ==================== VIEW TRACKING ROUTES ====================
 
 // POST /api/podcasts/:id/view — record a unique view for the authenticated user
@@ -462,10 +597,25 @@ router.get("/", async (req: any, res: any) => {
       return res.status(500).json({ error: error.message });
     }
 
+    const userId = req.headers["user-id"] as string | undefined;
+    let likedSet = new Set<string>();
+    if (userId && data && data.length > 0) {
+      const podcastIds = data.map((ep: any) => ep.id);
+      const { data: likes } = await supabase
+        .from("podcast_likes")
+        .select("podcast_id")
+        .eq("user_id", userId)
+        .in("podcast_id", podcastIds);
+      (likes || []).forEach((l: any) => likedSet.add(l.podcast_id));
+    }
+
     const episodes = (data || []).map((ep: any) => ({
       ...ep,
       links: parseLinks(ep.links),
       tags: parseTags(ep.tags),
+      likes_count: ep.likes_count ?? 0,
+      comments_count: ep.comments_count ?? 0,
+      isLikedByUser: likedSet.has(ep.id),
     }));
 
     return res.json({
@@ -492,13 +642,6 @@ router.get("/:slug", async (req: any, res: any) => {
 
     if (error) return res.status(500).json({ error: error.message });
     if (!data) return res.status(404).json({ error: "Episode not found" });
-
-    // Increment views asynchronously — don't await
-    supabase
-      .from("podcasts")
-      .update({ views_count: (data.views_count || 0) + 1 })
-      .eq("id", data.id)
-      .then(() => {});
 
     return res.json({ ...data, links: parseLinks(data.links), tags: parseTags(data.tags) });
   } catch (err: any) {

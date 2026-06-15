@@ -235,6 +235,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
       case 'post_pending_approval':
         return <FileText className={`${iconClass} text-amber-500`} />;
       case 'post_rejected':
+      case 'post_deleted':
         return <X className={`${iconClass} text-red-500`} />;
       case 'badge_earned':
         return <Trophy className={`${iconClass} text-amber-500`} />;
@@ -264,7 +265,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
       case 'comment_reply':
       case 'post_approved':
       case 'post_rejected':
-        return '/feed';
+      case 'post_deleted':
+        return '/blogs';
       case 'event_rsvp':
       case 'event_reminder_24h':
       case 'event_reminder_1h':
@@ -461,6 +463,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
           case 'post_rejected':
             // For post approval notifications, redirect to the post
             redirectUrl = `/post/${relatedId}`;
+            break;
+
+          case 'post_deleted':
+            // Post is gone — redirect to the blog listing
+            redirectUrl = '/blogs';
             break;
 
           case 'signup_approved':

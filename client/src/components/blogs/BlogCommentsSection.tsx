@@ -19,16 +19,21 @@ function CommentItem({
   onReply,
   currentUserId,
   isAdmin,
+  topLevelId,
 }: {
   comment: any;
   onDelete: (id: string, postId: string) => void;
   onReply: (parentId: string, content: string) => Promise<void>;
   currentUserId?: string;
   isAdmin: boolean;
+  topLevelId?: string;
 }) {
   const [showReply, setShowReply] = useState(false);
   const [replyContent, setReplyContent] = useState("");
   const [submitting, setSubmitting] = useState(false);
+
+  // For nested replies, always use the top-level comment's ID as parent (server only supports one level deep)
+  const effectiveParentId = topLevelId || comment.id;
 
   const authorName =
     comment.author
@@ -40,7 +45,7 @@ function CommentItem({
     if (!replyContent.trim()) return;
     setSubmitting(true);
     try {
-      await onReply(comment.id, replyContent.trim());
+      await onReply(effectiveParentId, replyContent.trim());
       setReplyContent("");
       setShowReply(false);
     } finally {
@@ -124,6 +129,7 @@ function CommentItem({
                 onReply={onReply}
                 currentUserId={currentUserId}
                 isAdmin={isAdmin}
+                topLevelId={comment.id}
               />
             ))}
           </div>

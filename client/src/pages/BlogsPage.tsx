@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { PenSquare, BookOpen, ChevronLeft, ChevronRight, Edit } from "lucide-react";
+import { PenSquare, BookOpen, ChevronLeft, ChevronRight, Edit, Bookmark } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { PageHeading } from "@/components/common/PageHeading";
 import { Button } from "@/components/ui/button";
@@ -38,6 +38,10 @@ export function BlogsPage() {
   const [myPostsLoading, setMyPostsLoading] = useState(false);
   const [activeTab, setActiveTab] = useState("all");
 
+  // Saved (bookmarked) posts tab
+  const [savedPosts, setSavedPosts] = useState<any[]>([]);
+  const [savedPostsLoading, setSavedPostsLoading] = useState(false);
+
   // Editor state
   const [editorOpen, setEditorOpen] = useState(false);
   const [editingPost, setEditingPost] = useState<any>(null);
@@ -69,7 +73,7 @@ export function BlogsPage() {
   // Fetch when page, category, or tag changes (but NOT search — search uses debounce below)
   useEffect(() => {
     fetchPosts();
-  }, [page, selectedCategory, selectedTag]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [page, selectedCategory, selectedTag]);
 
   // Debounced search: reset to page 1 and fetch in one shot.
   // BUG 5 FIX: if page is already 1 we pass the new search directly to fetchPosts.
@@ -86,7 +90,7 @@ export function BlogsPage() {
       }
     }, 300);
     return () => { if (searchTimeout.current) clearTimeout(searchTimeout.current); };
-  }, [search]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [search]);
 
   // BUG 5 FIX: fetchPosts accepts explicit overrides so the debounce and page-change
   // effects never both fire for the same query.
@@ -135,9 +139,23 @@ export function BlogsPage() {
     }
   };
 
+  const fetchSavedPosts = async () => {
+    if (!user) return;
+    setSavedPostsLoading(true);
+    try {
+      const res = await fetch(`${clientConfig.apiUrl}/api/blogs/my/bookmarks`, { headers: getHeaders() });
+      if (res.ok) setSavedPosts(await res.json());
+    } catch (e) {
+      console.error("Failed to fetch saved posts", e);
+    } finally {
+      setSavedPostsLoading(false);
+    }
+  };
+
   const handleTabChange = (tab: string) => {
     setActiveTab(tab);
     if (tab === "mine") fetchMyPosts();
+    if (tab === "saved") fetchSavedPosts();
   };
 
   const handleLike = async (postId: string) => {
@@ -170,6 +188,11 @@ export function BlogsPage() {
           p.id === postId ? { ...p, viewer_has_bookmarked: bookmarked, bookmarks_count: p.bookmarks_count + (bookmarked ? 1 : -1) } : p;
         setPosts((prev) => prev.map(updater));
         setMyPosts((prev) => prev.map(updater));
+        if (bookmarked) {
+          setSavedPosts((prev) => prev.some((p) => p.id === postId) ? prev.map(updater) : prev);
+        } else {
+          setSavedPosts((prev) => prev.filter((p) => p.id !== postId));
+        }
       }
     } catch {}
   };
@@ -228,6 +251,7 @@ export function BlogsPage() {
           <TabsList className="bg-gray-100">
             <TabsTrigger value="all">All Posts {total > 0 && <span className="ml-1.5 text-xs bg-white px-1.5 py-0.5 rounded-full text-gray-600">{total}</span>}</TabsTrigger>
             {user && <TabsTrigger value="mine">My Blogs</TabsTrigger>}
+            {user && <TabsTrigger value="saved">Saved</TabsTrigger>}
           </TabsList>
 
           {/* All Posts tab */}
@@ -379,6 +403,42 @@ export function BlogsPage() {
                         </div>
                       )}
                     </div>
+                  ))}
+                </div>
+              )}
+            </TabsContent>
+          )}
+
+          {/* Saved Blogs tab */}
+          {user && (
+            <TabsContent value="saved" className="mt-4">
+              {savedPostsLoading ? (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {[...Array(3)].map((_, i) => (
+                    <div key={i} className="animate-pulse rounded-xl overflow-hidden border border-gray-200">
+                      <div className="bg-gray-200" style={{ height: "160px" }} />
+                      <div className="p-4 space-y-3">
+                        <div className="h-5 bg-gray-200 rounded w-5/6" />
+                        <div className="h-4 bg-gray-100 rounded w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : savedPosts.length === 0 ? (
+                <div className="text-center py-16 text-gray-400">
+                  <Bookmark className="h-12 w-12 mx-auto mb-3 opacity-30" />
+                  <p className="text-lg font-medium">No saved posts yet</p>
+                  <p className="text-sm mt-1">Bookmark posts from the All Posts tab to save them here.</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                  {savedPosts.map((post) => (
+                    <BlogCard
+                      key={post.id}
+                      post={post}
+                      onLike={handleLike}
+                      onBookmark={handleBookmark}
+                    />
                   ))}
                 </div>
               )}

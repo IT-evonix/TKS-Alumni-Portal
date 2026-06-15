@@ -360,7 +360,8 @@ export const NotificationHistoryPage: React.FC = () => {
                                       case 'job': return <Briefcase className={iconClass} />;
                                       case 'signup_approved':
                                       case 'post_approved': return <CheckCircle className={iconClass} />;
-                                      case 'post_rejected': return <X className={iconClass} />;
+                                      case 'post_rejected':
+                                      case 'post_deleted': return <X className={iconClass} />;
                                       default: return <Bell className={iconClass} />;
                                     }
                                   })()}

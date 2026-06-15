@@ -58,6 +58,9 @@ export interface FeedPodcast {
   tags?: string[];
   episode_number?: number | null;
   views_count?: number;
+  likes_count?: number;
+  comments_count?: number;
+  isLikedByUser?: boolean;
   published_at?: string | null;
   created_at: string;
 }

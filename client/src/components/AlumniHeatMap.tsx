@@ -329,7 +329,7 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
           return coords[0] === coordinates[0] && coords[1] === coordinates[1];
         });
 
-        let totalCount = features.length;
+        const totalCount = features.length;
 
         const alumniListHtml = features.map(f => {
           const props = f.properties as any;

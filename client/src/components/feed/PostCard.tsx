@@ -45,12 +45,12 @@ interface Comment {
 interface PostCardProps {
   post: {
     id: string;
-    author: {
+    author?: {
       username: string;
       email: string;
     };
     content: string;
-    image_url?: string;
+    image_url?: string | null;
     likes_count: number;
     comments_count: number;
     created_at: string;
@@ -428,7 +428,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
     ? "The Kalyani School"
     : (post as any).author_first_name
       ? `${(post as any).author_first_name} ${(post as any).author_last_name || ''}`.trim()
-      : post.author.username;
+      : post.author?.username ?? '';
 
   const getAuthorProfilePicture = () => {
     if ((post as any).author_profile_picture && (post as any).author_profile_picture.trim() !== '') {
@@ -525,7 +525,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                   <span className="bg-[#e6f5f0] text-[#008060] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wide font-bold">Official</span>
                 </span>
               ) : (
-                <span>{post.author.email} · {formatTimeAgo(post.created_at)}</span>
+                <span>{post.author?.email} · {formatTimeAgo(post.created_at)}</span>
               )}
             </p>
             {!isAdminPost && <p className="sr-only">{formatTimeAgo(post.created_at)}</p>}

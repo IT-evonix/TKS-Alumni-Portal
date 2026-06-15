@@ -1,7 +1,7 @@
 import { Router } from "express";
 import multer from "multer";
 import { supabase } from "../supabase";
-import { broadcastNotificationToAllAlumni, NotificationType, NotificationRedirectUrl } from "../services/notification-helper";
+import { broadcastNotificationToAllAlumni, createAndEmitNotification, NotificationType, NotificationRedirectUrl } from "../services/notification-helper";
 
 const router = Router();
 
@@ -135,6 +135,48 @@ router.get("/categories", async (_req, res) => {
   } catch (error) {
     console.error("Get blog categories error:", error);
     res.status(500).json({ error: "Failed to fetch categories" });
+  }
+});
+
+// GET /api/blogs/my/bookmarks  — must come BEFORE /:slug
+router.get("/my/bookmarks", async (req, res) => {
+  try {
+    const userId = req.headers["user-id"] as string;
+    if (!userId) return res.status(401).json({ error: "Unauthorized" });
+
+    const { data: bookmarks, error: bmError } = await supabase
+      .from("blog_bookmarks")
+      .select("post_id")
+      .eq("user_id", userId)
+      .order("created_at", { ascending: false });
+    if (bmError) throw bmError;
+
+    const postIds = (bookmarks || []).map((b: any) => b.post_id);
+    if (postIds.length === 0) return res.json([]);
+
+    const { data, error } = await supabase
+      .from("blog_posts")
+      .select(`*, blog_categories(id, name, slug, color)`)
+      .in("id", postIds)
+      .eq("status", "published");
+    if (error) throw error;
+
+    // Preserve bookmark order
+    const postMap = new Map((data || []).map((p: any) => [p.id, p]));
+    const posts = postIds
+      .map((id: string) => postMap.get(id))
+      .filter(Boolean)
+      .map((p: any) => ({
+        ...p,
+        category: p.blog_categories ?? null,
+        blog_categories: undefined,
+        viewer_has_bookmarked: true,
+      }));
+
+    res.json(posts);
+  } catch (error) {
+    console.error("Get bookmarked blog posts error:", error);
+    res.status(500).json({ error: "Failed to fetch bookmarked posts" });
   }
 });
 
@@ -307,13 +349,13 @@ router.get("/", async (req, res) => {
       const fetchPromises: Promise<any>[] = [];
       if (userId) {
         fetchPromises.push(
-          supabase.from("blog_likes").select("post_id").eq("user_id", userId).in("post_id", postIds),
-          supabase.from("blog_bookmarks").select("post_id").eq("user_id", userId).in("post_id", postIds),
+          Promise.resolve(supabase.from("blog_likes").select("post_id").eq("user_id", userId).in("post_id", postIds)),
+          Promise.resolve(supabase.from("blog_bookmarks").select("post_id").eq("user_id", userId).in("post_id", postIds)),
         );
       }
       fetchPromises.push(
-        supabase.from("users").select("id, username").in("id", authorIds),
-        supabase.from("alumni").select("user_id, first_name, last_name, profile_picture, current_role").in("user_id", authorIds),
+        Promise.resolve(supabase.from("users").select("id, username").in("id", authorIds)),
+        Promise.resolve(supabase.from("alumni").select("user_id, first_name, last_name, profile_picture, current_role").in("user_id", authorIds)),
       );
 
       const results = await Promise.all(fetchPromises);
@@ -671,6 +713,34 @@ router.post("/:id/publish", async (req, res) => {
       .select()
       .single();
     if (error) throw error;
+
+    // Notify all admins that a blog post is pending review
+    try {
+      const { data: admins } = await supabase
+        .from("users")
+        .select("id")
+        .eq("is_admin", true);
+      if (admins && admins.length > 0) {
+        for (const admin of admins) {
+          try {
+            await createAndEmitNotification({
+              userId: admin.id,
+              type: NotificationType.POST_PENDING_APPROVAL,
+              title: "Blog Post Pending Review",
+              content: `A blog post "${data.title}" has been submitted for review.`,
+              relatedId: data.id,
+              redirectUrl: "/admin/blogs",
+              actorId: userId,
+            });
+          } catch (notifErr) {
+            console.error("Blog pending review: failed to notify admin", admin.id, notifErr);
+          }
+        }
+      }
+    } catch (notifyError) {
+      console.error("Blog pending review: admin notification error", notifyError);
+    }
+
     res.json(data);
   } catch (error) {
     console.error("Publish blog post error:", error);
@@ -704,7 +774,33 @@ router.post("/:id/like", async (req, res) => {
       .select("id")
       .maybeSingle();
     if (insErr) throw insErr;
-    if (inserted) await atomicCounter(id, "likes_count", 1); // only increment if row was actually new
+    if (inserted) {
+      await atomicCounter(id, "likes_count", 1); // only increment if row was actually new
+
+      // Notify the blog author (skip if liker is the author)
+      const { data: blogPost } = await supabase
+        .from("blog_posts")
+        .select("author_id, title")
+        .eq("id", id)
+        .maybeSingle();
+      if (blogPost && blogPost.author_id !== userId) {
+        const { data: liker } = await supabase
+          .from("users")
+          .select("first_name, last_name")
+          .eq("id", userId)
+          .maybeSingle();
+        const likerName = liker ? `${liker.first_name} ${liker.last_name}` : "Someone";
+        await createAndEmitNotification({
+          userId: blogPost.author_id,
+          type: NotificationType.POST_LIKE,
+          title: "Post Liked",
+          content: `${likerName} liked your blog post "${blogPost.title}"`,
+          relatedId: id,
+          redirectUrl: `/blogs/${id}`,
+          actorId: userId,
+        }).catch((err) => console.error("Blog like notification error:", err));
+      }
+    }
     res.json({ liked: true });
   } catch (error) {
     console.error("Toggle blog like error:", error);
@@ -842,6 +938,17 @@ router.put("/admin/:id/approve", async (req, res) => {
       actorId: data.author_id,
     }).catch(() => {});
 
+    // Notify the author that their post was approved
+    createAndEmitNotification({
+      userId: data.author_id,
+      type: NotificationType.POST_APPROVED,
+      title: "Blog Post Approved",
+      content: `Your blog post "${data.title}" has been approved and published!`,
+      relatedId: data.id,
+      redirectUrl: `${NotificationRedirectUrl.BLOGS}/${data.slug}`,
+      actorId: userId,
+    }).catch(() => {});
+
     const io = (global as any).io;
     if (io) io.emit("new_blog", { blog: data });
 
@@ -880,6 +987,18 @@ router.put("/admin/:id/reject", async (req, res) => {
       .select()
       .single();
     if (error) throw error;
+
+    // Notify the author that their post was rejected
+    createAndEmitNotification({
+      userId: data.author_id,
+      type: NotificationType.POST_REJECTED,
+      title: "Blog Post Rejected",
+      content: `Your blog post "${data.title}" was not approved. Reason: ${rejection_reason.trim()}`,
+      relatedId: data.id,
+      redirectUrl: `${NotificationRedirectUrl.BLOGS}`,
+      actorId: userId,
+    }).catch(() => {});
+
     res.json(data);
   } catch (error) {
     console.error("Reject blog post error:", error);
@@ -895,8 +1014,30 @@ router.delete("/admin/:id", async (req, res) => {
     if (!(await isAdminUser(userId))) return res.status(403).json({ error: "Admin access required" });
 
     const { id } = req.params;
+
+    // Fetch post before deletion so we can notify the author
+    const { data: post } = await supabase
+      .from("blog_posts")
+      .select("id, title, author_id")
+      .eq("id", id)
+      .maybeSingle();
+
+    if (!post) return res.status(404).json({ error: "Post not found" });
+
     const { error } = await supabase.from("blog_posts").delete().eq("id", id);
     if (error) throw error;
+
+    // Notify the author that their post was removed by an admin
+    createAndEmitNotification({
+      userId: post.author_id,
+      type: NotificationType.POST_DELETED,
+      title: "Blog Post Removed",
+      content: `Your blog post "${post.title}" has been removed by an administrator.`,
+      relatedId: null,
+      redirectUrl: NotificationRedirectUrl.BLOGS,
+      actorId: userId,
+    }).catch(() => {});
+
     res.json({ success: true });
   } catch (error) {
     console.error("Admin delete blog post error:", error);

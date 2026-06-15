@@ -169,11 +169,15 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
   // Tracked in state so React re-renders on every keystroke
   const [contentText, setContentText] = useState("");
   const [contentTouched, setContentTouched] = useState(false);
+  const [, forceToolbarUpdate] = useState(0);
 
   // ── TipTap editor ──────────────────────────────────────────────────────────
   const editor = useEditor({
     extensions: [
-      StarterKit.configure({ codeBlock: false }),
+      StarterKit.configure({
+        codeBlock: false,
+        undoRedo: { newGroupDelay: 0 },
+      }),
       Link.configure({ openOnClick: false, autolink: true }),
       Image,
       CodeBlockLowlight.configure({ lowlight }),
@@ -188,6 +192,10 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
       const text = editor.getText();
       setContentText(text);
       setContentTouched(true);
+      forceToolbarUpdate(n => n + 1);
+    },
+    onSelectionUpdate() {
+      forceToolbarUpdate(n => n + 1);
     },
   });
 
