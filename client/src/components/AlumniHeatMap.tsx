@@ -41,55 +41,15 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
     const map = new maplibregl.Map({
       container: containerRef.current,
       style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
-      center: view.center, // view.center is already [lng, lat]
+      center: view.center,
       zoom: view.zoom,
-      maxZoom: 9, // Restrict maximum zoom level
+      maxZoom: 9,
       attributionControl: false
     });
 
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'top-right');
 
     map.on('load', () => {
-      // Enhance administrative boundaries to clearly delineate Countries, States, and Cities/Counties
-      const styleLayers = map.getStyle().layers;
-      if (styleLayers) {
-        styleLayers.forEach(layer => {
-          if (['boundary_county', 'boundary_state', 'boundary_country_outline', 'boundary_country_inner'].includes(layer.id) && layer.type === 'line') {
-            // Use a distinct but elegant slate color for borders
-            map.setPaintProperty(layer.id, 'line-color', '#94a3b8');
-            map.setPaintProperty(layer.id, 'line-opacity', 0.8);
-
-            // Dynamic line-width depending on the boundary type
-            let widthStyle = 1 as any;
-            if (layer.id.includes('country')) {
-              widthStyle = [
-                'interpolate', ['linear'], ['zoom'],
-                0, 0.5,
-                4, 1.5,
-                10, 2.5
-              ];
-            } else if (layer.id.includes('state')) {
-              widthStyle = [
-                'interpolate', ['linear'], ['zoom'],
-                3, 0.1,
-                6, 1.2,
-                12, 2
-              ];
-              map.setPaintProperty(layer.id, 'line-dasharray', [3, 2]); // Dashed lines for states
-            } else {
-              widthStyle = [
-                'interpolate', ['linear'], ['zoom'],
-                7, 0.1,
-                11, 1,
-                15, 1.5
-              ];
-              map.setPaintProperty(layer.id, 'line-dasharray', [2, 3]); // Dotted lines for counties/cities
-            }
-
-            map.setPaintProperty(layer.id, 'line-width', widthStyle);
-          }
-        });
-      }
 
       // Add a raw GeoJSON source for true heatmap
       map.addSource('alumni-source', {

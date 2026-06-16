@@ -1,6 +1,6 @@
 import React, { useRef, useState, useMemo } from "react";
 import { motion, useInView, AnimatePresence } from "framer-motion";
-import { Users, Globe, Plus, MapPin, UploadCloud, X, ImageIcon, Trash2, UserPlus, MessageSquare } from "lucide-react";
+import { Users, Globe, Plus, MapPin, UploadCloud, X, ImageIcon, Trash2, UserPlus, MessageSquare, CheckCircle2 } from "lucide-react";
 import { useMutation, useQueryClient, useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { apiRequest } from "@/lib/queryClient";
@@ -57,6 +57,7 @@ interface TravelChapterSectionProps {
   selectedChapter?: any | null;
   onChapterClick?: (chapter: any | null) => void;
   sidebarMode?: boolean;
+  mapInteracted?: boolean;
 }
 
 export function TravelChapterSection({
@@ -66,7 +67,8 @@ export function TravelChapterSection({
   mapBounds = null,
   selectedChapter: externalSelectedChapter,
   onChapterClick,
-  sidebarMode = false
+  sidebarMode = false,
+  mapInteracted = false
 }: TravelChapterSectionProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { once: true, margin: "-60px" });
@@ -152,21 +154,29 @@ export function TravelChapterSection({
     return () => window.removeEventListener('resize', handleResize);
   }, []);
 
-  // Filter chapters based on map bounds
+  // Filter chapters based on map bounds — filter only when the user has actively interacted with the map
   const visibleChapters = useMemo(() => {
     let filtered = chapters;
 
-    // Filter by bounds (ONLY on desktop)
-    // On mobile, the map is small, so we always show the full list below it.
-    if (isDesktop && mapBounds && filtered.length > 0) {
+    // Only filter by bounds when the user has actively interacted/panned/zoomed
+    if (mapInteracted && mapBounds && filtered.length > 0) {
       filtered = filtered.filter(chap => {
-        const [lng, lat] = generateCoordinatesForCity(chap.city);
+        let lng: number, lat: number;
+        if (chap.coordinates) {
+          const parts = chap.coordinates.split(',');
+          lng = parseFloat(parts[0]);
+          lat = parseFloat(parts[1]);
+        } else {
+          const coords = generateCoordinatesForCity(chap.city);
+          lng = coords[0];
+          lat = coords[1];
+        }
         return mapBounds.contains([lng, lat]);
       });
     }
 
     return filtered;
-  }, [chapters, mapBounds, isDesktop]);
+  }, [chapters, mapBounds, mapInteracted]);
 
   // Separate out current user's own chapters — only show in My Travel Chapters, not in directory
   const directoryChapters = useMemo(() =>
@@ -386,7 +396,7 @@ export function TravelChapterSection({
                 <Button
                   onClick={() => proposeMutation.mutate()}
                   disabled={proposeMutation.isPending || isUploading || !city || !country}
-                  className="w-full h-12 bg-gray-900 hover:bg-black text-white rounded-xl shadow-lg font-bold text-base mt-4 transition-all hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
+                  className="w-full h-10 bg-[#008060] hover:bg-[#006b51] text-white rounded-xl shadow-lg font-bold text-sm mt-4 transition-all hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
                 >
                   {proposeMutation.isPending || isUploading ? (
                     <span className="flex items-center"><UploadCloud className="w-5 h-5 mr-2 animate-pulse" /> Processing...</span>
@@ -402,7 +412,7 @@ export function TravelChapterSection({
       <div className="px-4 sm:px-6">
       {/* Tab Switcher */}
       {!sidebarMode && (
-        <div className="flex border-b border-gray-200 mb-8 w-fit gap-2">
+        <div className="flex border-b border-gray-200 mb-8 w-full overflow-x-auto custom-scrollbar gap-2 pb-1">
           <button
             onClick={() => setActiveTab('all')}
             className={`pb-3 text-sm font-bold border-b-2 px-6 transition-all duration-300 ${
@@ -578,7 +588,7 @@ export function TravelChapterSection({
                         </div>
                       )}
 
-                      {activeTab !== 'all' && chap.status !== 'approved' ? (
+                      {activeTab === 'my' || (activeTab === 'admin' && chap.status !== 'approved') ? (
                         <div className="flex flex-col gap-2 mt-auto w-full" onClick={e => e.stopPropagation()}>
                           <div className="flex gap-2 items-center w-full">
                             <Button
@@ -758,7 +768,7 @@ export function TravelChapterSection({
                 }
               }}
               disabled={editChapterMutation.isPending || !editCity || !editCountry}
-              className="w-full h-12 bg-gray-900 hover:bg-black text-white rounded-xl shadow-lg font-bold text-base mt-4 transition-all hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
+              className="w-full h-10 bg-[#008060] hover:bg-[#006b51] text-white rounded-xl shadow-lg font-bold text-sm mt-4 transition-all hover:scale-[1.02] disabled:opacity-70 disabled:hover:scale-100"
             >
               {editChapterMutation.isPending ? "Saving..." : "Save Changes"}
             </Button>
@@ -773,6 +783,7 @@ export function TravelChapterSection({
 function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selectedChapter: any, onClose: () => void, setLocation: any }) {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { user } = useAuth();
 
   const { data: chapterDetails, isLoading } = useQuery({
     queryKey: ['travel-chapter', selectedChapter?.id],
@@ -796,6 +807,8 @@ function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selecte
     onSuccess: () => {
       toast({ title: "Joined!", description: "You are now a member of this travel chapter." });
       queryClient.invalidateQueries({ queryKey: ['travel-chapter', selectedChapter.id] });
+      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
     },
     onError: (err) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -855,28 +868,24 @@ function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selecte
                   <Users className="w-4 h-4 mr-2" /> Open Group Chat
                 </Button>
 
-                {!isMember ? (
-                  <Button 
-                    className="flex-1 h-12 bg-white hover:bg-emerald-50 border border-emerald-200 text-[#008060] shadow-sm font-bold rounded-xl"
-                    onClick={() => joinMutation.mutate()}
-                    disabled={joinMutation.isPending || isLoading}
-                  >
-                    {joinMutation.isPending ? "Joining..." : <><Plus className="w-4 h-4 mr-2" /> Join Chapter</>}
-                  </Button>
-                ) : (
-                  <Button 
-                    className="flex-1 h-12 bg-white hover:bg-gray-100 border border-gray-200 text-gray-700 font-bold rounded-xl shadow-sm"
-                    onClick={() => {
-                      if (selectedChapter.created_by) {
-                        const prefillMsg = encodeURIComponent(`Hi! I noticed your ${selectedChapter.city} Travel Chapter on the TKS Alumni Portal. It's great to see alumni building communities globally — would be happy to connect and exchange thoughts! 🌐`);
-                        setLocation(`/inbox?user=${selectedChapter.created_by}&msg=${prefillMsg}`);
-                      } else {
-                        setLocation('/inbox');
-                      }
-                    }}
-                  >
-                    <MessageSquare className="w-4 h-4 mr-2" /> Message Host
-                  </Button>
+                {selectedChapter.created_by !== user?.id && (
+                  <>
+                    {!isMember ? (
+                      <Button 
+                        className="flex-1 h-12 bg-white hover:bg-emerald-50 border border-emerald-200 text-[#008060] shadow-sm font-bold rounded-xl"
+                        onClick={() => joinMutation.mutate()}
+                        disabled={joinMutation.isPending || isLoading}
+                      >
+                        {joinMutation.isPending ? "Joining..." : <><Plus className="w-4 h-4 mr-2" /> Join Chapter</>}
+                      </Button>
+                    ) : (
+                      <Button 
+                        className="flex-1 h-12 bg-emerald-50 hover:bg-emerald-50 border border-emerald-200 text-[#008060] font-bold rounded-xl shadow-sm cursor-default"
+                      >
+                        <CheckCircle2 className="w-4 h-4 mr-2" /> Member
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </>

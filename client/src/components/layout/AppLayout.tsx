@@ -17,7 +17,7 @@ import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters' | 'mentorship' | 'podcast';
+  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters' | 'travel-chapters-detail' | 'mentorship' | 'podcast';
 }
 
 // Define user roles
@@ -451,7 +451,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               <Button
                 key={item.id}
                 variant="ghost"
-                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${activePage === item.id
+                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${(activePage === item.id || (activePage === 'travel-chapters-detail' && item.id === 'travel-chapters'))
                   ? "bg-[#e6f5f0] text-[#008060] hover:bg-[#d0ede4]"
                   : "text-gray-600 hover:bg-[#e6f5f0]/60 hover:text-[#008060]"
                   }`}
@@ -460,8 +460,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
                   setShowMobileMenu(false);
                 }}
               >
-                {activePage === item.id && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
-                <item.icon className={`mr-3 w-[18px] h-[18px] flex-shrink-0 ${activePage === item.id ? 'text-[#008060]' : 'text-gray-500'}`} />
+                {(activePage === item.id || (activePage === 'travel-chapters-detail' && item.id === 'travel-chapters')) && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
+                <item.icon className={`mr-3 w-[18px] h-[18px] flex-shrink-0 ${(activePage === item.id || (activePage === 'travel-chapters-detail' && item.id === 'travel-chapters')) ? 'text-[#008060]' : 'text-gray-500'}`} />
                 <span className="truncate text-sm">{item.label}</span>
                 {item.id === 'inbox' && unreadMessageCount > 0 && (
                   <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
@@ -479,14 +479,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               <Button
                 key={item.id}
                 variant="ghost"
-                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${activePage === item.id
+                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${(activePage === item.id || (activePage === 'travel-chapters-detail' && item.id === 'travel-chapters'))
                   ? "bg-[#e6f5f0] text-[#008060] hover:bg-[#d0ede4]"
                   : "text-gray-600 hover:bg-[#e6f5f0]/60 hover:text-[#008060]"
                   }`}
                 onClick={() => { setLocation(item.path); setShowMobileMenu(false); }}
               >
-                {activePage === item.id && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
-                <item.icon className={`mr-3 w-[17px] h-[17px] flex-shrink-0 ${activePage === item.id ? 'text-[#008060]' : 'text-gray-500'}`} />
+                {(activePage === item.id || (activePage === 'travel-chapters-detail' && item.id === 'travel-chapters')) && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
+                <item.icon className={`mr-3 w-[17px] h-[17px] flex-shrink-0 ${(activePage === item.id || (activePage === 'travel-chapters-detail' && item.id === 'travel-chapters')) ? 'text-[#008060]' : 'text-gray-500'}`} />
                 <span className="truncate text-sm">{item.label}</span>
               </Button>
             ))}
@@ -626,8 +626,8 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
         </div>
 
         {/* Page Content - Scrollable with centered container for large screens */}
-        <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' || activePage === 'travel-chapters' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-14 sm:mt-16 w-full max-w-full`}>
-          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'travel-chapters' ? 'h-full' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 lg:py-10'}`}>
+        <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' || activePage === 'travel-chapters-detail' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-14 sm:mt-16 w-full max-w-full`}>
+          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'travel-chapters-detail' ? 'h-full' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 lg:py-10'}`}>
             {children}
           </div>
         </div>

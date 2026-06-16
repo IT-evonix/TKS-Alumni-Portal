@@ -50,13 +50,21 @@ router.get("/my-proposals", requireAuth, async (req, res) => {
 
     const { data: chapters, error } = await supabase
       .from("travel_chapters")
-      .select("*")
+      .select(`
+        *,
+        members:travel_chapter_members(count)
+      `)
       .eq("created_by", userId)
       .order("created_at", { ascending: false });
 
     if (error) throw error;
 
-    res.json(chapters || []);
+    const formattedChapters = (chapters || []).map(chapter => ({
+      ...chapter,
+      memberCount: chapter.members?.[0]?.count || 0
+    }));
+
+    res.json(formattedChapters);
   } catch (error) {
     console.error("Error fetching my proposals:", error);
     res.status(500).json({ error: "Failed to fetch your proposals" });
@@ -116,7 +124,12 @@ router.get("/admin", requireAdmin, async (req, res) => {
 
     if (error) throw error;
 
-    res.json(chapters);
+    const formattedChapters = (chapters || []).map(chapter => ({
+      ...chapter,
+      memberCount: chapter.members?.[0]?.count || 0
+    }));
+
+    res.json(formattedChapters);
   } catch (error) {
     console.error("Error fetching chapters for admin:", error);
     res.status(500).json({ error: "Failed to fetch chapters" });
@@ -149,6 +162,7 @@ router.get("/:id", requireAuth, async (req, res) => {
       .select(`
         role,
         joined_at,
+        user_id,
         user:users!travel_chapter_members_user_id_fkey(
           id,
           username,
@@ -160,10 +174,7 @@ router.get("/:id", requireAuth, async (req, res) => {
     if (membersError) throw membersError;
 
     // Check if current user is a member
-    const isMember = members.some((m: any) => {
-      const u = Array.isArray(m.user) ? m.user[0] : m.user;
-      return u?.id === userId;
-    });
+    const isMember = members.some((m: any) => m.user_id === userId);
 
     res.json({
       ...chapter,
@@ -172,7 +183,7 @@ router.get("/:id", requireAuth, async (req, res) => {
         const u = Array.isArray(m.user) ? m.user[0] : m.user;
         const al = Array.isArray(u?.alumni) ? u?.alumni[0] : u?.alumni;
         return {
-          userId: u?.id,
+          userId: m.user_id,
           role: m.role,
           joinedAt: m.joined_at,
           firstName: al?.first_name,
@@ -658,6 +669,279 @@ router.patch("/:id", requireAuth, async (req, res) => {
     }
     console.error("Error updating chapter:", error);
     res.status(500).json({ error: "Failed to update chapter" });
+  }
+});
+
+// Event schemas and routes
+const createEventSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  venue: z.string().min(1, "Venue/Location is required"),
+  event_date: z.string().min(1, "Event date & time is required"),
+  description: z.string().optional(),
+});
+
+// GET /api/travel-chapters/:id/events - Get events for a chapter
+router.get("/:id/events", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.headers["user-id"] as string;
+    const userRole = (req as any).user?.role;
+
+    // Check if user is a member
+    const { data: memberCheck } = await supabase
+      .from("travel_chapter_members")
+      .select("id")
+      .eq("chapter_id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (!memberCheck && userRole !== 'administrator') {
+      return res.status(403).json({ error: "Must be a member to view chapter events" });
+    }
+
+    const { data: events, error } = await supabase
+      .from("travel_chapter_events")
+      .select(`
+        *,
+        creator:users!travel_chapter_events_created_by_fkey(
+          id,
+          username,
+          alumni(first_name, last_name, profile_picture)
+        ),
+        rsvps:travel_chapter_event_rsvps(
+          user_id,
+          status,
+          user:users!travel_chapter_event_rsvps_user_id_fkey(
+            alumni(first_name, last_name, profile_picture)
+          )
+        )
+      `)
+      .eq("chapter_id", id)
+      .order("event_date", { ascending: true });
+
+    if (error) throw error;
+
+    // Format the response
+    const formattedEvents = (events || []).map((evt: any) => {
+      const creatorUser = Array.isArray(evt.creator) ? evt.creator[0] : evt.creator;
+      const creatorAlumni = Array.isArray(creatorUser?.alumni) ? creatorUser.alumni[0] : creatorUser?.alumni;
+      
+      let rsvpsList = (evt.rsvps || []).map((r: any) => {
+        const rUser = Array.isArray(r.user) ? r.user[0] : r.user;
+        const rAlumni = Array.isArray(rUser?.alumni) ? rUser.alumni[0] : rUser?.alumni;
+        return {
+          userId: r.user_id,
+          status: r.user_id === evt.created_by ? 'going' : r.status,
+          firstName: rAlumni?.first_name,
+          lastName: rAlumni?.last_name,
+          profilePicture: rAlumni?.profile_picture,
+        };
+      });
+
+      // Ensure creator is in rsvps list and status is 'going'
+      const hasCreator = rsvpsList.some((r: any) => r.userId === evt.created_by);
+      if (!hasCreator && creatorUser) {
+        rsvpsList.push({
+          userId: creatorUser.id,
+          status: 'going',
+          firstName: creatorAlumni?.first_name,
+          lastName: creatorAlumni?.last_name,
+          profilePicture: creatorAlumni?.profile_picture,
+        });
+      }
+
+      return {
+        ...evt,
+        creator: {
+          id: creatorUser?.id,
+          username: creatorUser?.username,
+          firstName: creatorAlumni?.first_name,
+          lastName: creatorAlumni?.last_name,
+          profilePicture: creatorAlumni?.profile_picture
+        },
+        rsvps: rsvpsList,
+        myRsvp: creatorUser?.id === userId ? 'going' : (rsvpsList.find((r: any) => r.userId === userId)?.status || null)
+      };
+    });
+
+    res.json(formattedEvents);
+  } catch (error) {
+    console.error("Error fetching events:", error);
+    res.status(500).json({ error: "Failed to fetch events" });
+  }
+});
+
+// POST /api/travel-chapters/:id/events - Create a new event
+router.post("/:id/events", requireAuth, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const userId = req.headers["user-id"] as string;
+    const userRole = (req as any).user?.role;
+
+    // Check if user is a member
+    const { data: memberCheck } = await supabase
+      .from("travel_chapter_members")
+      .select("id")
+      .eq("chapter_id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (!memberCheck && userRole !== 'administrator') {
+      return res.status(403).json({ error: "Must be a member to create events" });
+    }
+
+    const validatedData = createEventSchema.parse(req.body);
+
+    const { data: event, error } = await supabase
+      .from("travel_chapter_events")
+      .insert({
+        chapter_id: id,
+        title: validatedData.title,
+        description: validatedData.description || "",
+        venue: validatedData.venue,
+        event_date: validatedData.event_date,
+        created_by: userId
+      })
+      .select(`
+        *,
+        creator:users!travel_chapter_events_created_by_fkey(
+          id,
+          username,
+          alumni(first_name, last_name, profile_picture)
+        )
+      `)
+      .single();
+
+    if (error) throw error;
+
+    // Automatically RSVP 'going' for the host/creator in DB
+    await supabase.from("travel_chapter_event_rsvps").insert({
+      event_id: event.id,
+      user_id: userId,
+      status: "going"
+    });
+
+    const creatorUser = Array.isArray(event.creator) ? event.creator[0] : event.creator;
+    const creatorAlumni = Array.isArray(creatorUser?.alumni) ? creatorUser.alumni[0] : creatorUser?.alumni;
+
+    const formattedEvent = {
+      ...event,
+      creator: {
+        id: creatorUser?.id,
+        username: creatorUser?.username,
+        firstName: creatorAlumni?.first_name,
+        lastName: creatorAlumni?.last_name,
+        profilePicture: creatorAlumni?.profile_picture
+      },
+      rsvps: [{
+        userId: userId,
+        status: 'going',
+        firstName: creatorAlumni?.first_name,
+        lastName: creatorAlumni?.last_name,
+        profilePicture: creatorAlumni?.profile_picture
+      }],
+      myRsvp: 'going'
+    };
+
+    res.status(201).json(formattedEvent);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: error.errors[0].message });
+    }
+    console.error("Error creating event:", error);
+    res.status(500).json({ error: "Failed to create event" });
+  }
+});
+
+// POST /api/travel-chapters/:id/events/:eventId/rsvp - RSVP to an event
+router.post("/:id/events/:eventId/rsvp", requireAuth, async (req, res) => {
+  try {
+    const { id, eventId } = req.params;
+    const userId = req.headers["user-id"] as string;
+    const { status } = req.body;
+
+    if (!["going", "maybe", "not_going"].includes(status)) {
+      return res.status(400).json({ error: "Invalid RSVP status" });
+    }
+
+    // Check if user is a member of the chapter
+    const { data: memberCheck } = await supabase
+      .from("travel_chapter_members")
+      .select("id")
+      .eq("chapter_id", id)
+      .eq("user_id", userId)
+      .single();
+
+    if (!memberCheck) {
+      return res.status(403).json({ error: "Must be a member of the chapter to RSVP" });
+    }
+
+    // Upsert RSVP
+    const { error } = await supabase
+      .from("travel_chapter_event_rsvps")
+      .upsert({
+        event_id: eventId,
+        user_id: userId,
+        status,
+        updated_at: new Date().toISOString()
+      }, {
+        onConflict: "event_id,user_id"
+      });
+
+    if (error) throw error;
+
+    res.json({ message: "RSVP updated successfully" });
+  } catch (error) {
+    console.error("Error updating RSVP:", error);
+    res.status(500).json({ error: "Failed to update RSVP" });
+  }
+});
+
+// DELETE /api/travel-chapters/:id/events/:eventId - Delete an event
+router.delete("/:id/events/:eventId", requireAuth, async (req, res) => {
+  try {
+    const { id, eventId } = req.params;
+    const userId = req.headers["user-id"] as string;
+    const userRole = (req as any).user?.role;
+
+    // Fetch event details
+    const { data: event, error: eventError } = await supabase
+      .from("travel_chapter_events")
+      .select("created_by")
+      .eq("id", eventId)
+      .single();
+
+    if (eventError || !event) {
+      return res.status(404).json({ error: "Event not found" });
+    }
+
+    // Fetch chapter details (to check chapter host/creator)
+    const { data: chapter, error: chapterError } = await supabase
+      .from("travel_chapters")
+      .select("created_by")
+      .eq("id", id)
+      .single();
+
+    const isAuthorized = 
+      event.created_by === userId || 
+      chapter?.created_by === userId || 
+      userRole === 'administrator';
+
+    if (!isAuthorized) {
+      return res.status(403).json({ error: "Unauthorized to delete this event" });
+    }
+
+    const { error } = await supabase
+      .from("travel_chapter_events")
+      .delete()
+      .eq("id", eventId);
+
+    if (error) throw error;
+
+    res.json({ message: "Event deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting event:", error);
+    res.status(500).json({ error: "Failed to delete event" });
   }
 });
 
