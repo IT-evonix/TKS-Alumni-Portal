@@ -7,6 +7,9 @@ interface TravelChaptersMapProps {
   selectedChapter?: any;
   onBoundsChange?: (bounds: maplibregl.LngLatBounds) => void;
   onChapterClick?: (chapter: any) => void;
+  currentUserId?: string;
+  onMapInteract?: () => void;
+  resetTrigger?: number;
 }
 
 // Simple hash function to generate consistent rough coordinates for a city
@@ -59,11 +62,12 @@ export function generateCoordinatesForCity(city: string): [number, number] {
   return [lng, lat];
 }
 
-export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, onChapterClick }: TravelChaptersMapProps) {
+export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, onChapterClick, currentUserId, onMapInteract, resetTrigger }: TravelChaptersMapProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const mapRef = useRef<maplibregl.Map | null>(null);
   const markersRef = useRef<maplibregl.Marker[]>([]);
   const activePopupRef = useRef<maplibregl.Popup | null>(null);
+  const isResettingRef = useRef(false);
 
   // 1. Initialize Map exactly once
   useEffect(() => {
@@ -71,7 +75,7 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
 
     const map = new maplibregl.Map({
       container: containerRef.current,
-      style: 'https://basemaps.cartocdn.com/gl/positron-gl-style/style.json',
+      style: 'https://basemaps.cartocdn.com/gl/voyager-gl-style/style.json',
       center: [30, 20],
       zoom: 0.8,
       maxZoom: 14,
@@ -89,12 +93,23 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
       const style = document.createElement('style');
       style.id = 'chapter-map-popup-style';
       style.textContent = `
+        /* Let popup escape map container */
         .travel-chapters-map {
           overflow: visible !important;
         }
-        .travel-chapters-map .maplibregl-canvas-container {
+        /* Only clip the actual map canvas to the border radius */
+        .travel-chapters-map .maplibregl-canvas-container,
+        .travel-chapters-map .maplibregl-canvas {
+          border-radius: 0 0 16px 16px;
           overflow: hidden;
-          border-radius: inherit;
+        }
+        /* Popup always on top, never clipped */
+        .maplibregl-popup {
+          z-index: 9999 !important;
+          overflow: visible !important;
+        }
+        .chapter-popup {
+          z-index: 9999 !important;
         }
         
         /* Light Theme Popup */
@@ -102,10 +117,11 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
           border-radius: 12px !important;
           padding: 16px !important;
           background: white !important;
-          box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1) !important;
-          border: 1px solid #f3f4f6;
+          box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15) !important;
+          border: 1px solid #e5e7eb;
           box-sizing: border-box;
           color: #111827 !important;
+          overflow: visible !important;
         }
         
         .chapter-popup .maplibregl-popup-tip {
@@ -122,7 +138,7 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
           }
           .chapter-popup {
             max-width: 90vw !important;
-            z-index: 50;
+            z-index: 9999 !important;
           }
         }
         
@@ -149,7 +165,23 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
       document.head.appendChild(style);
     }
 
+    map.addControl(new maplibregl.FullscreenControl(), 'top-right');
     map.addControl(new maplibregl.NavigationControl({ showCompass: false }), 'bottom-right');
+
+    const handleInteract = () => {
+      if (isResettingRef.current) return;
+      if (onMapInteract) onMapInteract();
+    };
+
+    map.on('dragstart', () => {
+      isResettingRef.current = false; // User manual control, cancel resetting flag
+      handleInteract();
+      if (activePopupRef.current && window.innerWidth < 640) {
+        activePopupRef.current.remove();
+        activePopupRef.current = null;
+      }
+    });
+    map.on('zoomstart', handleInteract);
 
     map.on('moveend', () => {
       if (onBoundsChange) onBoundsChange(map.getBounds());
@@ -158,13 +190,6 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
       if (onBoundsChange) onBoundsChange(map.getBounds());
       // Auto-close popup when zoomed out beyond marker visibility
       if (map.getZoom() < 4 && activePopupRef.current) {
-        activePopupRef.current.remove();
-        activePopupRef.current = null;
-      }
-    });
-    // Close popup when user starts dragging the map
-    map.on('dragstart', () => {
-      if (activePopupRef.current) {
         activePopupRef.current.remove();
         activePopupRef.current = null;
       }
@@ -221,31 +246,35 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
       };
     }
 
-    // Group chapters by location to show carousel for multiple chapters at same location
+    // Group chapters by city+country so same-city chapters always merge into one marker with a slider
     const groupedChapters: Record<string, any[]> = {};
+    // Also track representative coordinates per group
+    const groupCoords: Record<string, [number, number]> = {};
+
     chapters.forEach(chap => {
-      let lng: number, lat: number;
-      if (chap.coordinates) {
-        const parts = chap.coordinates.split(',');
-        lng = parseFloat(parts[0]);
-        lat = parseFloat(parts[1]);
-      } else {
-        const coords = generateCoordinatesForCity(chap.city);
-        lng = coords[0];
-        lat = coords[1];
+      // Normalize key: lower-case city+country so "Pune, India" and "pune, india" merge
+      const cityKey = `${(chap.city || '').trim().toLowerCase()}__${(chap.country || '').trim().toLowerCase()}`;
+
+      if (!groupedChapters[cityKey]) {
+        groupedChapters[cityKey] = [];
+        // Pick coordinates once for the group
+        let lng: number, lat: number;
+        if (chap.coordinates) {
+          const parts = chap.coordinates.split(',');
+          lng = parseFloat(parts[0]);
+          lat = parseFloat(parts[1]);
+        } else {
+          const coords = generateCoordinatesForCity(chap.city);
+          lng = coords[0];
+          lat = coords[1];
+        }
+        groupCoords[cityKey] = [lng, lat];
       }
-      
-      const key = `${lng},${lat}`;
-      if (!groupedChapters[key]) {
-        groupedChapters[key] = [];
-      }
-      groupedChapters[key].push(chap);
+      groupedChapters[cityKey].push(chap);
     });
 
-    Object.entries(groupedChapters).forEach(([key, locationChapters]) => {
-      const [lngStr, latStr] = key.split(',');
-      const lng = parseFloat(lngStr);
-      const lat = parseFloat(latStr);
+    Object.entries(groupedChapters).forEach(([cityKey, locationChapters]) => {
+      const [lng, lat] = groupCoords[cityKey];
 
       // Default standard marker with brand green color
       const marker = new maplibregl.Marker({ color: '#008060', scale: 0.85 })
@@ -281,6 +310,8 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
         const map = mapRef.current;
         if (!map) return;
 
+        if (onMapInteract) onMapInteract();
+
         // Close any existing popup
         if (activePopupRef.current) {
           activePopupRef.current.remove();
@@ -295,13 +326,13 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
         map.flyTo({
           center: [lng, lat],
           offset: [0, yOffset],
-          zoom: Math.max(map.getZoom(), 6),
+          zoom: Math.max(map.getZoom(), 12),
           duration: 900,
           essential: true,
         });
 
-        // Group ID to track slider state
-        const groupId = locationChapters[0].id;
+        // Group ID to track slider state — use cityKey so all chapters at same location share one slider
+        const groupId = `grp_${locationChapters.map((c: any) => c.id).join('_')}`;  
         (window as any).__slideState[groupId] = 0;
 
         const slidesHtml = locationChapters.map((chap, index) => {
@@ -322,14 +353,19 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
               <div style="display: flex; justify-content: space-between; margin-bottom: 12px; gap: 8px; align-items: center; padding: 10px 12px; background: #f9fafb; border-radius: 8px; border: 1px solid #f3f4f6; transition: all 0.2s ease; box-sizing: border-box; width: 100%;">
                 <div style="display: flex; flex-direction: column; min-width: 0;">
                   <span style="font-size: 11px; color: #6b7280; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">Host: Active</span>
+                  ${chap.isMember ? `<span style="font-size: 10px; font-weight: bold; color: #008060; background: #e6f5f0; padding: 2px 6px; border-radius: 4px; margin-top: 4px; display: inline-block; width: max-content;">Member</span>` : ''}
                 </div>
-                <div style="display: flex; gap: 6px; flex-shrink: 0;">
-                  <a href="/profile/${chap.created_by}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #ecfdf5; color: #10b981; border-radius: 50%; text-decoration: none; border: 1px solid #d1fae5;" title="Connect with Host" onmouseover="this.style.background='#d1fae5'" onmouseout="this.style.background='#ecfdf5'">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
-                  </a>
-                  <a href="/inbox?user=${chap.created_by}&msg=${encodeURIComponent(`Hi! I noticed your ${chap.city} Travel Chapter on the TKS Alumni Portal. It's great to see alumni building communities globally — would be happy to connect and exchange thoughts! 🌐`)}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #eff6ff; color: #3b82f6; border-radius: 50%; text-decoration: none; border: 1px solid #dbeafe;" title="Message Host" onmouseover="this.style.background='#dbeafe'" onmouseout="this.style.background='#eff6ff'">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
-                  </a>
+                <div style="display: flex; gap: 6px; flex-shrink: 0; align-items: center;">
+                  ${chap.created_by !== currentUserId ? `
+                    <a href="/profile/${chap.created_by}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #ecfdf5; color: #10b981; border-radius: 50%; text-decoration: none; border: 1px solid #d1fae5;" title="Connect with Host" onmouseover="this.style.background='#d1fae5'" onmouseout="this.style.background='#ecfdf5'">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><line x1="19" y1="8" x2="19" y2="14"></line><line x1="22" y1="11" x2="16" y2="11"></line></svg>
+                    </a>
+                    <a href="/inbox?user=${chap.created_by}&msg=${encodeURIComponent(`Hi! I noticed your ${chap.city} Travel Chapter on the TKS Alumni Portal. It's great to see alumni building communities globally — would be happy to connect and exchange thoughts! 🌐`)}" style="display: flex; align-items: center; justify-content: center; width: 28px; height: 28px; background: #e6f5f0; color: #008060; border-radius: 50%; text-decoration: none; border: 1px solid #d0ede4;" title="Message Host" onmouseover="this.style.background='#d0ede4'" onmouseout="this.style.background='#e6f5f0'">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path></svg>
+                    </a>
+                  ` : `
+                    <span style="font-size: 10px; font-weight: bold; color: #008060; background: #e6f5f0; padding: 2px 6px; border-radius: 4px;">Host (You)</span>
+                  `}
                 </div>
               </div>
 
@@ -368,9 +404,9 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
 
         const popup = new maplibregl.Popup({
           closeButton: true,
-          closeOnClick: true,
+          closeOnClick: false,
           offset: 36,
-          maxWidth: '300px',
+          maxWidth: '320px',
           className: 'chapter-popup',
         })
           .setLngLat([lng, lat])
@@ -382,6 +418,9 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
         (window as any).__openTravelChapter = (id: string) => {
           const chapter = chapters.find(c => c.id === id);
           if (chapter && onChapterClick) {
+            if (document.fullscreenElement) {
+              document.exitFullscreen().catch(err => console.error(err));
+            }
             onChapterClick(chapter);
             popup.remove();
             activePopupRef.current = null;
@@ -392,12 +431,37 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
       markersRef.current.push(marker);
     });
 
+    // Dynamic marker visibility: hide markers that are off-screen to prevent them from leaking out of the map container
+    const updateMarkerVisibilities = () => {
+      const currentMap = mapRef.current;
+      if (!currentMap) return;
+      const bounds = currentMap.getBounds();
+      markersRef.current.forEach(marker => {
+        const lngLat = marker.getLngLat();
+        if (bounds.contains(lngLat)) {
+          marker.getElement().style.display = '';
+        } else {
+          marker.getElement().style.display = 'none';
+        }
+      });
+    };
+
+    updateMarkerVisibilities();
+    map.on('move', updateMarkerVisibilities);
+
     // Fire initial bounds change so the list filters properly
     if (onBoundsChange) {
       onBoundsChange(map.getBounds());
     }
 
-  }, [chapters, onChapterClick, onBoundsChange]);
+    return () => {
+      const currentMap = mapRef.current;
+      if (currentMap) {
+        currentMap.off('move', updateMarkerVisibilities);
+      }
+    };
+
+  }, [chapters, onChapterClick, onBoundsChange, onMapInteract]);
 
   // 3. Zoom/center on selectedChapter when it changes
   useEffect(() => {
@@ -422,11 +486,37 @@ export function TravelChaptersMap({ chapters, selectedChapter, onBoundsChange, o
     map.flyTo({
       center: [lng, lat],
       offset: [0, yOffset],
-      zoom: Math.max(map.getZoom(), 6),
+      zoom: Math.max(map.getZoom(), 12),
       duration: 1200,
       essential: true
     });
   }, [selectedChapter]);
+
+  // 4. Zoom out/reset when resetTrigger changes
+  useEffect(() => {
+    const map = mapRef.current;
+    if (!map || resetTrigger === undefined || resetTrigger === 0) return;
+
+    // Remove any active popup on reset
+    if (activePopupRef.current) {
+      activePopupRef.current.remove();
+      activePopupRef.current = null;
+    }
+
+    isResettingRef.current = true;
+
+    map.flyTo({
+      center: [30, 20],
+      zoom: 0.8,
+      duration: 1000,
+      essential: true
+    });
+
+    // Reset the flag after transition completes
+    map.once('moveend', () => {
+      isResettingRef.current = false;
+    });
+  }, [resetTrigger]);
 
   return (
     <div className="relative w-full h-full bg-slate-50 overflow-visible z-50 lg:z-10">
