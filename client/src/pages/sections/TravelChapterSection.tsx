@@ -462,186 +462,204 @@ export function TravelChapterSection({
         </div>
       )}
 
-      {isLoading ? (
-        <div className="py-20">
-          <LoadingState message="Discovering travel chapters..." size="lg" />
-        </div>
-      ) : (activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).length === 0 ? (
-        <div className="flex flex-col items-center justify-center py-20 text-center w-full">
-          <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
-            {activeTab === 'all' ? <MapPin className="w-8 h-8 text-gray-400" /> : <Globe className="w-8 h-8 text-gray-400" />}
-          </div>
-          <h3 className="text-lg font-bold text-gray-900">
-            {activeTab === 'all' 
-              ? "No Chapters in View" 
-              : activeTab === 'my'
-                ? "No Proposed Chapters"
-                : "No Proposals to Review"}
-          </h3>
-          <p className="text-gray-500 mt-2 max-w-sm">
-            {activeTab === 'all' 
-              ? "Pan or zoom the map to discover chapters in other areas, or propose a new one!"
-              : activeTab === 'my'
-                ? "You haven't proposed any travel chapters yet. Click 'Propose Chapter' to start a local community!"
-                : "All submitted travel chapter proposals have been reviewed."}
-          </p>
-        </div>
-      ) : (
-        <motion.div
-          variants={containerVariants}
-          initial="hidden"
-          animate="visible"
-          className={`grid ${sidebarMode ? 'grid-cols-1 gap-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6'} pb-10 px-2`}
-        >
-          <AnimatePresence>
-            {(activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).map((chap: any, i: number) => (
-              <motion.div
-                key={chap.id}
-                variants={cardVariants}
-                initial="hidden"
-                animate="visible"
-                exit={{ opacity: 0, scale: 0.9, transition: { duration: 0.2 } }}
-                whileHover={{ y: -4, scale: sidebarMode ? 1.01 : 1.02, transition: { duration: 0.2 } }}
-                onClick={() => setSelectedChapter(chap)}
-                className={`group relative bg-white border border-gray-200 transition-all duration-300 cursor-pointer ${sidebarMode ? 'rounded-xl p-3 sm:p-4 flex flex-row items-center gap-4 hover:border-[#008060]/30 shadow-sm hover:shadow-md' : 'rounded-2xl overflow-hidden shadow-sm hover:shadow-xl flex flex-col h-full'}`}
-              >
-                {sidebarMode ? (
-                  <>
-                    {/* Compact Image Thumbnail */}
-                    <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg flex-shrink-0 relative overflow-hidden bg-gray-100 border border-gray-100 shadow-sm">
-                      {chap.cover_image ? (
-                        <img src={chap.cover_image} alt={chap.city} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
-                      ) : (
-                        <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${getAccent(i)} opacity-80`} />
-                      )}
-                    </div>
-                    {/* Compact Details */}
-                    <div className="flex-1 min-w-0 flex flex-col justify-center">
-                      <div className="flex items-center gap-2 mb-0.5">
-                        <h3 className="text-base sm:text-lg font-bold text-gray-900 truncate tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>{chap.city}</h3>
+      <AnimatePresence mode="wait">
+        {isLoading ? (
+          <motion.div
+            key="loading"
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            transition={{ duration: 0.15 }}
+            className="py-20"
+          >
+            <LoadingState message="Discovering travel chapters..." size="lg" />
+          </motion.div>
+        ) : (activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).length === 0 ? (
+          <motion.div
+            key={`empty-${activeTab}`}
+            initial={{ opacity: 0, y: 10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            transition={{ duration: 0.15 }}
+            className="flex flex-col items-center justify-center py-20 text-center w-full"
+          >
+            <div className="w-20 h-20 bg-gray-100 rounded-full flex items-center justify-center mb-4">
+              {activeTab === 'all' ? <MapPin className="w-8 h-8 text-gray-400" /> : <Globe className="w-8 h-8 text-gray-400" />}
+            </div>
+            <h3 className="text-lg font-bold text-gray-900">
+              {activeTab === 'all' 
+                ? "No Chapters in View" 
+                : activeTab === 'my'
+                  ? "No Proposed Chapters"
+                  : "No Proposals to Review"}
+            </h3>
+            <p className="text-gray-500 mt-2 max-w-sm">
+              {activeTab === 'all' 
+                ? "Pan or zoom the map to discover chapters in other areas, or propose a new one!"
+                : activeTab === 'my'
+                  ? "You haven't proposed any travel chapters yet. Click 'Propose Chapter' to start a local community!"
+                  : "All submitted travel chapter proposals have been reviewed."}
+            </p>
+          </motion.div>
+        ) : (
+          <motion.div
+            key={`grid-${activeTab}`}
+            variants={containerVariants}
+            initial="hidden"
+            animate="visible"
+            exit={{ opacity: 0, transition: { duration: 0.15 } }}
+            className={`grid ${sidebarMode ? 'grid-cols-1 gap-5' : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 xl:grid-cols-2 gap-6'} pb-10 px-2`}
+          >
+            <AnimatePresence>
+              {(activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).map((chap: any, i: number) => (
+                <motion.div
+                  key={chap.id}
+                  variants={cardVariants}
+                  initial="hidden"
+                  animate="visible"
+                  exit={{ opacity: 0, scale: 0.95, transition: { duration: 0.15 } }}
+                  whileHover={{ y: -4, scale: sidebarMode ? 1.01 : 1.02, transition: { duration: 0.2 } }}
+                  onClick={() => setSelectedChapter(chap)}
+                  className={`group relative bg-white border border-gray-200 transition-all duration-300 cursor-pointer ${sidebarMode ? 'rounded-xl p-3 sm:p-4 flex flex-row items-center gap-4 hover:border-[#008060]/30 shadow-sm hover:shadow-md' : 'rounded-2xl overflow-hidden shadow-sm hover:shadow-xl flex flex-col h-full'}`}
+                >
+                  {sidebarMode ? (
+                    <>
+                      {/* Compact Image Thumbnail */}
+                      <div className="w-20 h-20 sm:w-24 sm:h-24 rounded-lg flex-shrink-0 relative overflow-hidden bg-gray-100 border border-gray-100 shadow-sm">
+                        {chap.cover_image ? (
+                          <img src={chap.cover_image} alt={chap.city} className="w-full h-full object-cover group-hover:scale-110 transition-transform duration-500" />
+                        ) : (
+                          <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${getAccent(i)} opacity-80`} />
+                        )}
+                      </div>
+                      {/* Compact Details */}
+                      <div className="flex-1 min-w-0 flex flex-col justify-center">
+                        <div className="flex items-center gap-2 mb-0.5">
+                          <h3 className="text-base sm:text-lg font-bold text-gray-900 truncate tracking-tight" style={{ fontFamily: 'Georgia, serif' }}>{chap.city}</h3>
+                          {chap.status === "approved" && (
+                            <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" title="Active"></div>
+                          )}
+                          {chap.status === "pending" && (
+                            <div className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-500" title="Pending"></div>
+                          )}
+                          {chap.status === "rejected" && (
+                            <div className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500" title="Rejected"></div>
+                          )}
+                        </div>
+                        <p className="text-xs font-medium text-gray-500 truncate mb-1">{chap.country}</p>
+                        
+                        {/* Members Count Badge */}
+                        <p className="text-xs text-gray-400 mb-2 flex items-center gap-1 font-medium">
+                          <Users className="w-3.5 h-3.5 text-[#008060]" />
+                          <span>{chap.memberCount || 0} {chap.memberCount === 1 ? 'member' : 'members'}</span>
+                        </p>
+                        
+                        <div className="inline-flex items-center text-xs font-bold text-[#008060]">
+                          <span>View Chapter</span>
+                          <svg className="w-3.5 h-3.5 ml-1 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
+                          </svg>
+                        </div>
+                      </div>
+                    </>
+                  ) : (
+                    <>
+                      {/* Original Large Grid Card */}
+                      <div className="h-44 w-full relative overflow-hidden bg-gray-100">
+                        {chap.cover_image ? (
+                          <img src={chap.cover_image} alt={chap.city} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
+                        ) : (
+                          <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${getAccent(i)} opacity-80`} />
+                        )}
                         {chap.status === "approved" && (
-                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-emerald-500 shadow-[0_0_8px_rgba(16,185,129,0.8)] animate-pulse" title="Active"></div>
+                          <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center">
+                            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Active
+                          </div>
                         )}
                         {chap.status === "pending" && (
-                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-amber-500" title="Pending"></div>
+                          <div className="absolute top-3 right-3 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">
+                            Pending
+                          </div>
                         )}
                         {chap.status === "rejected" && (
-                          <div className="flex-shrink-0 w-2 h-2 rounded-full bg-red-500" title="Rejected"></div>
+                          <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">
+                            Rejected
+                          </div>
                         )}
                       </div>
-                      <p className="text-xs font-medium text-gray-500 truncate mb-1">{chap.country}</p>
-                      
-                      {/* Members Count Badge */}
-                      <p className="text-xs text-gray-400 mb-2 flex items-center gap-1 font-medium">
-                        <Users className="w-3.5 h-3.5 text-[#008060]" />
-                        <span>{chap.memberCount || 0} {chap.memberCount === 1 ? 'member' : 'members'}</span>
-                      </p>
-                      
-                      <div className="inline-flex items-center text-xs font-bold text-[#008060]">
-                        <span>View Chapter</span>
-                        <svg className="w-3.5 h-3.5 ml-1 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 transition-all duration-300" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={3} d="M9 5l7 7-7 7" />
-                        </svg>
-                      </div>
-                    </div>
-                  </>
-                ) : (
-                  <>
-                    {/* Original Large Grid Card */}
-                    <div className="h-44 w-full relative overflow-hidden bg-gray-100">
-                      {chap.cover_image ? (
-                        <img src={chap.cover_image} alt={chap.city} className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-700" />
-                      ) : (
-                        <div className={`absolute inset-0 w-full h-full bg-gradient-to-br ${getAccent(i)} opacity-80`} />
-                      )}
-                      {chap.status === "approved" && (
-                        <div className="absolute top-3 right-3 bg-black/80 backdrop-blur-md text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md flex items-center">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 mr-1.5 animate-pulse"></span> Active
-                        </div>
-                      )}
-                      {chap.status === "pending" && (
-                        <div className="absolute top-3 right-3 bg-amber-500 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">
-                          Pending
-                        </div>
-                      )}
-                      {chap.status === "rejected" && (
-                        <div className="absolute top-3 right-3 bg-red-600 text-white text-[10px] font-bold uppercase tracking-wider px-2.5 py-1 rounded-md">
-                          Rejected
-                        </div>
-                      )}
-                    </div>
 
-                    <div className="p-5 flex-1 flex flex-col">
-                      <div className="flex justify-between items-start mb-4 gap-2">
-                        <div>
-                          <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>{chap.city} Chapter</h3>
-                          <p className="text-xs text-gray-500 mt-1">{chap.city}, {chap.country}</p>
-                        </div>
-                      </div>
-
-                      {/* Members Count Badge */}
-                      {chap.status === 'approved' && (
-                        <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-4 bg-gray-50 px-2.5 py-1.5 rounded-lg w-fit">
-                          <Users className="w-3.5 h-3.5 text-[#008060]" />
-                          <span className="font-semibold text-gray-700">{chap.memberCount || 0}</span>
-                          <span>{chap.memberCount === 1 ? 'Member' : 'Members'}</span>
-                        </div>
-                      )}
-
-                      {activeTab === 'my' || (activeTab === 'admin' && chap.status !== 'approved') ? (
-                        <div className="flex flex-col gap-2 mt-auto w-full" onClick={e => e.stopPropagation()}>
-                          <div className="flex gap-2 items-center w-full">
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="flex-1 text-gray-600 hover:bg-gray-50 text-xs h-9 rounded-xl flex items-center justify-center gap-1 border-gray-200 font-semibold"
-                              onClick={() => setEditingChapter(chap)}
-                            >
-                              <Edit className="w-3.5 h-3.5" /> Edit
-                            </Button>
-                            <Button
-                              size="sm"
-                              variant="ghost"
-                              className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0 rounded-xl flex-shrink-0"
-                              onClick={() => setChapterToDelete(chap)}
-                              disabled={deleteMutation.isPending}
-                            >
-                              <Trash2 className="w-4.5 h-4.5" />
-                            </Button>
+                      <div className="p-5 flex-1 flex flex-col">
+                        <div className="flex justify-between items-start mb-4 gap-2">
+                          <div>
+                            <h3 className="text-xl font-bold text-gray-900" style={{ fontFamily: 'Georgia, serif' }}>{chap.city} Chapter</h3>
+                            <p className="text-xs text-gray-500 mt-1">{chap.city}, {chap.country}</p>
                           </div>
-                          {activeTab === 'admin' && chap.status === 'pending' && (
-                            <div className="flex gap-2 pt-2 border-t border-gray-100 w-full">
-                              <Button
-                                size="sm"
-                                className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-8 rounded-lg font-bold"
-                                onClick={() => updateStatusMutation.mutate({ id: chap.id, status: 'approved' })}
-                              >
-                                Approve
-                              </Button>
+                        </div>
+
+                        {/* Members Count Badge */}
+                        {chap.status === 'approved' && (
+                          <div className="flex items-center gap-1.5 text-xs text-gray-500 mb-4 bg-gray-50 px-2.5 py-1.5 rounded-lg w-fit">
+                            <Users className="w-3.5 h-3.5 text-[#008060]" />
+                            <span className="font-semibold text-gray-700">{chap.memberCount || 0}</span>
+                            <span>{chap.memberCount === 1 ? 'Member' : 'Members'}</span>
+                          </div>
+                        )}
+
+                        {activeTab === 'my' || (activeTab === 'admin' && chap.status !== 'approved') ? (
+                          <div className="flex flex-col gap-2 mt-auto w-full" onClick={e => e.stopPropagation()}>
+                            <div className="flex gap-2 items-center w-full">
                               <Button
                                 size="sm"
                                 variant="outline"
-                                className="flex-1 text-red-600 hover:bg-red-50 border-red-200 text-[10px] h-8 rounded-lg font-bold"
-                                onClick={() => updateStatusMutation.mutate({ id: chap.id, status: 'rejected' })}
+                                className="flex-1 text-gray-600 hover:bg-gray-50 text-xs h-9 rounded-xl flex items-center justify-center gap-1 border-gray-200 font-semibold"
+                                onClick={() => setEditingChapter(chap)}
                               >
-                                Reject
+                                <Edit className="w-3.5 h-3.5" /> Edit
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                className="text-red-500 hover:text-red-700 hover:bg-red-50 h-9 w-9 p-0 rounded-xl flex-shrink-0"
+                                onClick={() => setChapterToDelete(chap)}
+                                disabled={deleteMutation.isPending}
+                              >
+                                <Trash2 className="w-4.5 h-4.5" />
                               </Button>
                             </div>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="w-full mt-auto py-2.5 rounded-xl bg-emerald-50 text-center text-[#008060] font-bold text-xs group-hover:bg-[#008060] group-hover:text-white transition-all duration-300 shadow-sm">
-                          View Chapter
-                        </div>
-                      )}
-                    </div>
-                  </>
-                )}
-              </motion.div>
-            ))}
-          </AnimatePresence>
-        </motion.div>
-      )}
+                            {activeTab === 'admin' && chap.status === 'pending' && (
+                              <div className="flex gap-2 pt-2 border-t border-gray-100 w-full">
+                                <Button
+                                  size="sm"
+                                  className="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white text-[10px] h-8 rounded-lg font-bold"
+                                  onClick={() => updateStatusMutation.mutate({ id: chap.id, status: 'approved' })}
+                                >
+                                  Approve
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="flex-1 text-red-600 hover:bg-red-50 border-red-200 text-[10px] h-8 rounded-lg font-bold"
+                                  onClick={() => updateStatusMutation.mutate({ id: chap.id, status: 'rejected' })}
+                                >
+                                  Reject
+                                </Button>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <div className="w-full mt-auto py-2.5 rounded-xl bg-emerald-50 text-center text-[#008060] font-bold text-xs group-hover:bg-[#008060] group-hover:text-white transition-all duration-300 shadow-sm">
+                            View Chapter
+                          </div>
+                        )}
+                      </div>
+                    </>
+                  )}
+                </motion.div>
+              ))}
+            </AnimatePresence>
+          </motion.div>
+        )}
+      </AnimatePresence>
       </div>
 
       {/* Chapter Detail Modal */}
