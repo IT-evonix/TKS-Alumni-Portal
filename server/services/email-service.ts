@@ -860,3 +860,300 @@ TKS Alumni Portal Team
 
   return { subject, textBody, htmlBody };
 }
+
+/**
+ * Replace data-embedded blocks with fully table-based email card HTML.
+ * Must be called BEFORE inlineStyleHtml so the card markup gets styled too.
+ */
+function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
+  if (!html.includes("data-embedded=")) return html;
+
+  const LABEL: Record<string, string> = { blog: "Blog Post", podcast: "Podcast", post: "Community Post" };
+  const ACCENT: Record<string, string> = { blog: "#7c3aed", podcast: "#e11d48", post: "#0284c7" };
+
+  return html.replace(
+    /<div\s+data-embedded="([^"]*)"[^>]*data-embedded-type="([^"]*)"[^>]*data-embedded-id="([^"]*)"[^>]*data-embedded-url="([^"]*)"[^>]*data-embedded-cover="([^"]*)"[^>]*data-embedded-meta="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
+    (_match, _embedId, type, _id, url, cover, meta, inner) => {
+      const titleMatch = inner.match(/<span[^>]*data-embedded-title[^>]*>([\s\S]*?)<\/span>/i);
+      const excerptMatch = inner.match(/<span[^>]*data-embedded-excerpt[^>]*>([\s\S]*?)<\/span>/i);
+      const title = titleMatch ? titleMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+      const excerpt = excerptMatch ? excerptMatch[1].replace(/<[^>]*>/g, "").trim() : "";
+      const label = LABEL[type] || "Featured";
+      const accent = ACCENT[type] || "#008060";
+      const fullUrl = `${baseUrl.replace(/\/$/, "")}${url}`;
+
+      const coverBlock = cover
+        ? `<tr>
+            <td style="padding:0;line-height:0;font-size:0;">
+              <img src="${cover}" alt="" width="540" style="display:block;width:100%;max-width:540px;height:auto;max-height:180px;object-fit:cover;border:0;" />
+            </td>
+          </tr>`
+        : "";
+
+      const metaBlock = meta
+        ? `<p style="font-size:12px;color:#9ca3af;margin:0 0 6px 0;">${meta}</p>`
+        : "";
+
+      const excerptBlock = excerpt
+        ? `<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:6px 0 14px 0;">${excerpt.slice(0, 160)}${excerpt.length > 160 ? "…" : ""}</p>`
+        : "";
+
+      return `
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:3px solid ${accent};">
+  <tr>
+    <td style="padding:4px 16px;background:#f9fafb;">
+      <p style="font-size:10px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.1em;margin:0;">${label}</p>
+    </td>
+  </tr>
+  ${coverBlock}
+  <tr>
+    <td style="padding:16px 20px;background:#ffffff;">
+      ${metaBlock}
+      ${title ? `<h3 style="font-size:17px;font-weight:700;color:#111827;margin:0 0 6px 0;line-height:1.35;">${title}</h3>` : ""}
+      ${excerptBlock}
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+        <tr>
+          <td style="background:${accent};border-radius:5px;">
+            <a href="${fullUrl}" style="display:inline-block;padding:9px 20px;font-size:13px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:5px;">Read more &rarr;</a>
+          </td>
+        </tr>
+      </table>
+    </td>
+  </tr>
+</table>`;
+    }
+  );
+}
+
+/**
+ * Convert TipTap-generated HTML to email-safe HTML with inline styles.
+ * Email clients strip CSS classes, so we convert semantic elements to inline-styled equivalents.
+ */
+export function inlineStyleHtml(html: string): string {
+  if (!html) return "";
+  // Strip pre-existing style attributes first to avoid duplicate style= attributes
+  // which email clients handle inconsistently (last one wins in most, first in some)
+  const stripStyle = (attrs: string) => attrs.replace(/\s+style="[^"]*"/gi, "").replace(/\s+style='[^']*'/gi, "");
+  // Strip article wrapper attributes — keep content, remove data-* scaffolding
+  html = html
+    .replace(/<section[^>]*data-article[^>]*>/gi, '<div style="margin:0 0 32px 0;padding-bottom:32px;border-bottom:1px solid #e5e7eb;">')
+    .replace(/<\/section>/gi, "</div>")
+    .replace(/<h2[^>]*data-article-title[^>]*>/gi, '<h2 style="font-size:20px;font-weight:700;color:#1a202c;margin:0 0 12px 0;line-height:1.3;">')
+    .replace(/<img[^>]*data-article-image[^>]*\/?>/gi, (m) => `<img${m.replace(/data-article-image/gi, "").replace(/src="([^"]*)"/, 'src="$1"')} style="max-width:100%;height:auto;display:block;margin:0 0 16px 0;border-radius:6px;" />`)
+    .replace(/<div[^>]*data-article-body[^>]*>/gi, "<div>");
+  return html
+    .replace(/<h1([^>]*)>/gi, (_, a) => `<h1${stripStyle(a)} style="font-size:24px;font-weight:700;color:#1a202c;margin:24px 0 12px 0;line-height:1.3;">`)
+    .replace(/<h2([^>]*)>/gi, (_, a) => `<h2${stripStyle(a)} style="font-size:20px;font-weight:700;color:#1a202c;margin:20px 0 10px 0;line-height:1.3;">`)
+    .replace(/<h3([^>]*)>/gi, (_, a) => `<h3${stripStyle(a)} style="font-size:17px;font-weight:600;color:#1a202c;margin:16px 0 8px 0;line-height:1.3;">`)
+    .replace(/<p([^>]*)>/gi, (_, a) => `<p${stripStyle(a)} style="font-size:15px;color:#374151;line-height:1.7;margin:0 0 16px 0;">`)
+    .replace(/<strong([^>]*)>/gi, (_, a) => `<strong${stripStyle(a)} style="font-weight:700;color:#111827;">`)
+    .replace(/<em([^>]*)>/gi, (_, a) => `<em${stripStyle(a)} style="font-style:italic;">`)
+    .replace(/<ul([^>]*)>/gi, (_, a) => `<ul${stripStyle(a)} style="margin:0 0 16px 0;padding-left:24px;">`)
+    .replace(/<ol([^>]*)>/gi, (_, a) => `<ol${stripStyle(a)} style="margin:0 0 16px 0;padding-left:24px;">`)
+    .replace(/<li([^>]*)>/gi, (_, a) => `<li${stripStyle(a)} style="font-size:15px;color:#374151;line-height:1.7;margin-bottom:6px;">`)
+    .replace(/<blockquote([^>]*)>/gi, (_, a) => `<blockquote${stripStyle(a)} style="margin:16px 0;padding:12px 20px;border-left:4px solid #008060;background:#f0fdf9;color:#374151;font-style:italic;">`)
+    .replace(/<a([^>]*)>/gi, (_, a) => `<a${stripStyle(a)} style="color:#008060;text-decoration:underline;">`)
+    .replace(/<code([^>]*)>/gi, (_, a) => `<code${stripStyle(a)} style="font-family:monospace;background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:13px;color:#374151;">`)
+    .replace(/<pre([^>]*)>/gi, (_, a) => `<pre${stripStyle(a)} style="background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px;margin:0 0 16px 0;">`)
+    // Additional TipTap output elements
+    .replace(/<img([^>]*)\/?>/gi, (_, a) => `<img${stripStyle(a)} style="max-width:100%;height:auto;display:block;margin:12px 0;" />`)
+    .replace(/<hr([^>]*)\/?>/gi, () => `<hr style="border:none;border-top:2px solid #e5e7eb;margin:24px 0;" />`)
+    .replace(/<s([^>]*)>/gi, (_, a) => `<s${stripStyle(a)} style="text-decoration:line-through;color:#9ca3af;">`)
+    .replace(/<del([^>]*)>/gi, (_, a) => `<del${stripStyle(a)} style="text-decoration:line-through;color:#9ca3af;">`)
+    .replace(/<table([^>]*)>/gi, (_, a) => `<table${stripStyle(a)} style="width:100%;border-collapse:collapse;margin:0 0 16px 0;">`)
+    .replace(/<th([^>]*)>/gi, (_, a) => `<th${stripStyle(a)} style="padding:8px 12px;border:1px solid #e5e7eb;background:#f9fafb;font-weight:600;text-align:left;font-size:14px;color:#374151;">`)
+    .replace(/<td([^>]*)>/gi, (_, a) => `<td${stripStyle(a)} style="padding:8px 12px;border:1px solid #e5e7eb;font-size:14px;color:#374151;">`);
+}
+
+/**
+ * Generate branded newsletter email HTML wrapping TipTap content.
+ * Options:
+ *   recipientFirstName — personalises with "Hi [name]," greeting
+ *   unsubscribeToken   — adds a signed unsubscribe link in the footer
+ *   trackingPixelUrl   — injects a 1×1 pixel for open tracking
+ */
+export function generateNewsletterEmailHtml(
+  baseUrl: string,
+  newsletter: { title: string; content: string; slug: string; excerpt?: string | null; cover_image?: string | null },
+  options?: {
+    recipientFirstName?: string;
+    unsubscribeToken?: string;
+    trackingPixelUrl?: string;
+  }
+): string {
+  const base = baseUrl.replace(/\/$/, "");
+  const logoUrl = EMAIL_LOGO_URL || `${base}/tks_logo.png`;
+  const archiveUrl = `${base}/newsletters/${encodeURIComponent(newsletter.slug)}`;
+  const contactUrl = `${base}/contact`;
+  const contentWithCards = renderEmbeddedCardsForEmail(newsletter.content, base);
+  const styledContent = inlineStyleHtml(contentWithCards);
+  const issueDate = new Date().toLocaleDateString("en-IN", { year: "numeric", month: "long", day: "numeric" });
+  const year = new Date().getFullYear();
+
+  const greeting = options?.recipientFirstName
+    ? `<p style="font-size:16px;color:#374151;margin:0 0 20px 0;">Hi ${sanitizeForEmail(options.recipientFirstName)},</p>`
+    : "";
+
+  const unsubscribeLink = options?.unsubscribeToken
+    ? `${base}/api/newsletters/unsubscribe?token=${encodeURIComponent(options.unsubscribeToken)}`
+    : `${base}/settings`;
+
+  const trackingPixel = options?.trackingPixelUrl
+    ? `<img src="${sanitizeForEmail(options.trackingPixelUrl)}" width="1" height="1" style="display:none;width:1px;height:1px;" alt="" />`
+    : "";
+
+  const coverImageBlock = newsletter.cover_image
+    ? `<tr>
+        <td style="padding:0;line-height:0;font-size:0;">
+          <img src="${sanitizeForEmail(newsletter.cover_image)}" alt="${sanitizeForEmail(newsletter.title)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;" />
+        </td>
+      </tr>`
+    : "";
+
+  const excerptText = newsletter.excerpt
+    ? newsletter.excerpt.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
+    : "";
+  const excerptBlock = excerptText
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px 0;">
+        <tr>
+          <td style="background:#f0fdf9;border-left:4px solid #A6CE39;padding:14px 20px;border-radius:0 6px 6px 0;">
+            <p style="font-size:16px;font-style:italic;color:#374151;line-height:1.6;margin:0;">${sanitizeForEmail(excerptText)}</p>
+          </td>
+        </tr>
+      </table>`
+    : "";
+
+  return `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${sanitizeForEmail(newsletter.title)}</title>
+  <style>
+    @media only screen and (max-width:600px){
+      .email-outer{padding:0!important;}
+      .email-body{padding:24px 20px!important;}
+      .masthead-title{font-size:22px!important;}
+      .masthead-pad{padding:18px 20px 22px!important;}
+      .cta-pad{padding:0 20px 28px!important;}
+      .footer-pad{padding:16px 20px!important;}
+    }
+  </style>
+</head>
+<body style="margin:0;padding:0;background-color:#f0f4f8;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif;">
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" class="email-outer" style="background-color:#f0f4f8;padding:32px 16px;">
+    <tr>
+      <td align="center">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="600" style="max-width:600px;width:100%;">
+
+          <!-- [A] MASTHEAD -->
+          <tr>
+            <td style="border-radius:10px 10px 0 0;overflow:hidden;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <!-- Logo bar -->
+                <tr>
+                  <td style="background:#008060;padding:18px 28px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td style="vertical-align:middle;">
+                          <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="140" height="42" style="display:inline-block;max-width:140px;height:auto;border:0;outline:none;" />
+                        </td>
+                        <td width="8" style="background:#A6CE39;">&nbsp;</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Title block -->
+                <tr>
+                  <td class="masthead-pad" style="background:#006b51;padding:24px 36px 0;">
+                    <p style="font-size:11px;letter-spacing:0.15em;color:#A6CE39;text-transform:uppercase;font-weight:700;margin:0 0 10px 0;">The Kalyani School</p>
+                    <h1 class="masthead-title" style="font-size:28px;font-weight:800;color:#ffffff;line-height:1.25;margin:0 0 10px 0;">${sanitizeForEmail(newsletter.title)}</h1>
+                    <p style="font-size:13px;color:rgba(255,255,255,0.7);margin:0 0 22px 0;">${issueDate}</p>
+                    <!-- Two-tone accent divider -->
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td width="50%" height="4" style="background:#FDD11F;font-size:0;line-height:0;">&nbsp;</td>
+                        <td width="50%" height="4" style="background:#A6CE39;font-size:0;line-height:0;">&nbsp;</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- [B] COVER IMAGE (conditional) -->
+          ${coverImageBlock}
+
+          <!-- [C] CONTENT BODY -->
+          <tr>
+            <td class="email-body" style="background:#ffffff;padding:40px 48px 8px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+              ${greeting}
+              ${excerptBlock}
+              <hr style="border:none;border-top:2px solid #e5e7eb;margin:0 0 28px 0;">
+              <div style="font-size:15px;color:#374151;line-height:1.7;">
+                ${styledContent}
+              </div>
+            </td>
+          </tr>
+
+          <!-- [D] CTA BUTTON -->
+          <tr>
+            <td class="cta-pad" style="background:#ffffff;padding:28px 48px 44px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;text-align:center;">
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
+                <tr>
+                  <td style="background:#008060;border-radius:6px;">
+                    <a href="${sanitizeForEmail(archiveUrl)}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.03em;border-radius:6px;background:#008060;">Read Full Newsletter &rarr;</a>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+          <!-- [E] ENHANCED FOOTER -->
+          <tr>
+            <td style="background:#1a202c;border-radius:0 0 10px 10px;overflow:hidden;">
+              <!-- Identity block -->
+              <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                <tr>
+                  <td class="footer-pad" style="padding:28px 36px 20px;text-align:center;">
+                    <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="100" height="30" style="display:inline-block;max-width:100px;height:auto;border:0;outline:none;margin-bottom:10px;" />
+                    <p style="font-size:14px;font-weight:700;color:#ffffff;margin:0 0 4px 0;">The Kalyani School</p>
+                    <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;">Kalyani, West Bengal, India</p>
+                  </td>
+                </tr>
+                <!-- Thin divider -->
+                <tr>
+                  <td style="padding:0 36px;">
+                    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
+                      <tr>
+                        <td height="1" style="background:rgba(255,255,255,0.1);font-size:0;line-height:0;">&nbsp;</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+                <!-- Links & copyright -->
+                <tr>
+                  <td class="footer-pad" style="padding:16px 36px 24px;text-align:center;">
+                    <p style="margin:0 0 10px 0;">
+                      <a href="${sanitizeForEmail(unsubscribeLink)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Manage preferences</a>
+                      &nbsp;&middot;&nbsp;
+                      <a href="${sanitizeForEmail(unsubscribeLink)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Unsubscribe</a>
+                      &nbsp;&middot;&nbsp;
+                      <a href="${sanitizeForEmail(contactUrl)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Contact us</a>
+                    </p>
+                    <p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;">&copy; ${year} The Kalyani School. All rights reserved.</p>
+                  </td>
+                </tr>
+              </table>
+            </td>
+          </tr>
+
+        </table>
+      </td>
+    </tr>
+  </table>
+  ${trackingPixel}
+</body>
+</html>`.trim();
+}

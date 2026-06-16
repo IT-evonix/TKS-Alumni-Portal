@@ -90,6 +90,16 @@ const TravelChaptersDirectoryPage = lazy(() => import("@/pages/TravelChaptersDir
 const TravelChapterPage = lazy(() => import("@/pages/TravelChapterPage").then(m => ({ default: m.default })));
 const PodcastPage = lazy(() => import("@/pages/PodcastPage").then(m => ({ default: m.PodcastPage })));
 const AdminPodcastsPage = lazy(() => import("@/pages/AdminPodcastsPage").then(m => ({ default: m.AdminPodcastsPage })));
+const AdminNewslettersPage = lazy(() =>
+  import("@/pages/AdminNewslettersPage")
+    .then(m => ({ default: m.AdminNewslettersPage }))
+    .catch(err => { console.error("Failed to load AdminNewslettersPage:", err); throw err; })
+);
+const NewslettersPage = lazy(() =>
+  import("@/pages/NewslettersPage")
+    .then(m => ({ default: m.NewslettersPage }))
+    .catch(err => { console.error("Failed to load NewslettersPage:", err); throw err; })
+);
 
 // Admin pages - lazy loaded (rarely accessed by most users)
 const AdminDashboard = lazy(() => import("./pages/AdminDashboard").then(m => ({ default: m.AdminDashboard })));
@@ -153,6 +163,8 @@ function Router() {
           <ProtectedRoute path="/travel-chapters" component={TravelChaptersDirectoryPage} />
           <ProtectedRoute path="/podcast" component={PodcastPage} />
           <ProtectedRoute path="/podcasts/:slug" component={PodcastPage} />
+          <ProtectedRoute path="/newsletters" component={NewslettersPage} />
+          <ProtectedRoute path="/newsletters/:slug" component={NewslettersPage} />
           <ProtectedRoute path="/travel-chapters/:id" component={TravelChapterPage} />
 
           {/* Protected Admin Routes */}
@@ -172,6 +184,7 @@ function Router() {
           <ProtectedRoute path="/admin/blogs" component={AdminBlogsPage} adminOnly />
           <ProtectedRoute path="/admin/podcasts" component={AdminPodcastsPage} adminOnly />
           <ProtectedRoute path="/admin/travel-chapters" component={AdminTravelChaptersPage} adminOnly />
+          <ProtectedRoute path="/admin/newsletters" component={AdminNewslettersPage} adminOnly />
 
           {/* Fallback to 404 */}
           <Route component={NotFound} />

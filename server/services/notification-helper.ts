@@ -315,6 +315,8 @@ export const NotificationType = {
     NEW_BLOG: "new_blog",
     /** Sent to the author when an admin permanently deletes their post */
     POST_DELETED: "post_deleted",
+    /** Sent to recipients when admin publishes a newsletter */
+    NEWSLETTER: "newsletter",
 } as const;
 
 /**
@@ -332,6 +334,7 @@ export const NotificationRedirectUrl = {
     ADMIN_FEED: "/admin/feed",
     PODCASTS: "/podcasts",
     BLOGS: "/blogs",
+    NEWSLETTERS: "/newsletters",
 } as const;
 
 /**

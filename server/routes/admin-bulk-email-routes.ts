@@ -2,6 +2,7 @@
 import { Router } from "express";
 import { supabase } from "../supabase";
 import { sendEmail, checkEmailConfig, isZeptoMailCreditsError, getWelcomeEmailTemplate } from "../services/email-service";
+import { buildRecipientQuery } from "../utils/recipient-filter";
 import { z } from "zod";
 
 const router = Router();
@@ -26,34 +27,8 @@ const sendSchema = z.object({
     isHtml: z.boolean().optional().default(false),
 });
 
-// Helper to build user query based on filters
-const buildUserQuery = (filters: z.infer<typeof previewSchema>) => {
-    // Join with users table so we can filter by role and only get users with valid emails
-    let query = supabase
-        .from("alumni")
-        .select("user_id, email, first_name, last_name, graduation_year, batch, branch, users!inner(user_role, is_admin)")
-        .not("email", "is", null)
-        .neq("email", "");
-
-    const gradYear = filters.graduationYear && filters.graduationYear !== "all" ? parseInt(filters.graduationYear, 10) : NaN;
-    if (!Number.isNaN(gradYear)) {
-        query = query.eq("graduation_year", gradYear);
-    }
-
-    if (filters.batch && filters.batch !== "all") {
-        query = query.eq("batch", filters.batch);
-    }
-
-    if (filters.department && filters.department !== "all") {
-        query = query.eq("branch", filters.department);
-    }
-
-    if (filters.role && filters.role !== "all") {
-        query = query.eq("users.user_role", filters.role);
-    }
-
-    return query;
-};
+// Alias for local use — same shape as previewSchema
+const buildUserQuery = (filters: z.infer<typeof previewSchema>) => buildRecipientQuery(filters);
 
 
 // Get email template by type (e.g. welcome) – admin only

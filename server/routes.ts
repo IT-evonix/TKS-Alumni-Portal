@@ -19,10 +19,11 @@ import globalSearchRoutes from "./routes/global-search-routes";
 import securityRoutes from "./routes/security-routes";
 import auditLogRoutes from "./routes/audit-log-routes";
 import searchAnalyticsRoutes from "./routes/search-analytics-routes";
-import resumeRoutes from "./routes/resume-routes"
+import resumeRoutes from "./routes/resume-routes";
 import alumniMapRoutes from "./routes/alumni-map";
 import adminDigestRoutes from "./routes/admin-digest-routes";
 import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
+import { adminRouter as newsletterAdminRoutes, publicRouter as newsletterPublicRoutes } from "./routes/newsletter-routes";
 import { aggregateAdminDashboardMetrics } from "./services/admin-metrics-service";
 import gamificationRoutes from "./routes/gamification-routes";
 import blogRoutes from "./routes/blog-routes";
@@ -195,6 +196,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Admin Bulk Email Routes (admin only)
   app.use("/api/admin/bulk-email", requireAdmin, adminBulkEmailRoutes);
+
+  // Newsletter Routes
+  app.use("/api/admin/newsletters", requireAdmin, newsletterAdminRoutes);
+  app.use("/api/newsletters", requireAuth, newsletterPublicRoutes);
 
 
 
