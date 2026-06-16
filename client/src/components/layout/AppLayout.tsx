@@ -25,7 +25,7 @@ type UserRole = 'alumni' | 'student' | 'faculty' | 'administrator';
 
 export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'feed' }) => {
   const [location, setLocation] = useLocation();
-  const { user, alumni, faculty, student, admin, logout, refreshAlumni } = useAuth(); // Assuming these properties exist in useAuth
+  const { user, alumni, faculty, student, admin, logout, refreshAlumni, isLoading } = useAuth(); // Assuming these properties exist in useAuth
   const alumniAny = alumni as any;
   const { scores } = useGamification();
   const { setShowSearchModal } = useSearch();
@@ -62,30 +62,39 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
   // Daily Location Check-in trigger logic
   React.useEffect(() => {
-    // Only prompt alumni users, only on the Feed page
-    if (user?.user_role !== 'alumni' || currentPage !== 'feed' || !user?.id) {
+    // Only prompt alumni users, only on the Feed page, and only after auth loading completes
+    if (isLoading || user?.user_role !== 'alumni' || currentPage !== 'feed' || !user?.id) {
       return;
     }
 
     const promptKey = `heatmap_location_prompted_${user.id}`;
     const hasBeenPrompted = localStorage.getItem(promptKey);
 
-    // Force prompt exactly once per user to ensure heatmap compatibility,
-    // regardless of whether they already have legacy location data in DB.
+    // Check if user already has valid location coordinates saved in the database
+    const hasLocation = alumniAny?.latitude !== null && alumniAny?.latitude !== undefined &&
+                        alumniAny?.longitude !== null && alumniAny?.longitude !== undefined &&
+                        String(alumniAny.latitude).trim() !== '' && String(alumniAny.longitude).trim() !== '';
+
+    // Only prompt if they haven't been prompted on this browser AND they don't already have location coordinates in the DB
     if (!hasBeenPrompted) {
-      if (alumniAny) {
-        setLocalLocation({
-          city: alumniAny.current_city || '',
-          state: alumniAny.current_state || '',
-          country: alumniAny.current_country || '',
-          lat: alumniAny.latitude ? Number(alumniAny.latitude) : null,
-          lng: alumniAny.longitude ? Number(alumniAny.longitude) : null,
-          label: alumniAny.location_label || ''
-        });
+      if (hasLocation) {
+        // If they already have coordinates in the DB, sync it to localStorage
+        localStorage.setItem(promptKey, 'true');
+      } else {
+        if (alumniAny) {
+          setLocalLocation({
+            city: alumniAny.current_city || '',
+            state: alumniAny.current_state || '',
+            country: alumniAny.current_country || '',
+            lat: alumniAny.latitude ? Number(alumniAny.latitude) : null,
+            lng: alumniAny.longitude ? Number(alumniAny.longitude) : null,
+            label: alumniAny.location_label || ''
+          });
+        }
+        setShowDailyLocationPrompt(true);
       }
-      setShowDailyLocationPrompt(true);
     }
-  }, [user?.id, user?.user_role, currentPage, alumni]);
+  }, [user?.id, user?.user_role, currentPage, alumni, isLoading]);
 
   // Submit daily location to endpoint
   const handleSubmitLocation = async () => {
