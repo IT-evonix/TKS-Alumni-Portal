@@ -28,7 +28,7 @@ export const buildRecipientQuery = (filters: RecipientFilters, countOnly = false
     )
     .not("email", "is", null)
     .neq("email", "")
-    .eq("newsletter_unsubscribed", false);
+    .or("newsletter_unsubscribed.is.null,newsletter_unsubscribed.eq.false");
 
   const gradYear =
     filters.graduationYear && filters.graduationYear !== "all"
