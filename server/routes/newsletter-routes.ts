@@ -136,23 +136,47 @@ adminRouter.get("/user-search", async (req, res) => {
     const q = ((req.query.q as string) || "").trim();
     if (!q || q.length < 2) return res.json({ users: [] });
 
-    const { data: users, error } = await supabase
-      .from("alumni")
-      .select("user_id, email, first_name, last_name")
-      .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
-      .not("email", "is", null)
-      .neq("email", "")
-      .limit(25);
+    // Search both alumni and users tables so users without an alumni row are still found
+    const [alumniRes, usersRes] = await Promise.all([
+      supabase
+        .from("alumni")
+        .select("user_id, email, first_name, last_name")
+        .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+        .not("email", "is", null)
+        .neq("email", "")
+        .limit(25),
+      supabase
+        .from("users")
+        .select("id, email, first_name, last_name")
+        .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+        .not("email", "is", null)
+        .neq("email", "")
+        .limit(25),
+    ]);
 
-    if (error) throw error;
+    if (alumniRes.error) throw alumniRes.error;
+    if (usersRes.error) throw usersRes.error;
 
-    res.json({
-      users: (users ?? []).map((u: any) => ({
-        id: u.user_id,
-        email: u.email,
-        name: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
-      })),
-    });
+    // Merge, deduplicate by email (alumni row takes precedence)
+    const seen = new Set<string>();
+    const merged: { id: string; email: string; name: string }[] = [];
+
+    for (const u of alumniRes.data ?? []) {
+      const email = (u.email as string).toLowerCase();
+      if (!seen.has(email)) {
+        seen.add(email);
+        merged.push({ id: u.user_id, email: u.email, name: `${u.first_name || ""} ${u.last_name || ""}`.trim() });
+      }
+    }
+    for (const u of usersRes.data ?? []) {
+      const email = (u.email as string).toLowerCase();
+      if (!seen.has(email)) {
+        seen.add(email);
+        merged.push({ id: u.id, email: u.email, name: `${u.first_name || ""} ${u.last_name || ""}`.trim() });
+      }
+    }
+
+    res.json({ users: merged.slice(0, 25) });
   } catch (err) {
     console.error("[Newsletter] User search error:", err);
     res.status(500).json({ error: "Search failed" });
