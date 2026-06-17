@@ -142,7 +142,7 @@ adminRouter.get("/user-search", async (req, res) => {
       .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
       .not("email", "is", null)
       .neq("email", "")
-      .limit(10);
+      .limit(25);
 
     if (error) throw error;
 

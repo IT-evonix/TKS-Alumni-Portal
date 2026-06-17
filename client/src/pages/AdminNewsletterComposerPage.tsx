@@ -294,7 +294,7 @@ function ContentPickerPanel({
       const res = await fetch(url, { headers: getHeaders() });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "Search failed");
-      setResults(data.blogs ?? data.podcasts ?? data.posts ?? data.feedPosts ?? []);
+      setResults(data.blogs ?? data.episodes ?? data.podcasts ?? data.posts ?? data.feedPosts ?? []);
     } catch { setResults([]); } finally { setSearching(false); }
   }, [getHeaders]);
 

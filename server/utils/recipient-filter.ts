@@ -14,12 +14,16 @@ export interface RecipientFilters {
  * countOnly=true returns a count-only query (no row data) for efficient counting.
  */
 export const buildRecipientQuery = (filters: RecipientFilters, countOnly = false) => {
+  const filterByRole = !!(filters.role && filters.role !== "all");
+  // Use inner join only when filtering by role so alumni without a users row are still included otherwise
+  const usersJoin = filterByRole ? "users!inner(user_role, is_admin)" : "users(user_role, is_admin)";
+
   let query = supabase
     .from("alumni")
     .select(
       countOnly
-        ? "user_id, users!inner(user_role)"
-        : "user_id, email, first_name, last_name, graduation_year, batch, branch, users!inner(user_role, is_admin)",
+        ? `user_id, ${usersJoin}`
+        : `user_id, email, first_name, last_name, graduation_year, batch, branch, ${usersJoin}`,
       countOnly ? { count: "exact", head: true } : undefined
     )
     .not("email", "is", null)
@@ -42,8 +46,8 @@ export const buildRecipientQuery = (filters: RecipientFilters, countOnly = false
     query = query.eq("branch", filters.department);
   }
 
-  if (filters.role && filters.role !== "all") {
-    query = query.eq("users.user_role", filters.role);
+  if (filterByRole) {
+    query = query.eq("users.user_role", filters.role!);
   }
 
   return query;

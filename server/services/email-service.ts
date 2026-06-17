@@ -899,22 +899,22 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
         : "";
 
       return `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:3px solid ${accent};">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:4px solid ${accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
   <tr>
-    <td style="padding:4px 16px;background:#f9fafb;">
-      <p style="font-size:10px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.1em;margin:0;">${label}</p>
+    <td style="padding:6px 20px;background:#f9fafb;border-bottom:1px solid #f0f0f0;">
+      <p style="font-size:10px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.12em;margin:0;">${label}</p>
     </td>
   </tr>
   ${coverBlock}
   <tr>
-    <td style="padding:16px 20px;background:#ffffff;">
+    <td style="padding:20px 24px;background:#ffffff;">
       ${metaBlock}
-      ${title ? `<h3 style="font-size:17px;font-weight:700;color:#111827;margin:0 0 6px 0;line-height:1.35;">${title}</h3>` : ""}
+      ${title ? `<h3 style="font-size:18px;font-weight:700;color:#111827;margin:0 0 8px 0;line-height:1.3;">${title}</h3>` : ""}
       ${excerptBlock}
-      <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+      <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
         <tr>
-          <td style="background:${accent};border-radius:5px;">
-            <a href="${fullUrl}" style="display:inline-block;padding:9px 20px;font-size:13px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:5px;">Read more &rarr;</a>
+          <td style="background:${accent};border-radius:50px;">
+            <a href="${fullUrl}" style="display:inline-block;padding:10px 24px;font-size:13px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:50px;letter-spacing:0.02em;">Read more &rarr;</a>
           </td>
         </tr>
       </table>
@@ -936,10 +936,10 @@ export function inlineStyleHtml(html: string): string {
   const stripStyle = (attrs: string) => attrs.replace(/\s+style="[^"]*"/gi, "").replace(/\s+style='[^']*'/gi, "");
   // Strip article wrapper attributes — keep content, remove data-* scaffolding
   html = html
-    .replace(/<section[^>]*data-article[^>]*>/gi, '<div style="margin:0 0 32px 0;padding-bottom:32px;border-bottom:1px solid #e5e7eb;">')
+    .replace(/<section[^>]*data-article[^>]*>/gi, '<div style="margin:0 0 36px 0;padding-bottom:36px;border-bottom:2px solid #e2e8f0;">')
     .replace(/<\/section>/gi, "</div>")
-    .replace(/<h2[^>]*data-article-title[^>]*>/gi, '<h2 style="font-size:20px;font-weight:700;color:#1a202c;margin:0 0 12px 0;line-height:1.3;">')
-    .replace(/<img([^>]*data-article-image[^>]*)\/?>/gi, (_, a) => `<img${stripStyle(a).replace(/\s*data-article-image\s*/gi, " ")} style="max-width:100%;height:auto;display:block;margin:0 0 16px 0;border-radius:6px;" />`)
+    .replace(/<h2[^>]*data-article-title[^>]*>/gi, '<h2 style="font-size:22px;font-weight:800;color:#111827;margin:0 0 14px 0;line-height:1.25;padding-bottom:10px;border-bottom:2px solid #A6CE39;">')
+    .replace(/<img([^>]*data-article-image[^>]*)\/?>/gi, (_, a) => `<img${stripStyle(a).replace(/\s*data-article-image\s*/gi, " ")} style="max-width:100%;height:auto;display:block;margin:0 0 10px 0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.09);" />`)
     .replace(/<div[^>]*data-article-body[^>]*>/gi, "<div>");
   return html
     .replace(/<h1([^>]*)>/gi, (_, a) => `<h1${stripStyle(a)} style="font-size:24px;font-weight:700;color:#1a202c;margin:24px 0 12px 0;line-height:1.3;">`)
@@ -956,8 +956,8 @@ export function inlineStyleHtml(html: string): string {
     .replace(/<code([^>]*)>/gi, (_, a) => `<code${stripStyle(a)} style="font-family:monospace;background:#f3f4f6;padding:2px 6px;border-radius:4px;font-size:13px;color:#374151;">`)
     .replace(/<pre([^>]*)>/gi, (_, a) => `<pre${stripStyle(a)} style="background:#1e293b;color:#e2e8f0;padding:16px;border-radius:8px;overflow-x:auto;font-size:13px;margin:0 0 16px 0;">`)
     // Additional TipTap output elements
-    .replace(/<img([^>]*)\/?>/gi, (_, a) => `<img${stripStyle(a)} style="max-width:100%;height:auto;display:block;margin:12px 0;" />`)
-    .replace(/<hr([^>]*)\/?>/gi, () => `<hr style="border:none;border-top:2px solid #e5e7eb;margin:24px 0;" />`)
+    .replace(/<img([^>]*)\/?>/gi, (_, a) => `<img${stripStyle(a)} style="max-width:100%;height:auto;display:block;margin:14px 0;border-radius:8px;box-shadow:0 2px 10px rgba(0,0,0,0.09);" />`)
+    .replace(/<hr([^>]*)\/?>/gi, () => `<hr style="border:none;border-top:2px solid #e2e8f0;margin:28px 0;" />`)
     .replace(/<s([^>]*)>/gi, (_, a) => `<s${stripStyle(a)} style="text-decoration:line-through;color:#9ca3af;">`)
     .replace(/<del([^>]*)>/gi, (_, a) => `<del${stripStyle(a)} style="text-decoration:line-through;color:#9ca3af;">`)
     .replace(/<table([^>]*)>/gi, (_, a) => `<table${stripStyle(a)} style="width:100%;border-collapse:collapse;margin:0 0 16px 0;">`)
@@ -991,7 +991,7 @@ export function generateNewsletterEmailHtml(
   const year = new Date().getFullYear();
 
   const greeting = options?.recipientFirstName
-    ? `<p style="font-size:16px;color:#374151;margin:0 0 20px 0;">Hi ${sanitizeForEmail(options.recipientFirstName)},</p>`
+    ? `<p style="font-size:17px;color:#374151;margin:0 0 20px 0;font-weight:500;">Hi ${sanitizeForEmail(options.recipientFirstName)},</p>`
     : "";
 
   const unsubscribeLink = options?.unsubscribeToken
@@ -1004,9 +1004,12 @@ export function generateNewsletterEmailHtml(
 
   const coverImageBlock = newsletter.cover_image
     ? `<tr>
-        <td style="padding:0;line-height:0;font-size:0;">
-          <img src="${sanitizeForEmail(newsletter.cover_image)}" alt="${sanitizeForEmail(newsletter.title)}" width="600" style="display:block;width:100%;max-width:600px;height:auto;border:0;" />
+        <td style="padding:0;line-height:0;font-size:0;overflow:hidden;">
+          <img src="${sanitizeForEmail(newsletter.cover_image)}" alt="${sanitizeForEmail(newsletter.title)}" width="600" class="cover-img" style="display:block;width:100%;max-width:600px;max-height:320px;height:auto;object-fit:cover;border:0;" />
         </td>
+      </tr>
+      <tr>
+        <td height="6" style="background:linear-gradient(180deg,rgba(0,104,69,0.18) 0%,rgba(0,104,69,0) 100%);font-size:0;line-height:0;">&nbsp;</td>
       </tr>`
     : "";
 
@@ -1014,10 +1017,11 @@ export function generateNewsletterEmailHtml(
     ? newsletter.excerpt.replace(/<[^>]*>/g, "").replace(/\s+/g, " ").trim()
     : "";
   const excerptBlock = excerptText
-    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 24px 0;">
+    ? `<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:0 0 28px 0;">
         <tr>
-          <td style="background:#f0fdf9;border-left:4px solid #A6CE39;padding:14px 20px;border-radius:0 6px 6px 0;">
-            <p style="font-size:16px;font-style:italic;color:#374151;line-height:1.6;margin:0;">${sanitizeForEmail(excerptText)}</p>
+          <td style="background:#f0fdf9;border-left:5px solid #008060;padding:16px 22px;border-radius:0 8px 8px 0;">
+            <p style="font-size:10px;font-weight:700;color:#008060;text-transform:uppercase;letter-spacing:0.12em;margin:0 0 8px 0;">Summary</p>
+            <p style="font-size:17px;font-style:italic;font-weight:500;color:#374151;line-height:1.65;margin:0;">${sanitizeForEmail(excerptText)}</p>
           </td>
         </tr>
       </table>`
@@ -1034,9 +1038,11 @@ export function generateNewsletterEmailHtml(
       .email-outer{padding:0!important;}
       .email-body{padding:24px 20px!important;}
       .masthead-title{font-size:22px!important;}
-      .masthead-pad{padding:18px 20px 22px!important;}
-      .cta-pad{padding:0 20px 28px!important;}
+      .masthead-pad{padding:20px 20px 0!important;}
+      .cta-pad{padding:20px 20px 32px!important;}
       .footer-pad{padding:16px 20px!important;}
+      img.cover-img{max-height:200px!important;height:auto!important;}
+      img.article-img{width:100%!important;height:auto!important;border-radius:6px!important;}
     }
   </style>
 </head>
@@ -1052,28 +1058,42 @@ export function generateNewsletterEmailHtml(
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <!-- Logo bar -->
                 <tr>
-                  <td style="background:#008060;padding:18px 28px;">
+                  <td style="background:linear-gradient(135deg,#006845 0%,#008060 100%);padding:16px 28px;">
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                       <tr>
                         <td style="vertical-align:middle;">
-                          <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="140" height="42" style="display:inline-block;max-width:140px;height:auto;border:0;outline:none;" />
+                          <!-- Circular badge + name -->
+                          <table role="presentation" cellpadding="0" cellspacing="0" border="0">
+                            <tr>
+                              <td style="vertical-align:middle;padding-right:12px;">
+                                <div style="display:inline-block;background:#ffffff;border-radius:50%;padding:5px;box-shadow:0 2px 8px rgba(0,0,0,0.25);">
+                                  <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="38" height="38" style="display:block;width:38px;height:38px;border-radius:50%;object-fit:contain;border:0;" />
+                                </div>
+                              </td>
+                              <td style="vertical-align:middle;">
+                                <p style="margin:0;font-size:15px;font-weight:700;color:#ffffff;letter-spacing:0.01em;line-height:1.2;">The Kalyani School</p>
+                                <p style="margin:0;font-size:11px;color:rgba(255,255,255,0.75);letter-spacing:0.08em;text-transform:uppercase;">Alumni Portal</p>
+                              </td>
+                            </tr>
+                          </table>
                         </td>
-                        <td width="8" style="background:#A6CE39;">&nbsp;</td>
+                        <td style="text-align:right;vertical-align:middle;">
+                          <span style="display:inline-block;background:rgba(166,206,57,0.25);border:1px solid rgba(166,206,57,0.6);border-radius:50px;padding:4px 14px;font-size:11px;font-weight:700;color:#A6CE39;letter-spacing:0.1em;text-transform:uppercase;">Newsletter</span>
+                        </td>
                       </tr>
                     </table>
                   </td>
                 </tr>
                 <!-- Title block -->
                 <tr>
-                  <td class="masthead-pad" style="background:#006b51;padding:24px 36px 0;">
-                    <p style="font-size:11px;letter-spacing:0.15em;color:#A6CE39;text-transform:uppercase;font-weight:700;margin:0 0 10px 0;">The Kalyani School</p>
-                    <h1 class="masthead-title" style="font-size:28px;font-weight:800;color:#ffffff;line-height:1.25;margin:0 0 10px 0;">${sanitizeForEmail(newsletter.title)}</h1>
-                    <p style="font-size:13px;color:rgba(255,255,255,0.7);margin:0 0 22px 0;">${issueDate}</p>
-                    <!-- Two-tone accent divider -->
+                  <td class="masthead-pad" style="background:linear-gradient(180deg,#006b51 0%,#005a44 100%);padding:28px 36px 0;">
+                    <p style="font-size:11px;letter-spacing:0.18em;color:#A6CE39;text-transform:uppercase;font-weight:700;margin:0 0 8px 0;">The Kalyani School &nbsp;&#x2022;&nbsp; ${issueDate}</p>
+                    <h1 class="masthead-title" style="font-size:30px;font-weight:800;color:#ffffff;line-height:1.2;margin:0 0 24px 0;letter-spacing:-0.01em;">${sanitizeForEmail(newsletter.title)}</h1>
+                    <!-- Two-tone accent divider — bolder -->
                     <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                       <tr>
-                        <td width="50%" height="4" style="background:#FDD11F;font-size:0;line-height:0;">&nbsp;</td>
-                        <td width="50%" height="4" style="background:#A6CE39;font-size:0;line-height:0;">&nbsp;</td>
+                        <td width="50%" height="6" style="background:#FDD11F;font-size:0;line-height:0;">&nbsp;</td>
+                        <td width="50%" height="6" style="background:#A6CE39;font-size:0;line-height:0;">&nbsp;</td>
                       </tr>
                     </table>
                   </td>
@@ -1102,8 +1122,8 @@ export function generateNewsletterEmailHtml(
             <td class="cta-pad" style="background:#ffffff;padding:28px 48px 44px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;text-align:center;">
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                 <tr>
-                  <td style="background:#008060;border-radius:6px;">
-                    <a href="${sanitizeForEmail(archiveUrl)}" style="display:inline-block;padding:14px 32px;font-size:15px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.03em;border-radius:6px;background:#008060;">Read Full Newsletter &rarr;</a>
+                  <td style="background:linear-gradient(135deg,#006845 0%,#008060 100%);border-radius:50px;box-shadow:0 6px 20px rgba(0,128,96,0.35);">
+                    <a href="${sanitizeForEmail(archiveUrl)}" style="display:inline-block;padding:16px 44px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.03em;border-radius:50px;">Read Full Newsletter &rarr;</a>
                   </td>
                 </tr>
               </table>
@@ -1117,9 +1137,15 @@ export function generateNewsletterEmailHtml(
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%">
                 <tr>
                   <td class="footer-pad" style="padding:28px 36px 20px;text-align:center;">
-                    <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="100" height="30" style="display:inline-block;max-width:100px;height:auto;border:0;outline:none;margin-bottom:10px;" />
-                    <p style="font-size:14px;font-weight:700;color:#ffffff;margin:0 0 4px 0;">The Kalyani School</p>
-                    <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;">Manjari (Budruk), Near Hadapsar, Pune 412307, Maharashtra, India</p>
+                    <div style="display:inline-block;background:rgba(255,255,255,0.08);border-radius:50%;padding:8px;margin-bottom:12px;">
+                      <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;object-fit:contain;border:0;outline:none;" />
+                    </div>
+                    <p style="font-size:15px;font-weight:700;color:#ffffff;margin:0 0 6px 0;">The Kalyani School</p>
+                    <p style="font-size:12px;color:rgba(255,255,255,0.55);margin:0 0 4px 0;line-height:1.6;">Manjari (Budruk), Near Hadapsar, Pune 412307, Maharashtra, India</p>
+                    <p style="font-size:12px;color:rgba(255,255,255,0.55);margin:0;">
+                      +91 8149117666 &nbsp;/&nbsp; +91 8149118666 &nbsp;&middot;&nbsp;
+                      <a href="mailto:alumni@thekalyanischool.edu.in" style="color:#A6CE39;text-decoration:none;">alumni@thekalyanischool.edu.in</a>
+                    </p>
                   </td>
                 </tr>
                 <!-- Thin divider -->
@@ -1136,13 +1162,13 @@ export function generateNewsletterEmailHtml(
                 <tr>
                   <td class="footer-pad" style="padding:16px 36px 24px;text-align:center;">
                     <p style="margin:0 0 10px 0;">
-                      <a href="${sanitizeForEmail(unsubscribeLink)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Manage preferences</a>
+                      <a href="${sanitizeForEmail(`${base}/settings`)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Manage preferences</a>
                       &nbsp;&middot;&nbsp;
                       <a href="${sanitizeForEmail(unsubscribeLink)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Unsubscribe</a>
                       &nbsp;&middot;&nbsp;
                       <a href="${sanitizeForEmail(contactUrl)}" style="color:#A6CE39;font-size:12px;text-decoration:none;">Contact us</a>
                     </p>
-                    <p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;">&copy; ${year} The Kalyani School. All rights reserved.</p>
+                    <p style="font-size:11px;color:rgba(255,255,255,0.4);margin:0;">&copy; ${year} The Kalyani School Alumni Portal. All rights reserved.</p>
                   </td>
                 </tr>
               </table>
