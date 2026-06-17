@@ -402,7 +402,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
     { id: 'forums', icon: MessagesSquare, label: 'Forums', path: '/forums', section: 'main', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'events', icon: Calendar, label: 'Events', path: '/events', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'job-portal', icon: Briefcase, label: 'Job Portal', path: '/job-portal', section: 'discover', roles: ['alumni', 'student', 'faculty'] },
-    { id: 'mentorship', icon: GraduationCap, label: 'Mentorship', path: '/mentorship', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
+    { id: 'mentorship', icon: GraduationCap, label: 'Mentorship', path: '/mentorship', section: 'discover', roles: ['alumni', 'faculty', 'administrator'] },
     { id: 'blogs', icon: BookOpen, label: 'Blogs', path: '/blogs', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'alumni-map', icon: MapPin, label: 'Global Network', path: '/alumni-map', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },
     { id: 'travel-chapters', icon: Globe, label: 'Travel Chapters', path: '/travel-chapters', section: 'discover', roles: ['alumni', 'student', 'faculty', 'administrator'] },

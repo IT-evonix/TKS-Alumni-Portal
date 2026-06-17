@@ -112,6 +112,10 @@ export interface Alumni {
   years_of_experience?: number
   timezone?: string
   expertise_areas?: string
+  interest_areas?: string
+  available_days?: string
+  session_type?: string
+  meeting_link?: string
   created_at: string
   updated_at: string
 }

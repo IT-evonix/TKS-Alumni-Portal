@@ -1,11 +1,11 @@
 import React, { useEffect, lazy, Suspense } from "react";
-import { Route, Switch, Redirect } from "wouter";
+import { Route, Switch, Redirect, useLocation } from "wouter";
 import { HelmetProvider } from "react-helmet-async";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
-import { AuthProvider } from "@/contexts/AuthContext";
+import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SearchProvider } from "@/contexts/SearchContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { GamificationProvider } from "@/contexts/GamificationContext";
@@ -75,6 +75,8 @@ const NotificationHistoryPage = lazy(() => import("@/pages/NotificationHistoryPa
 const UserProfilePage = lazy(() => import("@/pages/UserProfilePage").then(m => ({ default: m.UserProfilePage })));
 const PublicProfilePage = lazy(() => import("@/pages/PublicProfilePage").then(m => ({ default: m.PublicProfilePage })));
 const MentorshipPage = lazy(() => import("@/pages/MentorshipPage").then(m => ({ default: m.MentorshipPage })));
+const MentorDashboard = lazy(() => import("@/pages/mentorship/MentorDashboard").then(m => ({ default: m.MentorDashboard })));
+const MenteeDashboard = lazy(() => import("@/pages/mentorship/MenteeDashboard").then(m => ({ default: m.MenteeDashboard })));
 
 // Forum pages - lazy loaded
 const ForumsPage = lazy(() => import("@/pages/ForumsPage").then(m => ({ default: m.ForumsPage })));
@@ -125,6 +127,20 @@ const AdminTravelChaptersPage = lazy(() => import("@/pages/AdminTravelChaptersPa
 const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ default: m.SharedPostPage })));
 const NotFound = lazy(() => import("@/pages/not-found").then(m => ({ default: m.default })));
 
+const MentorshipRedirect = () => {
+  const { user, isStudent } = useAuth();
+  const [, setLocation] = useLocation();
+  useEffect(() => {
+    if (!user?.id) return; // Wait for auth to hydrate before acting
+    if (isStudent) { setLocation('/feed'); return; }
+    fetch('/api/mentorship/my-status', { headers: { 'user-id': user.id } })
+      .then(r => r.ok ? r.json() : null)
+      .then(data => setLocation(data?.is_mentor ? '/mentorship/mentor' : '/mentorship/mentee'))
+      .catch(() => setLocation('/mentorship/mentee'));
+  }, [user?.id, isStudent]);
+  return <PageLoader />;
+};
+
 function Router() {
   return (
     <Suspense fallback={<PageLoader />}>
@@ -158,7 +174,9 @@ function Router() {
           <ProtectedRoute path="/notifications/history" component={NotificationHistoryPage} />
           <ProtectedRoute path="/profile" component={UserProfilePage} />
           <ProtectedRoute path="/profile/:userId" component={PublicProfilePage} />
-          <ProtectedRoute path="/mentorship" component={MentorshipPage} />
+          <ProtectedRoute path="/mentorship/mentor" component={MentorDashboard} />
+          <ProtectedRoute path="/mentorship/mentee" component={MenteeDashboard} />
+          <ProtectedRoute path="/mentorship" component={MentorshipRedirect} />
           <ProtectedRoute path="/forums" component={ForumsPage} />
           <ProtectedRoute path="/forums/new" component={ForumNewThreadPage} />
           <ProtectedRoute path="/forums/thread/:id" component={ForumThreadPage} />

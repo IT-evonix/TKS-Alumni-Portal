@@ -11038,6 +11038,36 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Get distinct expertise tags from active mentors
+  app.get("/api/mentorship/available-expertise", async (req, res) => {
+    try {
+      const { data, error } = await supabase
+        .from("alumni")
+        .select("expertise_areas")
+        .eq("is_mentor", true)
+        .eq("is_active", true)
+        .not("expertise_areas", "is", null);
+
+      if (error) return res.status(500).json({ error: "Failed to fetch expertise" });
+
+      const tagSet = new Set<string>();
+      for (const row of data || []) {
+        try {
+          const tags: string[] = JSON.parse(row.expertise_areas || "[]");
+          if (Array.isArray(tags)) tags.forEach(t => { if (t) tagSet.add(t); });
+        } catch {
+          // fallback: comma-separated string
+          (row.expertise_areas || "").split(",").map((s: string) => s.trim()).filter(Boolean).forEach((t: string) => tagSet.add(t));
+        }
+      }
+
+      res.json({ expertise: Array.from(tagSet).sort() });
+    } catch (error) {
+      console.error("Get available expertise error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Get available mentors (with scoring)
   app.get("/api/mentorship/mentors", async (req, res) => {
     try {
@@ -11057,7 +11087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let query = supabase
         .from("alumni")
-        .select("*, alumni_skills(skill_name, proficiency_level, category, is_primary)")
+        .select("*, alumni_skills(skill_name, proficiency_level, category, is_primary), available_days, session_type, meeting_link")
         .eq("is_mentor", true)
         .eq("is_active", true);
 
@@ -11119,7 +11149,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data } = await supabase
         .from("alumni")
-        .select("is_mentor, mentor_available, max_mentees, mentee_count, interest_areas")
+        .select("is_mentor, mentor_available, max_mentees, mentee_count, interest_areas, available_days, session_type, meeting_link")
         .eq("user_id", userId)
         .single();
 
@@ -11183,7 +11213,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No user ID provided" });
       }
 
+      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
+      if (reqUser?.user_role === "student") {
+        return res.status(403).json({ error: "Students are not eligible for mentee features." });
+      }
+
       const { mentorId, message, goalText, matchScore } = req.body;
+
+      // Prevent self-mentorship
+      if (mentorId === userId) {
+        return res.status(400).json({ error: "You cannot request yourself as a mentor." });
+      }
 
       // Prevent duplicate pending requests
       const { data: existing } = await supabase
@@ -11247,6 +11287,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.headers["user-id"] as string;
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
 
+      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
+      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
+
       const { data: requests, error } = await supabase
         .from("mentorship_requests")
         .select("*")
@@ -11287,7 +11330,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from("mentorship_requests")
         .select("*")
         .eq("mentor_id", userId)
-        .eq("status", "pending")
+        .in("status", ["pending", "accepted"])
         .order("created_at", { ascending: false });
 
       if (error) {
@@ -11350,9 +11393,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update mentee_count on mentor's alumni record
       if (status === "accepted") {
-        await Promise.resolve(supabase.rpc("increment_mentee_count", { mentor_user_id: userId })).catch(() => {
-          // RPC may not exist; best-effort
-        });
+        const { data: mentorRow } = await supabase
+          .from("alumni")
+          .select("mentee_count")
+          .eq("user_id", userId)
+          .single();
+        await supabase
+          .from("alumni")
+          .update({ mentee_count: (mentorRow?.mentee_count ?? 0) + 1 })
+          .eq("user_id", userId);
       }
 
       // Fetch mentor name for notification
@@ -11380,6 +11429,398 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.json({ message: `Request ${status}` });
     } catch (error) {
       console.error("Update request error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Mentee withdraws a pending request
+  app.delete("/api/mentorship/request/:id", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
+      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
+
+      const { id } = req.params;
+
+      const { data: mentorshipReq } = await supabase
+        .from("mentorship_requests")
+        .select("mentee_id, mentor_id, status")
+        .eq("id", id)
+        .single();
+
+      if (!mentorshipReq || mentorshipReq.mentee_id !== userId) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+      if (mentorshipReq.status !== "pending") {
+        return res.status(400).json({ error: "Only pending requests can be withdrawn." });
+      }
+
+      await supabase.from("mentorship_requests").delete().eq("id", id);
+
+      // Notify mentor
+      const { data: menteeAlumni } = await supabase
+        .from("alumni").select("first_name, last_name").eq("user_id", userId).single();
+      const menteeName = menteeAlumni ? `${menteeAlumni.first_name} ${menteeAlumni.last_name}` : "Someone";
+      const io = (global as any).io;
+      if (io) {
+        io.to(`user:${mentorshipReq.mentor_id}`).emit("notification", {
+          type: "mentorship_withdrawn",
+          title: "Mentorship Request Withdrawn",
+          content: `${menteeName} withdrew their mentorship request.`,
+        });
+      }
+
+      res.json({ message: "Request withdrawn" });
+    } catch (error) {
+      console.error("Withdraw request error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // End an accepted mentorship relationship (mentor or mentee)
+  app.post("/api/mentorship/request/:id/end", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { id } = req.params;
+
+      const { data: mentorshipReq } = await supabase
+        .from("mentorship_requests")
+        .select("mentor_id, mentee_id, status")
+        .eq("id", id)
+        .single();
+
+      if (!mentorshipReq) return res.status(404).json({ error: "Request not found" });
+      if (mentorshipReq.mentor_id !== userId && mentorshipReq.mentee_id !== userId) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+      if (mentorshipReq.status !== "accepted") {
+        return res.status(400).json({ error: "Only accepted relationships can be ended." });
+      }
+
+      await supabase
+        .from("mentorship_requests")
+        .update({ status: "ended", updated_at: new Date().toISOString() })
+        .eq("id", id);
+
+      // Decrement mentee_count
+      const { data: mentorRow } = await supabase
+        .from("alumni").select("mentee_count").eq("user_id", mentorshipReq.mentor_id).single();
+      await supabase
+        .from("alumni")
+        .update({ mentee_count: Math.max(0, (mentorRow?.mentee_count ?? 1) - 1) })
+        .eq("user_id", mentorshipReq.mentor_id);
+
+      // Notify other party
+      const otherId = userId === mentorshipReq.mentor_id ? mentorshipReq.mentee_id : mentorshipReq.mentor_id;
+      const { data: initiator } = await supabase
+        .from("alumni").select("first_name, last_name").eq("user_id", userId).single();
+      const initiatorName = initiator ? `${initiator.first_name} ${initiator.last_name}` : "Your contact";
+      const io = (global as any).io;
+      if (io) {
+        io.to(`user:${otherId}`).emit("notification", {
+          type: "mentorship_ended",
+          title: "Mentorship Relationship Ended",
+          content: `${initiatorName} ended the mentorship relationship.`,
+        });
+      }
+
+      res.json({ message: "Relationship ended" });
+    } catch (error) {
+      console.error("End relationship error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Mentor availability settings
+  app.patch("/api/mentorship/my-availability", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { available_days, session_type, meeting_link, max_mentees } = req.body;
+
+      const { error } = await supabase
+        .from("alumni")
+        .update({
+          available_days: available_days ?? null,
+          session_type: session_type ?? null,
+          meeting_link: meeting_link ?? null,
+          ...(max_mentees !== undefined ? { max_mentees } : {}),
+          updated_at: new Date().toISOString(),
+        })
+        .eq("user_id", userId);
+
+      if (error) {
+        console.error("Update availability error:", error);
+        return res.status(500).json({ error: "Failed to update availability" });
+      }
+
+      res.json({ message: "Availability updated" });
+    } catch (error) {
+      console.error("Update availability error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Bookmark endpoints
+  app.post("/api/mentorship/bookmark", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
+      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
+
+      const { mentorId } = req.body;
+      if (!mentorId) return res.status(400).json({ error: "mentorId required" });
+
+      const { data: existing } = await supabase
+        .from("mentorship_bookmarks")
+        .select("mentor_id")
+        .eq("mentee_id", userId)
+        .eq("mentor_id", mentorId)
+        .maybeSingle();
+
+      if (existing) {
+        await supabase.from("mentorship_bookmarks").delete()
+          .eq("mentee_id", userId).eq("mentor_id", mentorId);
+        return res.json({ bookmarked: false });
+      }
+
+      await supabase.from("mentorship_bookmarks").insert({ mentee_id: userId, mentor_id: mentorId });
+      res.json({ bookmarked: true });
+    } catch (error) {
+      console.error("Bookmark error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/mentorship/bookmarks", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
+      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
+
+      const { data } = await supabase
+        .from("mentorship_bookmarks")
+        .select("mentor_id")
+        .eq("mentee_id", userId);
+
+      res.json({ mentorIds: (data || []).map((r: any) => r.mentor_id) });
+    } catch (error) {
+      console.error("Get bookmarks error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Session endpoints
+  app.post("/api/mentorship/sessions", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { requestId, scheduledAt, durationMinutes, agenda, meetLink } = req.body;
+      if (!requestId || !scheduledAt) return res.status(400).json({ error: "requestId and scheduledAt required" });
+
+      // Verify user is part of the accepted request
+      const { data: mentorshipReq } = await supabase
+        .from("mentorship_requests")
+        .select("mentor_id, mentee_id, status")
+        .eq("id", requestId)
+        .single();
+
+      if (!mentorshipReq || mentorshipReq.status !== "accepted") {
+        return res.status(400).json({ error: "Session requires an accepted mentorship relationship." });
+      }
+      if (mentorshipReq.mentor_id !== userId && mentorshipReq.mentee_id !== userId) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+
+      const { data: session, error } = await supabase.from("mentorship_sessions").insert({
+        mentor_id: mentorshipReq.mentor_id,
+        mentee_id: mentorshipReq.mentee_id,
+        request_id: requestId,
+        scheduled_at: scheduledAt,
+        duration_minutes: durationMinutes || 60,
+        agenda: agenda || null,
+        meet_link: meetLink || null,
+        status: "upcoming",
+      }).select().single();
+
+      if (error) {
+        console.error("Create session error:", error);
+        return res.status(500).json({ error: "Failed to create session" });
+      }
+
+      // Notify other party
+      const otherId = userId === mentorshipReq.mentor_id ? mentorshipReq.mentee_id : mentorshipReq.mentor_id;
+      const { data: creator } = await supabase
+        .from("alumni").select("first_name, last_name").eq("user_id", userId).single();
+      const creatorName = creator ? `${creator.first_name} ${creator.last_name}` : "Your contact";
+      const io = (global as any).io;
+      if (io) {
+        io.to(`user:${otherId}`).emit("notification", {
+          type: "session_scheduled",
+          title: "Session Scheduled",
+          content: `${creatorName} scheduled a mentorship session.`,
+        });
+      }
+
+      res.json({ session });
+    } catch (error) {
+      console.error("Create session error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/mentorship/sessions", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { data: sessions, error } = await supabase
+        .from("mentorship_sessions")
+        .select("*")
+        .or(`mentor_id.eq.${userId},mentee_id.eq.${userId}`)
+        .order("scheduled_at", { ascending: true });
+
+      if (error) return res.status(500).json({ error: "Failed to fetch sessions" });
+
+      // Enrich with other party info
+      const enriched = await Promise.all(
+        (sessions || []).map(async (s: any) => {
+          const otherId = s.mentor_id === userId ? s.mentee_id : s.mentor_id;
+          const role = s.mentor_id === userId ? "mentor" : "mentee";
+          const { data: other } = await supabase
+            .from("alumni")
+            .select("first_name, last_name, profile_picture, current_role, current_company")
+            .eq("user_id", otherId)
+            .single();
+          return { ...s, other, myRole: role };
+        })
+      );
+
+      res.json({ sessions: enriched });
+    } catch (error) {
+      console.error("Get sessions error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/mentorship/sessions/:id", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { id } = req.params;
+      const { status, notes, agenda, scheduledAt } = req.body;
+
+      const { data: session } = await supabase
+        .from("mentorship_sessions")
+        .select("mentor_id, mentee_id")
+        .eq("id", id)
+        .single();
+
+      if (!session || (session.mentor_id !== userId && session.mentee_id !== userId)) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+
+      const updates: Record<string, any> = {};
+      if (status) updates.status = status;
+      if (notes !== undefined) updates.notes = notes;
+      if (agenda !== undefined) updates.agenda = agenda;
+      if (scheduledAt) updates.scheduled_at = scheduledAt;
+
+      const { error } = await supabase.from("mentorship_sessions").update(updates).eq("id", id);
+      if (error) return res.status(500).json({ error: "Failed to update session" });
+
+      res.json({ message: "Session updated" });
+    } catch (error) {
+      console.error("Update session error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Review endpoints
+  app.post("/api/mentorship/reviews", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { sessionId, reviewedId, rating, comment } = req.body;
+      if (!sessionId || !reviewedId || !rating) {
+        return res.status(400).json({ error: "sessionId, reviewedId, and rating required" });
+      }
+      if (rating < 1 || rating > 5) return res.status(400).json({ error: "Rating must be 1-5" });
+
+      // Verify user was in session
+      const { data: session } = await supabase
+        .from("mentorship_sessions")
+        .select("mentor_id, mentee_id, status")
+        .eq("id", sessionId)
+        .single();
+
+      if (!session || (session.mentor_id !== userId && session.mentee_id !== userId)) {
+        return res.status(403).json({ error: "Not authorised" });
+      }
+      if (session.status !== "completed") {
+        return res.status(400).json({ error: "Can only review completed sessions." });
+      }
+
+      const { error } = await supabase.from("mentorship_reviews").insert({
+        session_id: sessionId,
+        reviewer_id: userId,
+        reviewed_id: reviewedId,
+        rating,
+        comment: comment || null,
+      });
+
+      if (error) {
+        if (error.code === "23505") return res.status(409).json({ error: "You already reviewed this session." });
+        console.error("Create review error:", error);
+        return res.status(500).json({ error: "Failed to submit review" });
+      }
+
+      res.json({ message: "Review submitted" });
+    } catch (error) {
+      console.error("Create review error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/mentorship/reviews/:userId", async (req, res) => {
+    try {
+      const { userId: reviewedUserId } = req.params;
+
+      const { data: reviews, error } = await supabase
+        .from("mentorship_reviews")
+        .select("rating, comment, created_at, reviewer_id")
+        .eq("reviewed_id", reviewedUserId)
+        .order("created_at", { ascending: false });
+
+      if (error) return res.status(500).json({ error: "Failed to fetch reviews" });
+
+      const ratings = (reviews || []).map((r: any) => r.rating);
+      const avg = ratings.length > 0 ? ratings.reduce((a: number, b: number) => a + b, 0) / ratings.length : null;
+
+      // Enrich with reviewer name
+      const enriched = await Promise.all(
+        (reviews || []).slice(0, 10).map(async (r: any) => {
+          const { data: reviewer } = await supabase
+            .from("alumni").select("first_name, last_name").eq("user_id", r.reviewer_id).single();
+          return { ...r, reviewer };
+        })
+      );
+
+      res.json({ reviews: enriched, averageRating: avg ? Math.round(avg * 10) / 10 : null, total: ratings.length });
+    } catch (error) {
+      console.error("Get reviews error:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

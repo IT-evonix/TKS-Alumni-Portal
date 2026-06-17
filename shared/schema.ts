@@ -546,6 +546,45 @@ export const insertMentorshipRequestSchema = createInsertSchema(mentorshipReques
   updatedAt: true,
 });
 
+export const mentorshipBookmarks = pgTable("mentorship_bookmarks", {
+  menteeId: varchar("mentee_id").notNull(),
+  mentorId: varchar("mentor_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow(),
+}, (table) => ({ pk: { columns: [table.menteeId, table.mentorId] } }));
+
+export const mentorshipSessions = pgTable("mentorship_sessions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  mentorId: varchar("mentor_id").notNull(),
+  menteeId: varchar("mentee_id").notNull(),
+  requestId: varchar("request_id").notNull(),
+  scheduledAt: timestamp("scheduled_at").notNull(),
+  durationMinutes: integer("duration_minutes").default(60),
+  agenda: text("agenda"),
+  notes: text("notes"),
+  status: text("status").default("upcoming"), // upcoming | completed | cancelled
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const mentorshipReviews = pgTable("mentorship_reviews", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  sessionId: varchar("session_id").notNull(),
+  reviewerId: varchar("reviewer_id").notNull(),
+  reviewedId: varchar("reviewed_id").notNull(),
+  rating: integer("rating").notNull(),
+  comment: text("comment"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const insertMentorshipSessionSchema = createInsertSchema(mentorshipSessions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertMentorshipReviewSchema = createInsertSchema(mentorshipReviews).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).pick({
   username: true,
   password: true,
