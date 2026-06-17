@@ -147,17 +147,15 @@ adminRouter.get("/user-search", async (req, res) => {
         .limit(25),
       supabase
         .from("users")
-        .select("id, email, first_name, last_name")
-        .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+        .select("id, email, username")
+        .or(`email.ilike.%${q}%,username.ilike.%${q}%`)
         .not("email", "is", null)
         .neq("email", "")
         .limit(25),
     ]);
 
     if (alumniRes.error) throw alumniRes.error;
-    if (usersRes.error) throw usersRes.error;
-
-    // Merge, deduplicate by email (alumni row takes precedence)
+    // usersRes errors are non-fatal — we still return alumni results
     const seen = new Set<string>();
     const merged: { id: string; email: string; name: string }[] = [];
 
@@ -168,11 +166,11 @@ adminRouter.get("/user-search", async (req, res) => {
         merged.push({ id: u.user_id, email: u.email, name: `${u.first_name || ""} ${u.last_name || ""}`.trim() });
       }
     }
-    for (const u of usersRes.data ?? []) {
+    for (const u of (usersRes.data ?? [])) {
       const email = (u.email as string).toLowerCase();
       if (!seen.has(email)) {
         seen.add(email);
-        merged.push({ id: u.id, email: u.email, name: `${u.first_name || ""} ${u.last_name || ""}`.trim() });
+        merged.push({ id: u.id, email: u.email, name: u.username || "" });
       }
     }
 
