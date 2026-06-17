@@ -1584,31 +1584,31 @@ The Kalyani School Alumni Team`;
                     </div>
                   ) : (
                     <div className="overflow-x-auto -mx-3 sm:-mx-4">
-                      <Table>
+                      <Table className="table-fixed w-full">
                         <TableHeader>
                           <TableRow className="bg-amber-50">
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm w-28 sm:w-32">
                               Name
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden sm:table-cell">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden sm:table-cell w-36">
                               Email
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm w-14">
                               Year
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden md:table-cell">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden md:table-cell w-32">
                               Batch
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden lg:table-cell">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden lg:table-cell w-28">
                               Phone
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden xl:table-cell">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden xl:table-cell w-36">
                               Course/Branch
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden 2xl:table-cell">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm hidden 2xl:table-cell w-40">
                               Reason
                             </TableHead>
-                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm">
+                            <TableHead className="font-semibold text-gray-700 text-xs sm:text-sm w-36">
                               Actions
                             </TableHead>
                           </TableRow>
@@ -1619,25 +1619,25 @@ The Kalyani School Alumni Team`;
                               key={request.id}
                               className="hover:bg-amber-50/50"
                             >
-                              <TableCell className="font-medium text-gray-900 text-xs sm:text-sm">
+                              <TableCell className="font-medium text-gray-900 text-xs sm:text-sm truncate max-w-0" title={`${request.first_name} ${request.last_name}`}>
                                 {request.first_name} {request.last_name}
                               </TableCell>
-                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden sm:table-cell truncate max-w-[150px]">
+                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden sm:table-cell truncate max-w-0" title={request.email}>
                                 {request.email}
                               </TableCell>
                               <TableCell className="text-gray-700 text-xs sm:text-sm">
                                 {request.graduation_year}
                               </TableCell>
-                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden md:table-cell">
+                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden md:table-cell truncate max-w-0" title={request.batch || ""}>
                                 {request.batch || "-"}
                               </TableCell>
-                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden lg:table-cell">
+                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden lg:table-cell truncate max-w-0" title={request.phone || ""}>
                                 {request.phone || "-"}
                               </TableCell>
-                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden xl:table-cell">
+                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden xl:table-cell truncate max-w-0" title={`${request.course}${request.branch ? ` / ${request.branch}` : ""}`}>
                                 {request.course}{request.branch ? ` / ${request.branch}` : ""}
                               </TableCell>
-                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden 2xl:table-cell truncate max-w-[200px]" title={request.reason_for_joining}>
+                              <TableCell className="text-gray-700 text-xs sm:text-sm hidden 2xl:table-cell truncate max-w-0" title={request.reason_for_joining}>
                                 {request.reason_for_joining || "-"}
                               </TableCell>
                               <TableCell>

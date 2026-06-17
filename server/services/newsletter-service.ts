@@ -59,12 +59,30 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
 
     if (recipErr) throw new Error(`Failed to resolve recipients: ${recipErr.message}`);
 
-    const users = (recipients ?? []) as Array<{
+    let users = (recipients as any[] ?? []) as Array<{
       user_id: string | null;
       email: string;
       first_name: string;
       last_name: string;
     }>;
+
+    // Merge custom_recipient_emails (stored as JSON string array) into the recipient list
+    const customEmailsRaw: string[] = (() => {
+      try {
+        const raw = newsletter.custom_recipient_emails;
+        if (!raw || raw === "[]") return [];
+        return JSON.parse(raw) as string[];
+      } catch {
+        return [];
+      }
+    })();
+    const existingEmails = new Set(users.map((u) => u.email.toLowerCase()));
+    for (const email of customEmailsRaw) {
+      if (email && !existingEmails.has(email.toLowerCase())) {
+        users = [...users, { user_id: null, email, first_name: "", last_name: "" }];
+        existingEmails.add(email.toLowerCase());
+      }
+    }
 
     const totalRecipients = users.length;
     console.log(`[Newsletter] Sending "${newsletter.title}" to ${totalRecipients} recipients`);
@@ -75,40 +93,47 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
     const baseUrl = getBaseUrl();
     const textBody = newsletter.content.replace(/<[^>]*>/gm, "").replace(/\s+/g, " ").trim();
 
-    // 5. Send emails — Promise.allSettled so partial failures don't abort the batch.
+    // 5. Send emails in batches to respect ZeptoMail rate limits.
     // HTML is generated per-user to include personalised greeting + unique unsubscribe/tracking links.
-    const emailResults = await Promise.allSettled(
-      users.map((u) => {
-        const unsubToken = u.user_id
-          ? Buffer.from(`${u.user_id}:${newsletterId}`).toString("base64")
-          : undefined;
-        const trackingPixelUrl = u.user_id
-          ? `${baseUrl}/api/newsletters/track/open/${encodeURIComponent(newsletterId)}/${encodeURIComponent(u.user_id)}`
-          : undefined;
-        const htmlBody = generateNewsletterEmailHtml(
-          baseUrl,
-          {
-            title: newsletter.title,
-            content: newsletter.content,
-            slug: newsletter.slug,
-            excerpt: newsletter.excerpt,
-            cover_image: newsletter.cover_image,
-          },
-          {
-            recipientFirstName: u.first_name || undefined,
-            unsubscribeToken: unsubToken,
-            trackingPixelUrl,
-          }
-        );
-        return sendEmail({
-          to: u.email,
-          toName: `${u.first_name} ${u.last_name}`.trim() || u.email,
-          subject: newsletter.title,
-          htmlBody,
-          textBody,
-        });
-      })
-    );
+    const SEND_CONCURRENCY = 20;
+    const emailResults: PromiseSettledResult<any>[] = [];
+
+    const buildEmailPromise = (u: typeof users[number]) => {
+      const unsubToken = u.user_id
+        ? Buffer.from(`${u.user_id}:${newsletterId}`).toString("base64")
+        : undefined;
+      const trackingPixelUrl = u.user_id
+        ? `${baseUrl}/api/newsletters/track/open/${encodeURIComponent(newsletterId)}/${encodeURIComponent(u.user_id)}`
+        : undefined;
+      const htmlBody = generateNewsletterEmailHtml(
+        baseUrl,
+        {
+          title: newsletter.title,
+          content: newsletter.content,
+          slug: newsletter.slug,
+          excerpt: newsletter.excerpt,
+          cover_image: newsletter.cover_image,
+        },
+        {
+          recipientFirstName: u.first_name || undefined,
+          unsubscribeToken: unsubToken,
+          trackingPixelUrl,
+        }
+      );
+      return sendEmail({
+        to: u.email,
+        toName: `${u.first_name} ${u.last_name}`.trim() || u.email,
+        subject: newsletter.title,
+        htmlBody,
+        textBody,
+      });
+    };
+
+    for (let i = 0; i < users.length; i += SEND_CONCURRENCY) {
+      const chunk = users.slice(i, i + SEND_CONCURRENCY);
+      const chunkResults = await Promise.allSettled(chunk.map(buildEmailPromise));
+      emailResults.push(...chunkResults);
+    }
 
     const sentCount = emailResults.filter((r) => r.status === "fulfilled").length;
     const failedCount = emailResults.filter((r) => r.status === "rejected").length;

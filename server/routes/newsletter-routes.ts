@@ -11,6 +11,11 @@ import {
 } from "../services/email-service";
 import { getBaseUrl } from "../utils/base-url";
 
+// ==================== CACHE ====================
+
+const recipientPreviewCache = new Map<string, { data: any; ts: number }>();
+const PREVIEW_CACHE_TTL = 30_000; // 30 seconds
+
 // ==================== UTILITIES ====================
 
 function generateSlug(title: string): string {
@@ -57,6 +62,7 @@ const newsletterCreateSchema = z.object({
   recipient_batch: z.string().default("all"),
   recipient_graduation_year: z.string().default("all"),
   recipient_department: z.string().default("all"),
+  custom_recipient_emails: z.array(z.string().email()).default([]),
   status: z.enum(["draft", "scheduled"]).default("draft"),
   scheduled_at: z.string().optional().nullable(),
 });
@@ -124,6 +130,35 @@ adminRouter.get("/filter-options", async (req, res) => {
   }
 });
 
+// GET /api/admin/newsletters/user-search?q=... — search users by name or email for custom recipients
+adminRouter.get("/user-search", async (req, res) => {
+  try {
+    const q = ((req.query.q as string) || "").trim();
+    if (!q || q.length < 2) return res.json({ users: [] });
+
+    const { data: users, error } = await supabase
+      .from("alumni")
+      .select("user_id, email, first_name, last_name")
+      .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
+      .not("email", "is", null)
+      .neq("email", "")
+      .limit(10);
+
+    if (error) throw error;
+
+    res.json({
+      users: (users ?? []).map((u: any) => ({
+        id: u.user_id,
+        email: u.email,
+        name: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
+      })),
+    });
+  } catch (err) {
+    console.error("[Newsletter] User search error:", err);
+    res.status(500).json({ error: "Search failed" });
+  }
+});
+
 // POST /api/admin/newsletters — create newsletter
 adminRouter.post("/", async (req, res) => {
   try {
@@ -179,6 +214,7 @@ adminRouter.post("/", async (req, res) => {
         recipient_batch: data.recipient_batch,
         recipient_graduation_year: data.recipient_graduation_year,
         recipient_department: data.recipient_department,
+        custom_recipient_emails: JSON.stringify(data.custom_recipient_emails ?? []),
         status: data.status,
         scheduled_at: scheduledAt,
       })
@@ -240,6 +276,7 @@ adminRouter.put("/:id", async (req, res) => {
     if (data.recipient_batch !== undefined) updates.recipient_batch = data.recipient_batch;
     if (data.recipient_graduation_year !== undefined) updates.recipient_graduation_year = data.recipient_graduation_year;
     if (data.recipient_department !== undefined) updates.recipient_department = data.recipient_department;
+    if (data.custom_recipient_emails !== undefined) updates.custom_recipient_emails = JSON.stringify(data.custom_recipient_emails);
 
     if (data.status !== undefined) {
       updates.status = data.status;
@@ -347,7 +384,7 @@ adminRouter.post("/:id/test-send", async (req, res) => {
 
     const { data: newsletter, error } = await supabase
       .from("newsletters")
-      .select("title, content, slug, excerpt")
+      .select("title, content, slug, excerpt, cover_image")
       .eq("id", req.params.id)
       .single();
 
@@ -425,10 +462,24 @@ adminRouter.post("/recipients/preview-filters", async (req, res) => {
       department?: string;
     };
 
-    const { data: users, error } = await buildRecipientQuery({ role, batch, graduationYear, department });
-    if (error) throw error;
+    const filters = { role, batch, graduationYear, department };
+    const cacheKey = `${role ?? ""}|${batch ?? ""}|${graduationYear ?? ""}|${department ?? ""}`;
+    const cached = recipientPreviewCache.get(cacheKey);
+    if (cached && Date.now() - cached.ts < PREVIEW_CACHE_TTL) {
+      return res.json(cached.data);
+    }
 
-    const formatted = (users ?? []).map((u: any) => ({
+    // Run count-only and 5-row sample in parallel to avoid fetching all rows
+    const [countRes, sampleRes] = await Promise.all([
+      buildRecipientQuery(filters, true),
+      buildRecipientQuery(filters).limit(5),
+    ]);
+
+    if (countRes.error) throw countRes.error;
+    if (sampleRes.error) throw sampleRes.error;
+
+    const total = countRes.count ?? 0;
+    const sample = ((sampleRes.data ?? []) as any[]).map((u) => ({
       id: u.user_id,
       email: u.email,
       name: `${u.first_name} ${u.last_name}`.trim(),
@@ -436,7 +487,9 @@ adminRouter.post("/recipients/preview-filters", async (req, res) => {
       graduationYear: u.graduation_year,
     }));
 
-    res.json({ count: formatted.length, users: formatted });
+    const responseData = { count: total, users: sample };
+    recipientPreviewCache.set(cacheKey, { data: responseData, ts: Date.now() });
+    res.json(responseData);
   } catch (err) {
     console.error("[Newsletter] Filter preview error:", err);
     res.status(500).json({ error: "Failed to preview recipients" });

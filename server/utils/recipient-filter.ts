@@ -11,11 +11,17 @@ export interface RecipientFilters {
  * Builds a Supabase query to resolve alumni recipients based on optional filters.
  * Returns rows with: user_id, email, first_name, last_name, graduation_year, batch, branch, users(user_role, is_admin)
  * Filters: 'all' or undefined means no filter applied for that field.
+ * countOnly=true returns a count-only query (no row data) for efficient counting.
  */
-export const buildRecipientQuery = (filters: RecipientFilters) => {
+export const buildRecipientQuery = (filters: RecipientFilters, countOnly = false) => {
   let query = supabase
     .from("alumni")
-    .select("user_id, email, first_name, last_name, graduation_year, batch, branch, users!inner(user_role, is_admin)")
+    .select(
+      countOnly
+        ? "user_id, users!inner(user_role)"
+        : "user_id, email, first_name, last_name, graduation_year, batch, branch, users!inner(user_role, is_admin)",
+      countOnly ? { count: "exact", head: true } : undefined
+    )
     .not("email", "is", null)
     .neq("email", "")
     .eq("newsletter_unsubscribed", false);

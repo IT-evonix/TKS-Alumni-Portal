@@ -95,6 +95,11 @@ const AdminNewslettersPage = lazy(() =>
     .then(m => ({ default: m.AdminNewslettersPage }))
     .catch(err => { console.error("Failed to load AdminNewslettersPage:", err); throw err; })
 );
+const AdminNewsletterComposerPage = lazy(() =>
+  import("@/pages/AdminNewsletterComposerPage")
+    .then(m => ({ default: m.AdminNewsletterComposerPage }))
+    .catch(err => { console.error("Failed to load AdminNewsletterComposerPage:", err); throw err; })
+);
 const NewslettersPage = lazy(() =>
   import("@/pages/NewslettersPage")
     .then(m => ({ default: m.NewslettersPage }))
@@ -184,6 +189,8 @@ function Router() {
           <ProtectedRoute path="/admin/blogs" component={AdminBlogsPage} adminOnly />
           <ProtectedRoute path="/admin/podcasts" component={AdminPodcastsPage} adminOnly />
           <ProtectedRoute path="/admin/travel-chapters" component={AdminTravelChaptersPage} adminOnly />
+          <ProtectedRoute path="/admin/newsletters/new" component={AdminNewsletterComposerPage} adminOnly />
+          <ProtectedRoute path="/admin/newsletters/:id/edit" component={AdminNewsletterComposerPage} adminOnly />
           <ProtectedRoute path="/admin/newsletters" component={AdminNewslettersPage} adminOnly />
 
           {/* Fallback to 404 */}

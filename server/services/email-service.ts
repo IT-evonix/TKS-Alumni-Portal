@@ -939,7 +939,7 @@ export function inlineStyleHtml(html: string): string {
     .replace(/<section[^>]*data-article[^>]*>/gi, '<div style="margin:0 0 32px 0;padding-bottom:32px;border-bottom:1px solid #e5e7eb;">')
     .replace(/<\/section>/gi, "</div>")
     .replace(/<h2[^>]*data-article-title[^>]*>/gi, '<h2 style="font-size:20px;font-weight:700;color:#1a202c;margin:0 0 12px 0;line-height:1.3;">')
-    .replace(/<img[^>]*data-article-image[^>]*\/?>/gi, (m) => `<img${m.replace(/data-article-image/gi, "").replace(/src="([^"]*)"/, 'src="$1"')} style="max-width:100%;height:auto;display:block;margin:0 0 16px 0;border-radius:6px;" />`)
+    .replace(/<img([^>]*data-article-image[^>]*)\/?>/gi, (_, a) => `<img${stripStyle(a).replace(/\s*data-article-image\s*/gi, " ")} style="max-width:100%;height:auto;display:block;margin:0 0 16px 0;border-radius:6px;" />`)
     .replace(/<div[^>]*data-article-body[^>]*>/gi, "<div>");
   return html
     .replace(/<h1([^>]*)>/gi, (_, a) => `<h1${stripStyle(a)} style="font-size:24px;font-weight:700;color:#1a202c;margin:24px 0 12px 0;line-height:1.3;">`)
@@ -1119,7 +1119,7 @@ export function generateNewsletterEmailHtml(
                   <td class="footer-pad" style="padding:28px 36px 20px;text-align:center;">
                     <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="100" height="30" style="display:inline-block;max-width:100px;height:auto;border:0;outline:none;margin-bottom:10px;" />
                     <p style="font-size:14px;font-weight:700;color:#ffffff;margin:0 0 4px 0;">The Kalyani School</p>
-                    <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;">Kalyani, West Bengal, India</p>
+                    <p style="font-size:12px;color:rgba(255,255,255,0.6);margin:0;">Manjari (Budruk), Near Hadapsar, Pune 412307, Maharashtra, India</p>
                   </td>
                 </tr>
                 <!-- Thin divider -->
