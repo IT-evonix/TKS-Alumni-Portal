@@ -1,6 +1,6 @@
 import React from "react";
 import { useLocation } from "wouter";
-import { Clock, Eye, ArrowRight, BookOpen } from "lucide-react";
+import { Clock, Eye, ArrowRight, BookOpen, Bookmark } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -9,13 +9,14 @@ import type { FeedBlog } from "@/types/feed";
 
 interface FeedBlogCardProps {
   blog: FeedBlog;
+  onBookmark?: (blogId: string) => void;
 }
 
 function formatDate(date: string) {
   return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
-export function FeedBlogCard({ blog }: FeedBlogCardProps) {
+export function FeedBlogCard({ blog, onBookmark }: FeedBlogCardProps) {
   const [, setLocation] = useLocation();
   const [coverError, setCoverError] = React.useState(false);
 
@@ -41,35 +42,52 @@ export function FeedBlogCard({ blog }: FeedBlogCardProps) {
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={() => setCoverError(true)}
           />
+          {/* Badges overlaid top-right */}
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 flex-wrap justify-end">
+            <Badge className="bg-[#008060]/90 text-white border-0 text-xs font-semibold shadow-sm">
+              Blog Post
+            </Badge>
+            {blog.category && (
+              <Badge
+                className="text-xs font-medium px-2 py-0.5 shadow-sm border-0"
+                style={{
+                  backgroundColor: blog.category.color,
+                  color: "#fff",
+                }}
+              >
+                {blog.category.name}
+              </Badge>
+            )}
+          </div>
         </div>
       ) : (
         <div
-          className="w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center"
+          className="relative w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center"
           style={{ height: "120px" }}
         >
           <BookOpen className="w-10 h-10 text-[#008060]/25" />
+          {/* Badges overlaid top-right */}
+          <div className="absolute top-2 right-2 flex items-center gap-1.5 flex-wrap justify-end">
+            <Badge className="bg-[#008060]/10 text-[#008060] border border-[#008060]/20 text-xs font-semibold hover:bg-[#008060]/10">
+              Blog Post
+            </Badge>
+            {blog.category && (
+              <Badge
+                className="text-xs font-medium px-2 py-0.5"
+                style={{
+                  backgroundColor: `${blog.category.color}20`,
+                  color: blog.category.color,
+                  border: `1px solid ${blog.category.color}40`,
+                }}
+              >
+                {blog.category.name}
+              </Badge>
+            )}
+          </div>
         </div>
       )}
 
       <CardContent className="p-4 space-y-3">
-        {/* Type badge + category */}
-        <div className="flex items-center gap-2 flex-wrap">
-          <Badge className="bg-[#008060]/10 text-[#008060] border border-[#008060]/20 text-xs font-semibold hover:bg-[#008060]/10">
-            Blog Post
-          </Badge>
-          {blog.category && (
-            <Badge
-              className="text-xs font-medium px-2 py-0.5"
-              style={{
-                backgroundColor: `${blog.category.color}20`,
-                color: blog.category.color,
-                border: `1px solid ${blog.category.color}40`,
-              }}
-            >
-              {blog.category.name}
-            </Badge>
-          )}
-        </div>
 
         {/* Title */}
         <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2 group-hover:text-[#008060] transition-colors">
@@ -123,6 +141,17 @@ export function FeedBlogCard({ blog }: FeedBlogCardProps) {
                 <Eye className="h-3 w-3" />
                 {blog.views_count}
               </span>
+            )}
+            {onBookmark && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className={`h-7 w-7 p-0 ${blog.viewer_has_bookmarked ? "text-[#008060]" : "text-gray-400 hover:text-[#008060]"}`}
+                title={blog.viewer_has_bookmarked ? "Remove bookmark" : "Save blog"}
+                onClick={(e) => { e.stopPropagation(); onBookmark(blog.id); }}
+              >
+                <Bookmark className={`h-4 w-4 ${blog.viewer_has_bookmarked ? "fill-current" : ""}`} />
+              </Button>
             )}
             <Button
               variant="outline"

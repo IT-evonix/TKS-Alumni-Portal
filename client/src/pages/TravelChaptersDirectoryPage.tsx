@@ -1,6 +1,5 @@
 import React, { useState, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeading } from '@/components/common/PageHeading';
 import { Globe, MapPin, List } from 'lucide-react';
 import { TravelChapterSection } from './sections/TravelChapterSection';
 import { TravelChaptersMap } from '@/components/TravelChaptersMap';

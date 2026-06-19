@@ -11,7 +11,6 @@ import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHan
 import { SkeletonConnectionCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
 import { OptimizedImage } from "@/components/common/OptimizedImage";
-import { PageHeading } from "@/components/common/PageHeading";
 import { BackButton } from "@/components/common/BackButton";
 import { UserMinus, Check, Users, UserCheck, Send, BellRing, Trophy, MessageSquare, School } from 'lucide-react';
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -857,15 +856,14 @@ export const ConnectionsPage = (): JSX.Element => {
 
   return (
     <AppLayout currentPage="connections">
-      <div className="p-3 sm:p-4 lg:p-6 max-w-7xl mx-auto overflow-x-hidden w-full">
+      <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto overflow-x-hidden w-full">
         {/* Back Button */}
         <div className="mb-4 sm:mb-6 lg:hidden">
           <BackButton />
         </div>
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4 mb-6 sm:mb-8">
           <div className="flex flex-col gap-1">
-            <PageHeading firstWord="Connections" secondWord="Portal" className="mb-0" />
-            {!isInitialLoading && totalCount > 0 && (
+{!isInitialLoading && totalCount > 0 && (
               <p className="text-sm text-gray-500">
                 {alumni.length === totalCount
                   ? `Showing all ${totalCount} ${getTabEntityLabel(activeTab)}`

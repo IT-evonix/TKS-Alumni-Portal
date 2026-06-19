@@ -567,7 +567,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
         </div>
 
         {/* Content */}
-        <div className="mb-4">
+        <div className="mb-2">
           {isEditing ? (
             <div className="space-y-3">
               <Textarea
@@ -619,24 +619,24 @@ const PostCardComponent: React.FC<PostCardProps> = ({
         </div>
 
         {/* Engagement row */}
-        <div className="flex items-center gap-1 pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+        <div className="flex items-center gap-1 pt-1.5" style={{ borderTop: '1px solid var(--border-subtle)' }}>
           <button
             onClick={onLike}
-            className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium transition-all duration-200 active:scale-110 ${isLiked ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-gray-500 hover:text-red-500 hover:bg-red-50'}`}
+            className={`flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium transition-all duration-200 active:scale-110 ${isLiked ? 'text-red-500 bg-red-50 hover:bg-red-100' : 'text-gray-500 hover:text-red-500 hover:bg-red-50'}`}
           >
-            <span className="text-base">{isLiked ? '❤️' : '🤍'}</span>
+            <span className="text-sm">{isLiked ? '❤️' : '🤍'}</span>
             <span>{post.likes_count}</span>
           </button>
           <button
             onClick={onComment}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all duration-200 active:scale-110"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all duration-200 active:scale-110"
           >
-            <span className="text-base">💬</span>
+            <span className="text-sm">💬</span>
             <span>{post.comments_count}</span>
           </button>
           <button
             onClick={handleShare}
-            className="flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all duration-200 active:scale-110 ml-auto"
+            className="flex items-center gap-1 px-2.5 py-1 rounded-full text-sm font-medium text-gray-500 hover:text-[#008060] hover:bg-[#e6f5f0] transition-all duration-200 active:scale-110 ml-auto"
           >
             <span className="text-base">🔗</span>
             <span className="hidden sm:inline">Share</span>

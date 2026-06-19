@@ -22,6 +22,13 @@ export interface Mentor {
   meeting_link?: string;
   averageRating?: number | null;
   reviewCount?: number;
+  mentorship_style?: 'structured' | 'ad_hoc' | 'accountability' | 'flexible';
+  help_topics?: string;
+  linkedin_url?: string;
+  github_url?: string;
+  portfolio_url?: string;
+  twitter_url?: string;
+  total_mentees_helped?: number;
 }
 
 export interface MentorshipRequest {

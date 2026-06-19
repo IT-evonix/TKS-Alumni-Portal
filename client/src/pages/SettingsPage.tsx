@@ -1,7 +1,6 @@
 import React, { useState } from "react";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { PageHeading } from "@/components/common/PageHeading";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -115,7 +114,7 @@ export const SettingsPage = (): JSX.Element => {
       <div className="min-h-screen bg-gray-50">
         {/* Header */}
         <div className="bg-white border-b border-gray-200 p-3 sm:p-4 lg:p-6">
-          <div className="max-w-4xl mx-auto">
+          <div className="max-w-5xl mx-auto">
             {/* Mobile Back Button */}
             <Button
               variant="ghost"
@@ -127,12 +126,11 @@ export const SettingsPage = (): JSX.Element => {
               <span className="text-xl">←</span>
               <span className="sm:inline">Back</span>
             </Button>
-            <PageHeading firstWord="Account" secondWord="Settings" className="mb-0" />
-            <p className="text-sm sm:text-base text-gray-600">Manage your account and preferences</p>
+<p className="text-sm sm:text-base text-gray-600">Manage your account and preferences</p>
           </div>
         </div>
 
-        <div className="max-w-4xl mx-auto p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
+        <div className="max-w-5xl mx-auto p-3 sm:p-4 lg:p-6 space-y-4 sm:space-y-6">
           {/* Notification Settings */}
           <Card>
             <CardHeader className="p-4 sm:p-6">

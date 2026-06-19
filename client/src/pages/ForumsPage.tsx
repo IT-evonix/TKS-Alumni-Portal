@@ -11,7 +11,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { PageHeading } from "@/components/common/PageHeading";
 import {
     Search,
     Plus,
@@ -298,12 +297,11 @@ export const ForumsPage = (): JSX.Element => {
     return (
         <AppLayout currentPage="forums">
             <div className="min-h-screen bg-gradient-to-br from-gray-50 via-white to-gray-50">
-                <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
+                <div className="max-w-[1400px] mx-auto px-3 sm:px-4 lg:px-6 py-4 sm:py-6 lg:py-8">
                     {/* Header */}
                     <div className="mb-6 sm:mb-8">
                         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 sm:gap-4 mb-4 sm:mb-6">
                             <div className="min-w-0">
-                                <PageHeading firstWord="Discussions" secondWord="Forums" className="mb-2" />
                                 <p className="text-sm sm:text-base text-gray-600 mt-2">
                                     Connect, share knowledge, and engage with the alumni community
                                 </p>
@@ -332,9 +330,9 @@ export const ForumsPage = (): JSX.Element => {
                         </form>
                     </div>
 
-                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8">
+                    <div className="grid grid-cols-1 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
                         {/* Main Content */}
-                        <div className="lg:col-span-2">
+                        <div className="lg:col-span-2 xl:col-span-3">
                             {/* Tabs */}
                             <Tabs value={activeTab} onValueChange={setActiveTab} className="mb-6 sm:mb-8">
                                 {/* Compact Scrollable Tabs Container - Sized Up */}

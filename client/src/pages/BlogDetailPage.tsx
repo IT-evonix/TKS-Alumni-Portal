@@ -6,7 +6,6 @@ import { AppLayout } from "@/components/layout/AppLayout";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Textarea } from "@/components/ui/textarea";
 import { BlogCommentsSection } from "@/components/blogs/BlogCommentsSection";
 import { BlogAuthorCard } from "@/components/blogs/BlogAuthorCard";
@@ -14,6 +13,17 @@ import { BlogEditor } from "@/components/blogs/BlogEditor";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
 import { clientConfig } from "@/lib/config";
+
+function PageLayout({ isAdmin, children }: { isAdmin: boolean; children: React.ReactNode }) {
+  return isAdmin ? (
+    <div className="flex min-h-screen bg-white">
+      <AdminSidebar currentPage="blogs" />
+      <div className="flex-1 overflow-auto">{children}</div>
+    </div>
+  ) : (
+    <AppLayout currentPage="blogs">{children}</AppLayout>
+  );
+}
 
 export function BlogDetailPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -200,19 +210,9 @@ export function BlogDetailPage() {
     });
   }, [post?.content]);
 
-  const PageLayout: React.FC<{ children: React.ReactNode }> = ({ children }) =>
-    adminUser ? (
-      <div className="flex min-h-screen bg-white">
-        <AdminSidebar currentPage="blogs" />
-        <div className="flex-1 overflow-auto">{children}</div>
-      </div>
-    ) : (
-      <AppLayout currentPage="blogs">{children}</AppLayout>
-    );
-
   if (loading) {
     return (
-      <PageLayout>
+      <PageLayout isAdmin={!!adminUser}>
         <div className="max-w-3xl mx-auto px-4 py-8 space-y-6 animate-pulse">
           <div className="h-5 bg-gray-200 rounded w-24" />
           <div className="h-64 bg-gray-200 rounded-xl" />
@@ -227,7 +227,7 @@ export function BlogDetailPage() {
 
   if (notFound || !post) {
     return (
-      <PageLayout>
+      <PageLayout isAdmin={!!adminUser}>
         <div className="max-w-3xl mx-auto px-4 py-16 text-center">
           <p className="text-2xl font-bold text-gray-700">Post not found</p>
           <p className="text-gray-400 mt-2">This post may have been removed or doesn't exist.</p>
@@ -240,7 +240,7 @@ export function BlogDetailPage() {
   }
 
   return (
-    <PageLayout>
+    <PageLayout isAdmin={!!adminUser}>
       <div className="max-w-3xl mx-auto px-4 py-6 space-y-6">
         {/* Back button */}
         <Button variant="ghost" size="sm" className="text-gray-500 hover:text-gray-800 -ml-2" onClick={() => setLocation("/blogs")}>
@@ -378,24 +378,6 @@ export function BlogDetailPage() {
           {/* Title */}
           <h1 className="text-3xl font-bold text-gray-900 leading-tight">{post.title}</h1>
 
-          {/* Author line */}
-          <div className="flex items-center gap-3">
-            <Avatar className="h-9 w-9">
-              <AvatarImage src={post.author?.profile_picture} />
-              <AvatarFallback className="bg-[#008060]/10 text-[#008060] text-sm font-semibold">
-                {`${post.author?.first_name?.[0] || ""}${post.author?.last_name?.[0] || ""}`.toUpperCase() || "U"}
-              </AvatarFallback>
-            </Avatar>
-            <div>
-              <p className="text-sm font-medium text-gray-900">
-                {`${post.author?.first_name || ""} ${post.author?.last_name || ""}`.trim() || post.author?.username}
-              </p>
-              {post.author?.current_role && (
-                <p className="text-xs text-gray-500">{post.author.current_role}</p>
-              )}
-            </div>
-          </div>
-
           {/* Tags */}
           {post.tags && post.tags.length > 0 && (
             <div className="flex flex-wrap gap-1.5">
@@ -430,6 +412,7 @@ export function BlogDetailPage() {
         {/* Action bar */}
         <div className="flex items-center gap-3 py-4 border-t border-b border-gray-100">
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             className={`gap-1.5 ${liked ? "text-red-500 hover:text-red-600" : "text-gray-500 hover:text-red-500"}`}
@@ -440,6 +423,7 @@ export function BlogDetailPage() {
             <span className="text-xs">Likes</span>
           </Button>
           <Button
+            type="button"
             variant="ghost"
             size="sm"
             className={`gap-1.5 ${bookmarked ? "text-[#008060] hover:text-[#006b51]" : "text-gray-500 hover:text-[#008060]"}`}
@@ -448,7 +432,7 @@ export function BlogDetailPage() {
             <Bookmark className={`h-5 w-5 ${bookmarked ? "fill-current" : ""}`} />
             <span className="text-xs">Bookmark</span>
           </Button>
-          <Button variant="ghost" size="sm" className="gap-1.5 text-gray-500 hover:text-gray-700 ml-auto" onClick={handleShare}>
+          <Button type="button" variant="ghost" size="sm" className="gap-1.5 text-gray-500 hover:text-gray-700 ml-auto" onClick={handleShare}>
             <Share2 className="h-5 w-5" />
             <span className="text-xs">Share</span>
           </Button>

@@ -15,7 +15,6 @@ import { MessageSquare, User, Calendar, FileText, MapPin, Building2, Briefcase, 
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { validateRequired, validateTextLength, validateURL } from "@/utils/validation";
 import { SkeletonJobCard } from "@/components/common/SkeletonLoader";
-import { PageHeading } from "@/components/common/PageHeading";
 import { BackButton } from "@/components/common/BackButton";
 import { supabase } from "@/lib/supabase";
 
@@ -539,18 +538,13 @@ export const JobPortalPage = (): JSX.Element => {
 
   return (
     <AppLayout currentPage="job-portal">
-      <div className="p-3 sm:p-4 lg:p-6 max-w-7xl mx-auto">
+      <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto">
         {/* Back Button */}
         <div className="mb-4 sm:mb-6 lg:hidden">
           <BackButton />
         </div>
 
-        {/* Page Heading */}
-        <div className="mb-6 sm:mb-8">
-          <PageHeading firstWord="Job" secondWord="Portal" />
-        </div>
-
-        {/* Post Job Section */}
+{/* Post Job Section */}
         <Card className="mb-4 sm:mb-6 bg-gray-50">
           <CardContent className="p-4 sm:p-6">
             <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
@@ -874,9 +868,9 @@ export const JobPortalPage = (): JSX.Element => {
           )}
 
           {/* Job Listings */}
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
             {loading ? (
-              <div className="space-y-4">
+              <div className="lg:col-span-2 xl:col-span-3 space-y-4">
                 {[1, 2, 3].map((i) => (
                   <SkeletonJobCard key={i} />
                 ))}
@@ -887,7 +881,7 @@ export const JobPortalPage = (): JSX.Element => {
               </div>
             ) : activeTab === 'all' ? (
               displayJobs.length === 0 ? (
-                <Card className="border-dashed border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50">
+                <Card className="lg:col-span-2 xl:col-span-3 border-dashed border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50">
                   <CardContent className="p-12 text-center">
                     <div className="max-w-md mx-auto space-y-6">
                       <div className="text-6xl mb-4">💼</div>
@@ -926,17 +920,16 @@ export const JobPortalPage = (): JSX.Element => {
 
                         {/* Job Details */}
                         <div className="flex-1 min-w-0">
-                          <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 sm:gap-4 mb-3">
-                            <div className="flex-1 min-w-0">
-                              <h3 className="text-base sm:text-lg font-semibold text-[#008060] mb-1 break-words">{job.title || job.company}</h3>
+                          <div className="mb-3">
+                            <h3 className="text-base sm:text-lg font-semibold text-[#008060] mb-1 truncate">{job.title || job.company}</h3>
                               <p className="text-xs sm:text-sm text-gray-600 mb-2">
                                 Posted by {
-                                  job.posted_by_user?.alumni?.first_name 
+                                  job.posted_by_user?.alumni?.first_name
                                     ? `${job.posted_by_user.alumni.first_name} ${job.posted_by_user.alumni.last_name || ''}`.trim()
                                     : job.posted_by_user?.username || job.postedBy || 'Unknown'
                                 }
                               </p>
-                              <div className="flex flex-wrap items-center gap-2 sm:gap-4 text-xs sm:text-sm text-gray-600 mb-3">
+                              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-gray-600 mb-3">
                                 <span className="whitespace-nowrap">{job.location || 'Remote'}</span>
                                 <span className="bg-green-100 text-green-800 px-2 py-1 rounded whitespace-nowrap">
                                   {job.experience_level || job.type || 'All levels'}
@@ -945,14 +938,14 @@ export const JobPortalPage = (): JSX.Element => {
                               </div>
                             </div>
 
-                            <div className="flex flex-wrap gap-2 sm:flex-nowrap sm:flex-col">
+                          <div className="flex flex-wrap gap-2 mb-3">
                               {(() => {
                                 const currentUserId = user?.id || localStorage.getItem('userId');
                                 const isJobPoster = job.posted_by === currentUserId;
 
                                 if (isJobPoster) {
                                   return (
-                                    <div className="flex items-center gap-2">
+                                    <div className="flex flex-wrap items-center gap-2">
                                       <Button
                                         variant="outline"
                                         size="sm"
@@ -1049,7 +1042,6 @@ export const JobPortalPage = (): JSX.Element => {
                                 );
                               })()}
                             </div>
-                          </div>
 
                           <div className="mb-3">
                             <p className="text-sm font-medium text-gray-900 mb-1">Job Description:</p>
@@ -1082,7 +1074,7 @@ export const JobPortalPage = (): JSX.Element => {
               )
             ) : activeTab === 'saved' ? (
               savedJobsData.length === 0 ? (
-                <div className="text-center py-8">
+                <div className="lg:col-span-2 xl:col-span-3 text-center py-8">
                   <p className="text-gray-600 mb-4">You haven't saved any jobs yet</p>
                   <Button onClick={() => setActiveTab('all')} className="bg-[#008060] hover:bg-[#007055]">
                     Browse Jobs

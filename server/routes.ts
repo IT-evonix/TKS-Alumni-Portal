@@ -11087,7 +11087,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       let query = supabase
         .from("alumni")
-        .select("*, alumni_skills(skill_name, proficiency_level, category, is_primary), available_days, session_type, meeting_link")
+        .select("*, alumni_skills(skill_name, proficiency_level, category, is_primary), available_days, session_type, meeting_link, mentorship_style, help_topics, linkedin_url, github_url, portfolio_url, twitter_url, total_mentees_helped")
         .eq("is_mentor", true)
         .eq("is_active", true);
 
@@ -11095,7 +11095,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         query = query.ilike("expertise_areas", `%${expertise}%`);
       }
 
-      const { data: mentors, error } = await query.limit(50);
+      const page = Math.max(0, parseInt((req.query.page as string) || "0", 10));
+
+      const { data: mentors, error } = await query.limit(200);
 
       if (error) {
         console.error("Get mentors error:", error);
@@ -11134,7 +11136,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       // Sort by match_score descending
       result.sort((a: any, b: any) => (b.match_score || 0) - (a.match_score || 0));
 
-      res.json({ mentors: result.slice(0, 20) });
+      const PAGE_SIZE = 20;
+      const start = page * PAGE_SIZE;
+      const paginated = result.slice(start, start + PAGE_SIZE);
+      res.json({ mentors: paginated, total: result.length, hasMore: result.length > start + PAGE_SIZE });
     } catch (error) {
       console.error("Get mentors error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -11149,7 +11154,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { data } = await supabase
         .from("alumni")
-        .select("is_mentor, mentor_available, max_mentees, mentee_count, interest_areas, available_days, session_type, meeting_link")
+        .select("is_mentor, mentor_available, max_mentees, mentee_count, interest_areas, available_days, session_type, meeting_link, mentorship_style, help_topics, linkedin_url, github_url, portfolio_url, twitter_url, total_mentees_helped")
         .eq("user_id", userId)
         .single();
 
@@ -11224,6 +11229,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (mentorId === userId) {
         return res.status(400).json({ error: "You cannot request yourself as a mentor." });
       }
+
+      // Verify mentor exists and is active
+      const { data: mentorExists } = await supabase
+        .from("alumni")
+        .select("user_id")
+        .eq("user_id", mentorId)
+        .eq("is_mentor", true)
+        .maybeSingle();
+      if (!mentorExists) return res.status(404).json({ error: "Mentor not found." });
 
       // Prevent duplicate pending requests
       const { data: existing } = await supabase
@@ -11381,6 +11395,20 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Not authorised" });
       }
 
+      // Check capacity before accepting
+      let mentorRow: { mentee_count: number; max_mentees: number } | null = null;
+      if (status === "accepted") {
+        const { data } = await supabase
+          .from("alumni")
+          .select("mentee_count, max_mentees")
+          .eq("user_id", userId)
+          .single();
+        mentorRow = data;
+        if ((mentorRow?.mentee_count ?? 0) >= (mentorRow?.max_mentees ?? 3)) {
+          return res.status(400).json({ error: "Mentor is at full capacity." });
+        }
+      }
+
       const { error } = await supabase
         .from("mentorship_requests")
         .update({ status, updated_at: new Date().toISOString() })
@@ -11393,11 +11421,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       // Update mentee_count on mentor's alumni record
       if (status === "accepted") {
-        const { data: mentorRow } = await supabase
-          .from("alumni")
-          .select("mentee_count")
-          .eq("user_id", userId)
-          .single();
         await supabase
           .from("alumni")
           .update({ mentee_count: (mentorRow?.mentee_count ?? 0) + 1 })
@@ -11506,13 +11529,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .update({ status: "ended", updated_at: new Date().toISOString() })
         .eq("id", id);
 
-      // Decrement mentee_count
+      // Decrement mentee_count and increment total_mentees_helped
       const { data: mentorRow } = await supabase
         .from("alumni").select("mentee_count").eq("user_id", mentorshipReq.mentor_id).single();
       await supabase
         .from("alumni")
         .update({ mentee_count: Math.max(0, (mentorRow?.mentee_count ?? 1) - 1) })
         .eq("user_id", mentorshipReq.mentor_id);
+      await supabase.rpc("increment_mentees_helped", { uid: mentorshipReq.mentor_id });
 
       // Notify other party
       const otherId = userId === mentorshipReq.mentor_id ? mentorshipReq.mentee_id : mentorshipReq.mentor_id;
@@ -11541,7 +11565,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.headers["user-id"] as string;
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
 
-      const { available_days, session_type, meeting_link, max_mentees } = req.body;
+      const { available_days, session_type, meeting_link, max_mentees,
+              mentorship_style, help_topics, github_url, portfolio_url, twitter_url } = req.body;
 
       const { error } = await supabase
         .from("alumni")
@@ -11550,6 +11575,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
           session_type: session_type ?? null,
           meeting_link: meeting_link ?? null,
           ...(max_mentees !== undefined ? { max_mentees } : {}),
+          mentorship_style: mentorship_style ?? null,
+          help_topics: help_topics ?? null,
+          github_url: github_url ?? null,
+          portfolio_url: portfolio_url ?? null,
+          twitter_url: twitter_url ?? null,
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", userId);
@@ -11605,7 +11635,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
 
       const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
-      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
+      if (!reqUser || reqUser.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
 
       const { data } = await supabase
         .from("mentorship_bookmarks")
@@ -11627,6 +11657,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const { requestId, scheduledAt, durationMinutes, agenda, meetLink } = req.body;
       if (!requestId || !scheduledAt) return res.status(400).json({ error: "requestId and scheduledAt required" });
+
+      const MEET_LINK_RE = /^https?:\/\/(meet\.google\.com|zoom\.us|us\d*\.zoom\.us|teams\.microsoft\.com|teams\.live\.com|meet\.jit\.si|whereby\.com|webex\.com|[\w-]+\.webex\.com|bluejeans\.com|gotomeeting\.com|join\.me|gather\.town|meet\.around\.co|8x8\.vc)\//i;
+      if (meetLink && !MEET_LINK_RE.test(meetLink)) {
+        return res.status(400).json({ error: "Invalid or unsupported meeting link URL." });
+      }
 
       // Verify user is part of the accepted request
       const { data: mentorshipReq } = await supabase
@@ -11702,7 +11737,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             .select("first_name, last_name, profile_picture, current_role, current_company")
             .eq("user_id", otherId)
             .single();
-          return { ...s, other, myRole: role };
+          const otherProfile = other ?? { first_name: "Unknown", last_name: "User", profile_picture: null, current_role: null, current_company: null };
+          return { ...s, other: otherProfile, myRole: role };
         })
       );
 

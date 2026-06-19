@@ -17,7 +17,7 @@ import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 
 interface AppLayoutProps {
   children: React.ReactNode;
-  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters' | 'travel-chapters-detail' | 'mentorship' | 'podcast';
+  currentPage?: 'feed' | 'job-portal' | 'events' | 'connections' | 'inbox' | 'profile' | 'settings' | 'forums' | 'alumni-map' | 'blogs' | 'travel-chapters' | 'travel-chapters-detail' | 'mentorship' | 'podcast' | 'leaderboard' | 'notifications';
 }
 
 // Define user roles
@@ -327,6 +327,26 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
   const activePage = getCurrentPage();
 
+  const pageTitles: Record<string, { first: string; second?: string }> = {
+    feed: { first: 'Alumni', second: 'Feed' },
+    connections: { first: 'Connections', second: 'Portal' },
+    inbox: { first: 'Inbox' },
+    forums: { first: 'Discussions', second: 'Forums' },
+    events: { first: 'Events', second: 'Portal' },
+    'job-portal': { first: 'Job', second: 'Portal' },
+    mentorship: { first: 'Alumni', second: 'Mentorship' },
+    blogs: { first: 'TKS Alumni', second: 'Blogs' },
+    'alumni-map': { first: 'Global', second: 'Network' },
+    'travel-chapters': { first: 'Travel', second: 'Chapters' },
+    'travel-chapters-detail': { first: 'Travel', second: 'Chapters' },
+    podcast: { first: 'Alumni', second: 'Podcast' },
+    profile: { first: 'My', second: 'Profile' },
+    settings: { first: 'Account', second: 'Settings' },
+    leaderboard: { first: 'Hall of', second: 'Fame' },
+    notifications: { first: 'Notification', second: 'History' },
+  };
+  const pageTitle = pageTitles[activePage];
+
   const displayName = alumni
     ? `${alumni.first_name || ''} ${alumni.last_name || ''}`.trim() || user?.username || 'User'
     : user?.username || 'User';
@@ -518,6 +538,22 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               <span className="text-lg leading-none">☰</span>
             </Button>
 
+            {/* Page Title - desktop only */}
+            {pageTitle && (
+              <div className="hidden lg:flex items-center flex-shrink-0 min-w-0">
+                <div className="relative">
+                  <h1 className="text-base xl:text-lg font-extrabold tracking-tight text-gray-900 whitespace-nowrap">
+                    {pageTitle.second ? (
+                      <>{pageTitle.first} <span className="text-[#008060]">{pageTitle.second}</span></>
+                    ) : (
+                      <span className="text-[#008060]">{pageTitle.first}</span>
+                    )}
+                  </h1>
+                  <div className="absolute -bottom-1 left-0 w-8 h-0.5 bg-gradient-to-r from-[#008060] to-transparent rounded-full" />
+                </div>
+              </div>
+            )}
+
             {/* Search Bar */}
             <div className="flex-1 flex justify-center min-w-0">
               <div className="w-full max-w-sm lg:max-w-md xl:max-w-lg">
@@ -636,7 +672,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
         {/* Page Content - Scrollable with centered container for large screens */}
         <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' || activePage === 'travel-chapters-detail' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-14 sm:mt-16 w-full max-w-full`}>
-          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'travel-chapters-detail' ? 'h-full' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-10 py-6 sm:py-8 lg:py-10'}`}>
+          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'travel-chapters-detail' ? 'h-full' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-8 py-6 sm:py-8 lg:py-10'}`}>
             {children}
           </div>
         </div>

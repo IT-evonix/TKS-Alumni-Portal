@@ -63,3 +63,11 @@ export const isValidMeetLink = (url: string): boolean => {
   try { new URL(url); } catch { return false; }
   return MEET_LINK_PATTERN.test(url);
 };
+
+// Broader pattern for availability settings — includes Calendly and scheduling tools
+export const MEETING_LINK_PATTERN = /^https?:\/\/(calendly\.com|cal\.com|savvycal\.com|meet\.google\.com|zoom\.us|us\d*\.zoom\.us|teams\.microsoft\.com|teams\.live\.com|meet\.jit\.si|whereby\.com|webex\.com|[\w-]+\.webex\.com|bluejeans\.com|gotomeeting\.com|join\.me|gather\.town|meet\.around\.co|8x8\.vc)\//i;
+
+export const isValidMeetingLink = (url: string): boolean => {
+  try { new URL(url); } catch { return false; }
+  return MEETING_LINK_PATTERN.test(url);
+};

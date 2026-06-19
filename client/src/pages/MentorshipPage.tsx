@@ -1,6 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { AppLayout } from '@/components/layout/AppLayout';
-import { PageHeading } from '@/components/common/PageHeading';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -1038,7 +1037,7 @@ export const MentorshipPage = (): JSX.Element => {
   return (
     <AppLayout currentPage="mentorship">
       <div className="min-h-screen bg-gray-50 p-3 sm:p-4 lg:p-6">
-        <div className="max-w-6xl mx-auto space-y-4 sm:space-y-6">
+        <div className="max-w-[1400px] mx-auto space-y-4 sm:space-y-6">
 
           {/* Mobile back */}
           <Button variant="ghost" size="sm" className="lg:hidden flex items-center gap-2 text-gray-600 hover:text-[#008060] mb-2 min-h-[44px]"
@@ -1049,7 +1048,6 @@ export const MentorshipPage = (): JSX.Element => {
           {/* Header */}
           <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
             <div className="flex-1 min-w-0">
-              <PageHeading firstWord="Alumni" secondWord="Mentorship" className="mb-0" />
               <p className="text-sm sm:text-base text-gray-600 mt-1">AI-powered mentor matching for your career goals</p>
             </div>
             <Button onClick={toggleMentorStatus} variant={isMentor ? 'destructive' : 'brand'}
@@ -1330,7 +1328,7 @@ export const MentorshipPage = (): JSX.Element => {
 
               {/* Mentor grid */}
               {loading ? (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {[0, 1, 2].map(i => <SkeletonCard key={i} />)}
                 </div>
               ) : sortedMentors.length === 0 ? (
@@ -1340,7 +1338,7 @@ export const MentorshipPage = (): JSX.Element => {
                   <p className="text-sm mt-1">Try a different filter or search term.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {sortedMentors.map(renderMentorCard)}
                 </div>
               )}
@@ -1355,7 +1353,7 @@ export const MentorshipPage = (): JSX.Element => {
                   <p className="text-sm mt-1">Bookmark mentors in the Discover tab to save them here.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 sm:gap-6">
                   {savedMentors.map(renderMentorCard)}
                 </div>
               )}

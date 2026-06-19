@@ -1,6 +1,5 @@
 import React, { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { PageHeading } from "@/components/common/PageHeading";
 import { Card, CardContent } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -113,17 +112,36 @@ export function LeaderboardPage() {
     }
   };
 
+  // Collect all unique badges across leaderboard for the right panel
+  const allBadgesByTier = React.useMemo(() => {
+    const tierOrder = ["platinum", "gold", "silver", "bronze"];
+    const map: Record<string, { badge: any; holders: string[] }> = {};
+    [...pointsLeaderboard, ...badgesLeaderboard].forEach(u => {
+      const badges = (u as any).uniqueBadges || (u as any).topBadges || [];
+      badges.forEach((b: any) => {
+        if (!map[b.name]) map[b.name] = { badge: b, holders: [] };
+        const name = `${u.firstName} ${u.lastName}`.trim();
+        if (!map[b.name].holders.includes(name)) map[b.name].holders.push(name);
+      });
+    });
+    return Object.values(map).sort((a, b) => {
+      return tierOrder.indexOf(a.badge.tier) - tierOrder.indexOf(b.badge.tier);
+    }).slice(0, 15);
+  }, [pointsLeaderboard, badgesLeaderboard]);
+
   return (
-    <AppLayout currentPage="feed">
-      <div className="max-w-4xl mx-auto space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
-        
+    <AppLayout currentPage="leaderboard">
+      <div className="max-w-[1200px] mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8 items-start">
+          {/* Left: Main Leaderboard */}
+          <div className="lg:col-span-2 space-y-8">
+
         {/* Header */}
         <div className="text-center space-y-4 py-8">
           <div className="inline-flex items-center justify-center p-4 bg-emerald-100 rounded-full mb-2">
             <Trophy className="w-10 h-10 text-emerald-600" />
           </div>
-          <PageHeading firstWord="Hall of" secondWord="Fame" className="mb-0" />
-          <p className="text-slate-500 text-lg max-w-xl mx-auto">
+<p className="text-slate-500 text-lg max-w-xl mx-auto">
             Discover the most active and inspiring members of our alumni community. Compete for the most points or collect the highest value badges!
           </p>
         </div>
@@ -336,6 +354,84 @@ export function LeaderboardPage() {
             )}
           </CardContent>
         </Card>
+          </div>{/* end left col */}
+
+          {/* Right: Badges Showcase Panel */}
+          <div className="space-y-4 lg:sticky lg:top-6">
+            {/* Quick Stats */}
+            <Card className="border-0 shadow-lg rounded-2xl overflow-hidden bg-gradient-to-br from-emerald-50 to-white">
+              <CardContent className="p-4">
+                <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-emerald-600" /> Community Stats
+                </h3>
+                <div className="space-y-2">
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Total Alumni</span>
+                    <span className="font-bold text-slate-700">{pointsLeaderboard.length}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Total XP Earned</span>
+                    <span className="font-bold text-emerald-600">
+                      {pointsLeaderboard.reduce((sum, u) => sum + (u.total_points || 0), 0).toLocaleString()}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Badges Awarded</span>
+                    <span className="font-bold text-amber-600">
+                      {pointsLeaderboard.reduce((sum, u) => sum + (u.badgesCount || 0), 0)}
+                    </span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-slate-500">Top Streak</span>
+                    <span className="font-bold text-orange-500 flex items-center gap-1">
+                      <Flame className="w-3.5 h-3.5 fill-orange-500" />
+                      {Math.max(...pointsLeaderboard.map(u => u.current_streak_days || 0), 0)} days
+                    </span>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Badges In Play */}
+            <Card className="border-0 shadow-lg rounded-2xl overflow-hidden">
+              <CardContent className="p-4">
+                <h3 className="font-bold text-slate-700 mb-3 flex items-center gap-2">
+                  <Trophy className="w-4 h-4 text-amber-500" /> Badges In Play
+                </h3>
+                {loading ? (
+                  <div className="space-y-3">
+                    {[1,2,3,4,5].map(i => <Skeleton key={i} className="h-10 w-full rounded-lg" />)}
+                  </div>
+                ) : allBadgesByTier.length === 0 ? (
+                  <p className="text-sm text-slate-400 text-center py-4">No badges awarded yet</p>
+                ) : (
+                  <div className="space-y-2 max-h-[420px] overflow-y-auto pr-1">
+                    {allBadgesByTier.map(({ badge, holders }, i) => {
+                      const tierColor =
+                        badge.tier === "platinum" ? "text-purple-600 bg-purple-50 border-purple-100" :
+                        badge.tier === "gold"     ? "text-amber-600 bg-amber-50 border-amber-100" :
+                        badge.tier === "silver"   ? "text-slate-500 bg-slate-50 border-slate-100" :
+                        badge.tier === "bronze"   ? "text-orange-600 bg-orange-50 border-orange-100" :
+                                                    "text-emerald-600 bg-emerald-50 border-emerald-100";
+                      return (
+                        <div key={i} className="flex items-center gap-3 p-2 rounded-xl hover:bg-slate-50 transition-colors">
+                          <ShieldIcon badge={badge} size={28} />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-bold text-slate-700 truncate">{badge.name}</p>
+                            <p className="text-[10px] text-slate-400 truncate">{holders.slice(0, 2).join(', ')}{holders.length > 2 ? ` +${holders.length - 2}` : ''}</p>
+                          </div>
+                          <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border ${tierColor}`}>
+                            {badge.tier || 'special'}
+                          </span>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>{/* end right col */}
+        </div>{/* end grid */}
       </div>
     </AppLayout>
   );

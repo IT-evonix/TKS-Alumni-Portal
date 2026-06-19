@@ -163,8 +163,8 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
     defaultValues: { title: "", excerpt: "", cover_image: "", category_id: "" },
   });
 
-  const CONTENT_MIN = 50;
-  const CONTENT_MAX = 1000;
+  const CONTENT_MIN_WORDS = 10;
+  const CONTENT_MAX_WORDS = 1000;
 
   // Tracked in state so React re-renders on every keystroke
   const [contentText, setContentText] = useState("");
@@ -199,14 +199,13 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
     },
   });
 
-  const contentCharCount = contentText.length;
-  const contentOverLimit = contentCharCount > CONTENT_MAX;
-  const contentUnderMin = contentTouched && contentCharCount < CONTENT_MIN;
-  const contentInvalid = contentOverLimit || contentUnderMin;
-
   // Word count derived from live contentText
   const wordCount = contentText.trim() ? contentText.trim().split(/\s+/).length : 0;
   const readingTime = Math.max(1, Math.ceil(wordCount / 200));
+
+  const contentOverLimit = wordCount > CONTENT_MAX_WORDS;
+  const contentUnderMin = contentTouched && wordCount < CONTENT_MIN_WORDS;
+  const contentInvalid = contentOverLimit || contentUnderMin;
 
   const getHeaders = () => {
     const token = localStorage.getItem("auth_token") || "";
@@ -367,9 +366,10 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
   const savePost = async (data: BlogPostForm, status: "draft" | "pending_review") => {
     const content = editor?.getHTML() ?? "";
     const textContent = editor?.getText().trim() ?? "";
+    const wc = textContent ? textContent.split(/\s+/).length : 0;
     setContentTouched(true);
-    if (textContent.length < CONTENT_MIN) throw new Error(`Content must be at least ${CONTENT_MIN} characters excluding formatting (currently ${textContent.length})`);
-    if (textContent.length > CONTENT_MAX) throw new Error(`Content must be ${CONTENT_MAX} characters or fewer excluding formatting (currently ${textContent.length})`);
+    if (wc < CONTENT_MIN_WORDS) throw new Error(`Content must be at least ${CONTENT_MIN_WORDS} words (currently ${wc})`);
+    if (wc > CONTENT_MAX_WORDS) throw new Error(`Content must be ${CONTENT_MAX_WORDS} words or fewer (currently ${wc})`);
 
     const body = {
       ...data,
@@ -604,10 +604,13 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
 
           {/* Tags */}
           <div className="space-y-1">
-            <Label>Tags</Label>
+            <div className="flex items-center justify-between">
+              <Label>Tags</Label>
+              <span className="text-xs text-gray-400">up to 10</span>
+            </div>
             <div className="flex gap-2">
               <Input
-                placeholder="Add a tag (press Enter)"
+                placeholder="e.g. leadership, design, tech…"
                 value={tagInput}
                 onChange={(e) => setTagInput(e.target.value)}
                 onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addTag(); } }}
@@ -617,8 +620,14 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
+            {tagInput.length > 0 && (
+              <p className="text-xs text-[#008060] flex items-center gap-1">
+                <kbd className="inline-flex items-center px-1.5 py-0.5 rounded border border-[#008060]/30 bg-[#008060]/5 font-mono text-[10px] leading-none">↵ Enter</kbd>
+                to add · separate multiple tags one at a time
+              </p>
+            )}
             {tags.length > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
+              <div className="flex flex-wrap gap-1.5 mt-1">
                 {tags.map((tag) => (
                   <Badge key={tag} variant="secondary" className="gap-1 pr-1">
                     #{tag}
@@ -643,14 +652,14 @@ export function BlogEditor({ open, onClose, onSaved, categories, editPost }: Blo
             </div>
             <div className="flex items-center justify-between">
               {contentOverLimit ? (
-                <p className="text-xs text-red-500">Content exceeds {CONTENT_MAX} character limit</p>
+                <p className="text-xs text-red-500">Content exceeds {CONTENT_MAX_WORDS} word limit</p>
               ) : contentUnderMin ? (
-                <p className="text-xs text-red-500">Content must be at least {CONTENT_MIN} characters</p>
+                <p className="text-xs text-red-500">Content must be at least {CONTENT_MIN_WORDS} words</p>
               ) : (
-                <p className="text-xs text-gray-400">Min {CONTENT_MIN} · Max {CONTENT_MAX} characters</p>
+                <p className="text-xs text-gray-400">Min {CONTENT_MIN_WORDS} · Max {CONTENT_MAX_WORDS} words</p>
               )}
-              <span className={`text-xs tabular-nums font-medium ${contentOverLimit ? "text-red-500" : contentCharCount > CONTENT_MAX * 0.9 ? "text-amber-500" : contentCharCount >= CONTENT_MIN ? "text-[#008060]" : "text-gray-400"}`}>
-                {contentCharCount}/{CONTENT_MAX}
+              <span className={`text-xs tabular-nums font-medium ${contentOverLimit ? "text-red-500" : wordCount > CONTENT_MAX_WORDS * 0.9 ? "text-amber-500" : wordCount >= CONTENT_MIN_WORDS ? "text-[#008060]" : "text-gray-400"}`}>
+                {wordCount}/{CONTENT_MAX_WORDS} words
               </span>
             </div>
           </div>

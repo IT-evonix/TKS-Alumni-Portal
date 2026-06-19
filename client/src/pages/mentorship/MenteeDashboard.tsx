@@ -16,11 +16,12 @@ import {
   CheckCircle, XCircle, Clock, Sparkles, ChevronDown, ChevronUp,
   UserCheck, Bookmark, BookmarkCheck, Star,
   CalendarPlus, Calendar, ExternalLink, Video, Mail,
-  AlertTriangle, GraduationCap,
+  AlertTriangle, GraduationCap, Building2, BookOpen, Linkedin, Github, Globe, Twitter,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Mentor, MentorshipRequest, MentorshipSession } from './mentorship-types';
 import { SkeletonCard, MatchBar, StatusBadge, StarRating, isValidMeetLink } from './mentorship-components';
+import { MentorProfileModal } from './MentorProfileModal';
 
 export const MenteeDashboard = (): JSX.Element => {
   const { user, isAlumni, isFaculty } = useAuth();
@@ -42,6 +43,7 @@ export const MenteeDashboard = (): JSX.Element => {
   const [goalText, setGoalText] = useState('');
   const [goalOpen, setGoalOpen] = useState(false);
   const [pendingMentorIds, setPendingMentorIds] = useState<Set<string>>(new Set());
+  const [connectedMentorIds, setConnectedMentorIds] = useState<Set<string>>(new Set());
   const [myRequests, setMyRequests] = useState<MentorshipRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
@@ -57,6 +59,15 @@ export const MenteeDashboard = (): JSX.Element => {
   const [endConfirm, setEndConfirm] = useState<string | null>(null);
   const [becomingMentor, setBecomingMentor] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
+  const [profileModalMentor, setProfileModalMentor] = useState<Mentor | null>(null);
+  const [schedulingSession, setSchedulingSession] = useState(false);
+  const [mentorPage, setMentorPage] = useState(0);
+  const [hasMoreMentors, setHasMoreMentors] = useState(false);
+
+  const parseJsonArray = (raw?: string): string[] => {
+    if (!raw) return [];
+    try { return JSON.parse(raw); } catch { return raw.split(',').map(s => s.trim()).filter(Boolean); }
+  };
 
   const headers = { 'user-id': user?.id || '' };
 
@@ -75,13 +86,14 @@ export const MenteeDashboard = (): JSX.Element => {
       .catch(() => setStatusChecked(true));
   }, [user?.id]);
 
-  const fetchMentors = useCallback(async (goal?: string) => {
+  const fetchMentors = useCallback(async (goal?: string, page = 0) => {
     setLoading(true);
     try {
       const params = new URLSearchParams();
       if (expertiseFilter !== 'all') params.append('expertise', expertiseFilter);
       if (goal) params.append('goal', goal);
       if (interestFilter.length > 0) params.append('interests', interestFilter.join(','));
+      params.append('page', String(page));
       const res = await fetch(`/api/mentorship/mentors?${params}`, { headers });
       if (res.ok) {
         const data = await res.json();
@@ -98,7 +110,8 @@ export const MenteeDashboard = (): JSX.Element => {
             return m;
           })
         );
-        setMentors(withRatings);
+        setMentors(prev => page === 0 ? withRatings : [...prev, ...withRatings]);
+        setHasMoreMentors(data.hasMore ?? false);
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to load mentors', variant: 'destructive' });
@@ -119,8 +132,14 @@ export const MenteeDashboard = (): JSX.Element => {
           .filter((r: MentorshipRequest) => r.status === 'pending')
           .map((r: MentorshipRequest) => r.mentor_id));
         setPendingMentorIds(pending);
+        const connected = new Set<string>((data.requests || [])
+          .filter((r: MentorshipRequest) => r.status === 'accepted')
+          .map((r: MentorshipRequest) => r.mentor_id));
+        setConnectedMentorIds(connected);
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load your mentorship requests.', variant: 'destructive' });
+    } finally {
       setRequestsLoading(false);
     }
   }, [user?.id]);
@@ -133,7 +152,9 @@ export const MenteeDashboard = (): JSX.Element => {
         const data = await res.json();
         setBookmarkedIds(new Set(data.mentorIds || []));
       }
-    } catch { /* silent */ }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load bookmarks.', variant: 'destructive' });
+    }
   }, [user?.id]);
 
   const fetchSessions = useCallback(async () => {
@@ -146,24 +167,28 @@ export const MenteeDashboard = (): JSX.Element => {
         // Only mentee-side sessions
         setSessions((data.sessions || []).filter((s: MentorshipSession) => s.myRole === 'mentee'));
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load sessions.', variant: 'destructive' });
+    } finally {
       setSessionsLoading(false);
     }
   }, [user?.id]);
 
   useEffect(() => { fetchMyRequests(); fetchBookmarks(); }, [fetchMyRequests, fetchBookmarks]);
-  useEffect(() => { fetchMentors(); }, [expertiseFilter, interestFilter]);
+  useEffect(() => { setMentorPage(0); fetchMentors(undefined, 0); }, [expertiseFilter, interestFilter]);
   useEffect(() => { fetchSessions(); }, [fetchSessions]);
 
   useEffect(() => {
-    fetch('/api/mentorship/available-interests')
+    const controller = new AbortController();
+    fetch('/api/mentorship/available-interests', { signal: controller.signal })
       .then(r => r.ok ? r.json() : { interests: [] })
       .then(d => setAvailableInterests(d.interests || []))
-      .catch(() => {});
-    fetch('/api/mentorship/available-expertise')
+      .catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; });
+    fetch('/api/mentorship/available-expertise', { signal: controller.signal })
       .then(r => r.ok ? r.json() : { expertise: [] })
       .then(d => setAvailableExpertise(d.expertise || []))
-      .catch(() => {});
+      .catch((err) => { if (err instanceof DOMException && err.name === 'AbortError') return; });
+    return () => controller.abort();
   }, []);
 
   // ── Actions ─────────────────────────────────────────────────────────────────
@@ -289,6 +314,7 @@ export const MenteeDashboard = (): JSX.Element => {
       toast({ title: 'Invalid meet link', description: 'Please enter a valid link from a supported platform.', variant: 'destructive' });
       return;
     }
+    setSchedulingSession(true);
     try {
       const res = await fetch('/api/mentorship/sessions', {
         method: 'POST',
@@ -312,6 +338,8 @@ export const MenteeDashboard = (): JSX.Element => {
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to schedule session', variant: 'destructive' });
+    } finally {
+      setSchedulingSession(false);
     }
   };
 
@@ -396,76 +424,164 @@ export const MenteeDashboard = (): JSX.Element => {
 
   const renderMentorCard = (mentor: Mentor) => {
     const isPending = pendingMentorIds.has(mentor.user_id);
+    const isConnected = connectedMentorIds.has(mentor.user_id);
     const slots = (mentor.max_mentees ?? 3) - (mentor.mentee_count ?? 0);
     const isFull = mentor.mentor_available === false || slots <= 0;
     const isBookmarked = bookmarkedIds.has(mentor.user_id);
     const skills = mentor.alumni_skills?.filter(s => s.is_primary).slice(0, 3) ?? [];
-    const expertiseTags: string[] = (() => {
-      try {
-        const raw = mentor.expertise_areas;
-        if (!raw) return [];
-        return JSON.parse(raw);
-      } catch { return (mentor.expertise_areas || '').split(',').map(s => s.trim()).filter(Boolean); }
-    })().slice(0, 3);
+    const expertiseTags = parseJsonArray(mentor.expertise_areas).slice(0, 3);
+    const helpTopics = parseJsonArray(mentor.help_topics).slice(0, 4);
     const dayChips = mentor.available_days
       ? mentor.available_days.split(',').map(d => d.trim()).filter(Boolean)
       : [];
 
+    const matchColor = (mentor.match_score ?? 0) >= 70
+      ? 'bg-green-100 text-green-700 border-green-200'
+      : (mentor.match_score ?? 0) >= 45
+        ? 'bg-yellow-100 text-yellow-700 border-yellow-200'
+        : 'bg-gray-100 text-gray-600 border-gray-200';
+
+    const availDotColor = isFull ? 'bg-red-400' : slots <= 1 ? 'bg-yellow-400' : 'bg-green-400';
+
+    const styleLabels: Record<string, { icon: React.ReactNode; label: string }> = {
+      structured: { icon: <BookOpen className="w-3 h-3" />, label: 'Structured' },
+      ad_hoc:     { icon: <MessageSquare className="w-3 h-3" />, label: 'Ad-hoc' },
+      accountability: { icon: <CheckCircle className="w-3 h-3" />, label: 'Accountability' },
+      flexible:   { icon: <Sparkles className="w-3 h-3" />, label: 'Flexible' },
+    };
+    const styleInfo = mentor.mentorship_style ? styleLabels[mentor.mentorship_style] : null;
+
     return (
-      <Card key={mentor.id} className="border-0 shadow-lg hover:shadow-xl transition-shadow">
-        <CardHeader className="p-4 sm:p-6 pb-2">
-          <div className="flex items-start gap-3 sm:gap-4">
-            <Avatar className="w-12 h-12 sm:w-16 sm:h-16 flex-shrink-0">
-              <AvatarImage src={mentor.profile_picture} />
-              <AvatarFallback className="bg-[#008060] text-white text-sm sm:text-base">
-                {mentor.first_name?.[0]}{mentor.last_name?.[0]}
-              </AvatarFallback>
-            </Avatar>
-            <div className="flex-1 min-w-0">
-              <div className="flex items-start justify-between gap-1">
-                <CardTitle className="text-base sm:text-lg truncate">
-                  {mentor.first_name} {mentor.last_name}
-                  {mentor.graduation_year && (
-                    <span className="ml-2 text-xs font-normal text-gray-400">'{String(mentor.graduation_year).slice(-2)}</span>
-                  )}
-                </CardTitle>
-                <button
-                  type="button"
-                  onClick={() => toggleBookmark(mentor.user_id)}
-                  className="text-gray-400 hover:text-[#008060] transition-colors flex-shrink-0 mt-0.5"
-                  aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark mentor'}
-                >
-                  {isBookmarked
-                    ? <BookmarkCheck className="w-4 h-4 text-[#008060]" />
-                    : <Bookmark className="w-4 h-4" />}
-                </button>
+      <Card key={mentor.id} className="border-0 shadow-md hover:shadow-xl transition-all duration-200 group">
+        <CardContent className="p-4 sm:p-5 space-y-3">
+          {/* Top: 2-column identity + metrics */}
+          <div className="flex gap-3 sm:gap-4">
+            {/* Left: avatar + identity */}
+            <div className="flex flex-col items-center gap-1.5 flex-shrink-0">
+              <Avatar className="w-16 h-16 sm:w-20 sm:h-20 ring-2 ring-gray-100 group-hover:ring-[#008060]/30 transition-all">
+                <AvatarImage src={mentor.profile_picture} />
+                <AvatarFallback className="bg-[#008060] text-white text-base sm:text-lg font-semibold">
+                  {mentor.first_name?.[0]}{mentor.last_name?.[0]}
+                </AvatarFallback>
+              </Avatar>
+              {/* Social link icons */}
+              <div className="flex items-center gap-1">
+                {mentor.linkedin_url && (
+                  <a href={mentor.linkedin_url} target="_blank" rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-gray-400 hover:text-blue-600 transition-colors" aria-label="LinkedIn">
+                    <Linkedin className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {mentor.github_url && (
+                  <a href={mentor.github_url} target="_blank" rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-gray-400 hover:text-gray-800 transition-colors" aria-label="GitHub">
+                    <Github className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {mentor.portfolio_url && (
+                  <a href={mentor.portfolio_url} target="_blank" rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-gray-400 hover:text-[#008060] transition-colors" aria-label="Portfolio">
+                    <Globe className="w-3.5 h-3.5" />
+                  </a>
+                )}
+                {mentor.twitter_url && (
+                  <a href={mentor.twitter_url} target="_blank" rel="noopener noreferrer"
+                    onClick={e => e.stopPropagation()}
+                    className="text-gray-400 hover:text-sky-500 transition-colors" aria-label="Twitter">
+                    <Twitter className="w-3.5 h-3.5" />
+                  </a>
+                )}
               </div>
-              <p className="text-xs sm:text-sm text-gray-600 truncate">{mentor.current_role}</p>
-              <p className="text-xs text-gray-500 truncate">{mentor.current_company}</p>
-              {mentor.averageRating !== null && mentor.averageRating !== undefined && (
-                <div className="flex items-center gap-1 mt-0.5">
-                  <StarRating rating={mentor.averageRating} />
-                  <span className="text-xs text-gray-400">{mentor.averageRating.toFixed(1)} ({mentor.reviewCount})</span>
+            </div>
+
+            {/* Right: name, role, metrics */}
+            <div className="flex-1 min-w-0 space-y-1">
+              <div className="flex items-start justify-between gap-1">
+                <div className="min-w-0">
+                  <h3 className="font-semibold text-gray-900 text-sm sm:text-base leading-tight truncate">
+                    {mentor.first_name} {mentor.last_name}
+                    {mentor.graduation_year && (
+                      <span className="ml-1.5 text-xs font-normal text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded-full">
+                        '{String(mentor.graduation_year).slice(-2)}
+                      </span>
+                    )}
+                  </h3>
+                  <p className="text-xs sm:text-sm text-gray-600 truncate leading-tight mt-0.5">{mentor.current_role}</p>
+                  {mentor.current_company && (
+                    <p className="text-xs text-gray-500 truncate flex items-center gap-1 mt-0.5">
+                      <Building2 className="w-3 h-3 flex-shrink-0" />{mentor.current_company}
+                    </p>
+                  )}
                 </div>
-              )}
+                <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                  {mentor.match_score !== undefined && (
+                    <span className={`text-xs font-semibold px-2 py-0.5 rounded-full border ${matchColor}`}>
+                      {mentor.match_score}% match
+                    </span>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => toggleBookmark(mentor.user_id)}
+                    className="text-gray-400 hover:text-[#008060] transition-colors"
+                    aria-label={isBookmarked ? 'Remove bookmark' : 'Bookmark mentor'}
+                  >
+                    {isBookmarked
+                      ? <BookmarkCheck className="w-4 h-4 text-[#008060]" />
+                      : <Bookmark className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Rating + social proof */}
+              <div className="flex items-center flex-wrap gap-2 mt-1">
+                {mentor.averageRating !== null && mentor.averageRating !== undefined && (
+                  <span className="flex items-center gap-1">
+                    <StarRating rating={mentor.averageRating} size="sm" />
+                    <span className="text-xs text-gray-400">{mentor.averageRating.toFixed(1)} ({mentor.reviewCount})</span>
+                  </span>
+                )}
+                {(mentor.total_mentees_helped ?? 0) > 0 && (
+                  <span className="flex items-center gap-1 text-xs text-gray-500">
+                    <Users className="w-3 h-3 text-[#008060]" />
+                    {mentor.total_mentees_helped} mentored
+                  </span>
+                )}
+              </div>
+
+              {/* Availability indicator */}
+              <div className="flex items-center flex-wrap gap-x-3 gap-y-1 text-xs mt-1">
+                <span className="flex items-center gap-1">
+                  <span className={`w-2 h-2 rounded-full ${availDotColor} flex-shrink-0`} />
+                  {isFull
+                    ? <span className="text-red-500 font-medium">Full</span>
+                    : <span className="text-green-600 font-medium">{slots} slot{slots !== 1 ? 's' : ''} open</span>}
+                  {mentor.session_type && (
+                    <span className="text-gray-400 ml-1">· {mentor.session_type === 'video' ? 'Video' : mentor.session_type === 'async' ? 'Async' : 'Either'}</span>
+                  )}
+                </span>
+                {dayChips.length > 0 && (
+                  <span className="text-gray-400">{dayChips.join(' · ')}</span>
+                )}
+              </div>
             </div>
           </div>
-        </CardHeader>
-        <CardContent className="p-4 sm:p-6 pt-2 space-y-3">
-          {mentor.match_score !== undefined && (
+
+          {/* Match score breakdown */}
+          {mentor.match_score !== undefined && mentor.score_breakdown && (
             <div className="space-y-1">
               <MatchBar score={mentor.match_score} />
-              {mentor.score_breakdown && (
-                <button
-                  type="button"
-                  className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#008060] transition-colors"
-                  onClick={() => setExpandedBreakdown(expandedBreakdown === mentor.user_id ? null : mentor.user_id)}
-                >
-                  {expandedBreakdown === mentor.user_id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                  {expandedBreakdown === mentor.user_id ? 'Hide breakdown' : 'See breakdown'}
-                </button>
-              )}
-              {expandedBreakdown === mentor.user_id && mentor.score_breakdown && (() => {
+              <button
+                type="button"
+                className="flex items-center gap-1 text-xs text-gray-400 hover:text-[#008060] transition-colors"
+                onClick={() => setExpandedBreakdown(expandedBreakdown === mentor.user_id ? null : mentor.user_id)}
+              >
+                {expandedBreakdown === mentor.user_id ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                {expandedBreakdown === mentor.user_id ? 'Hide breakdown' : 'See score breakdown'}
+              </button>
+              {expandedBreakdown === mentor.user_id && (() => {
                 const factors: { key: string; label: string; max: number }[] = [
                   { key: 'interestOverlap', label: 'Interest Match', max: 25 },
                   { key: 'skillOverlap', label: 'Skill Overlap', max: 25 },
@@ -496,74 +612,94 @@ export const MenteeDashboard = (): JSX.Element => {
             </div>
           )}
 
-          <div className="flex items-center justify-between text-xs flex-wrap gap-1">
-            {isFull ? (
-              <span className="text-red-500 font-medium">Full — not accepting mentees</span>
-            ) : (
-              <span className="text-green-600 font-medium">Available · {slots} slot{slots !== 1 ? 's' : ''}</span>
-            )}
-            {dayChips.length > 0 && (
-              <span className="flex items-center gap-1 text-gray-500">
-                <Calendar className="w-3 h-3" />
-                {dayChips.join(' · ')}
-              </span>
-            )}
-            {mentor.session_type && (
-              <span className="flex items-center gap-1 text-gray-500">
-                {mentor.session_type === 'video' ? <Video className="w-3 h-3" /> : <Mail className="w-3 h-3" />}
-                {mentor.session_type}
-              </span>
-            )}
-          </div>
-
-          <div className="flex flex-wrap gap-1">
-            {expertiseTags.map((exp, i) => (
-              <Badge key={`exp-${i}`} variant="secondary" className="text-xs">{exp}</Badge>
-            ))}
-            {skills.map((s, i) => (
-              <Badge key={`sk-${i}`} variant="outline" className="text-xs">{s.skill_name}</Badge>
-            ))}
-          </div>
-
-          <div className="flex items-center gap-2">
-            <a href={`/profile/${mentor.user_id}`} className="text-xs text-[#008060] hover:underline flex items-center gap-1">
-              <ExternalLink className="w-3 h-3" /> View Profile
-            </a>
-            {mentor.meeting_link && (
-              <a href={mentor.meeting_link} target="_blank" rel="noopener noreferrer"
-                className="text-xs text-blue-600 hover:underline flex items-center gap-1">
-                <Video className="w-3 h-3" /> Book a call
-              </a>
-            )}
-          </div>
-
-          {activeRequestModal === mentor.user_id ? (
-            <div className="space-y-2">
-              <Textarea
-                placeholder="Introduce yourself and share what you hope to achieve (optional)"
-                value={requestMessage}
-                onChange={e => setRequestMessage(e.target.value)}
-                className="text-sm min-h-[72px]"
-              />
-              <div className="flex gap-2">
-                <Button onClick={() => handleRequestMentorship(mentor.user_id)} variant="brand"
-                  className="flex-1 min-h-[40px] text-sm" disabled={isFull}>
-                  Send Request
-                </Button>
-                <Button variant="ghost" onClick={() => setActiveRequestModal(null)} className="min-h-[40px]">Cancel</Button>
+          {/* Help topics + style */}
+          {(helpTopics.length > 0 || styleInfo || expertiseTags.length > 0 || skills.length > 0) && (
+            <div className="space-y-1.5">
+              {helpTopics.length > 0 && (
+                <div className="flex flex-wrap gap-1">
+                  {helpTopics.map((t, i) => (
+                    <Badge key={`ht-${i}`} className="text-xs bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100">{t}</Badge>
+                  ))}
+                </div>
+              )}
+              <div className="flex flex-wrap gap-1">
+                {expertiseTags.map((exp, i) => (
+                  <Badge key={`exp-${i}`} variant="secondary" className="text-xs">{exp}</Badge>
+                ))}
+                {skills.map((s, i) => (
+                  <Badge key={`sk-${i}`} variant="outline" className="text-xs">{s.skill_name}</Badge>
+                ))}
+                {styleInfo && (
+                  <Badge variant="outline" className="text-xs flex items-center gap-1 text-gray-600">
+                    {styleInfo.icon}{styleInfo.label}
+                  </Badge>
+                )}
               </div>
             </div>
-          ) : (
-            <Button
-              onClick={() => isPending ? null : setActiveRequestModal(mentor.user_id)}
-              variant={isPending ? 'outline' : 'brand'}
-              className="w-full min-h-[40px] text-sm"
-              disabled={isPending || isFull}
-            >
-              <MessageSquare className="w-4 h-4 mr-2" />
-              {isPending ? 'Request Pending' : isFull ? 'Mentor Full' : 'Request Mentorship'}
-            </Button>
           )}
+
+          {/* Bio */}
+          {mentor.bio && (
+            <p className="text-xs text-gray-500 line-clamp-2 leading-relaxed">{mentor.bio}</p>
+          )}
+
+          {/* Footer actions */}
+          <div className="pt-1 space-y-2">
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs min-h-[36px]"
+                onClick={() => setProfileModalMentor(mentor)}
+              >
+                <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> View Profile
+              </Button>
+              {mentor.meeting_link && (
+                <a href={mentor.meeting_link} target="_blank" rel="noopener noreferrer">
+                  <Button variant="outline" size="sm" className="text-xs min-h-[36px]">
+                    <Video className="w-3.5 h-3.5 mr-1" /> Book
+                  </Button>
+                </a>
+              )}
+            </div>
+
+            {isConnected ? (
+              <Button
+                variant="outline"
+                className="w-full min-h-[40px] text-sm text-green-700 border-green-200 bg-green-50 cursor-default"
+                disabled
+              >
+                <UserCheck className="w-4 h-4 mr-2" />
+                Connected
+              </Button>
+            ) : activeRequestModal === mentor.user_id ? (
+              <div className="space-y-2">
+                <Textarea
+                  placeholder="Introduce yourself and share what you hope to achieve (optional)"
+                  value={requestMessage}
+                  onChange={e => setRequestMessage(e.target.value)}
+                  className="text-sm min-h-[72px]"
+                />
+                <div className="flex gap-2">
+                  <Button onClick={() => handleRequestMentorship(mentor.user_id)} variant="brand"
+                    className="flex-1 min-h-[40px] text-sm" disabled={isFull}>
+                    Send Request
+                  </Button>
+                  <Button variant="ghost" onClick={() => setActiveRequestModal(null)} className="min-h-[40px]">Cancel</Button>
+                </div>
+              </div>
+            ) : (
+              <Button
+                onClick={() => isPending ? null : setActiveRequestModal(mentor.user_id)}
+                variant={isPending ? 'outline' : 'brand'}
+                className="w-full min-h-[40px] text-sm"
+                disabled={isPending || isFull}
+              >
+                <MessageSquare className="w-4 h-4 mr-2" />
+                {isPending ? 'Request Pending' : isFull ? 'Mentor Full' : 'Request Mentorship'}
+              </Button>
+            )}
+          </div>
         </CardContent>
       </Card>
     );
@@ -917,9 +1053,18 @@ export const MenteeDashboard = (): JSX.Element => {
                   <p className="text-sm mt-1">Try a different filter or search term.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
-                  {sortedMentors.map(renderMentorCard)}
-                </div>
+                <>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6">
+                    {sortedMentors.map(renderMentorCard)}
+                  </div>
+                  {hasMoreMentors && !loading && (
+                    <div className="flex justify-center mt-6">
+                      <Button variant="outline" onClick={() => { const next = mentorPage + 1; setMentorPage(next); fetchMentors(goalText, next); }}>
+                        Load more mentors
+                      </Button>
+                    </div>
+                  )}
+                </>
               )}
             </TabsContent>
 
@@ -961,8 +1106,8 @@ export const MenteeDashboard = (): JSX.Element => {
             <h2 className="font-semibold text-lg">Schedule Session with {scheduleModal.otherName}</h2>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Date & Time</label>
-                <Input type="datetime-local" value={newSession.scheduledAt}
+                <label htmlFor="mentee-session-date" className="text-xs text-gray-600 mb-1 block">Date & Time</label>
+                <Input id="mentee-session-date" type="datetime-local" value={newSession.scheduledAt}
                   min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
                   onChange={e => setNewSession(p => ({ ...p, scheduledAt: e.target.value }))}
                   className="text-sm" />
@@ -981,25 +1126,25 @@ export const MenteeDashboard = (): JSX.Element => {
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">
+                <label htmlFor="mentee-session-meetlink" className="text-xs text-gray-600 mb-1 block">
                   Meet Link <span className="text-red-500">*</span>
                   <span className="ml-1 text-gray-400">(Google Meet, Zoom, Teams, Jitsi, Webex…)</span>
                 </label>
-                <Input type="url" value={newSession.meetLink}
+                <Input id="mentee-session-meetlink" type="url" value={newSession.meetLink}
                   onChange={e => setNewSession(p => ({ ...p, meetLink: e.target.value }))}
                   placeholder="https://meet.google.com/abc-defg-hij" className="text-sm" />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Agenda (optional)</label>
-                <Textarea value={newSession.agenda}
+                <label htmlFor="mentee-session-agenda" className="text-xs text-gray-600 mb-1 block">Agenda (optional)</label>
+                <Textarea id="mentee-session-agenda" value={newSession.agenda}
                   onChange={e => setNewSession(p => ({ ...p, agenda: e.target.value }))}
                   placeholder="Topics to cover, questions to ask…" className="text-sm min-h-[64px]" />
               </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={createSession} variant="brand" className="flex-1"
-                disabled={!newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
-                <CalendarPlus className="w-4 h-4 mr-2" /> Schedule
+                disabled={schedulingSession || !newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
+                <CalendarPlus className="w-4 h-4 mr-2" /> {schedulingSession ? 'Scheduling…' : 'Schedule'}
               </Button>
               <Button variant="ghost" onClick={() => setScheduleModal(null)}>Cancel</Button>
             </div>
@@ -1058,6 +1203,22 @@ export const MenteeDashboard = (): JSX.Element => {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Mentor profile modal */}
+      {profileModalMentor && (
+        <MentorProfileModal
+          mentor={profileModalMentor}
+          onClose={() => setProfileModalMentor(null)}
+          onRequest={(mentorId) => {
+            setProfileModalMentor(null);
+            setActiveRequestModal(mentorId);
+          }}
+          isPending={pendingMentorIds.has(profileModalMentor.user_id)}
+          isConnected={connectedMentorIds.has(profileModalMentor.user_id)}
+          isFull={profileModalMentor.mentor_available === false || (profileModalMentor.mentee_count ?? 0) >= (profileModalMentor.max_mentees ?? 3)}
+          currentUserId={user?.id || ''}
+        />
       )}
     </AppLayout>
   );

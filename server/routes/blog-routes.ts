@@ -61,11 +61,32 @@ async function fetchAuthor(authorId: string, includeExtended = false) {
   ]);
   const u = userRes.data;
   const a = alumniRes.data;
+
+  // Derive a human-readable name from username when no alumni profile exists
+  // e.g. "john_doe_42" → first_name "John", last_name "Doe"
+  let derivedFirst: string | null = null;
+  let derivedLast: string | null = null;
+  if (!a?.first_name && u?.username) {
+    const parts = u.username
+      .replace(/[_\-\.]+/g, " ")
+      .replace(/\d+/g, "")
+      .trim()
+      .split(/\s+/)
+      .filter(Boolean)
+      .map((p: string) => p.charAt(0).toUpperCase() + p.slice(1).toLowerCase());
+    if (parts.length >= 2) {
+      derivedFirst = parts[0];
+      derivedLast = parts.slice(1).join(" ");
+    } else if (parts.length === 1) {
+      derivedFirst = parts[0];
+    }
+  }
+
   return {
     id: u?.id ?? authorId,
     username: u?.username ?? null,
-    first_name: a?.first_name ?? null,
-    last_name: a?.last_name ?? null,
+    first_name: a?.first_name ?? derivedFirst,
+    last_name: a?.last_name ?? derivedLast,
     profile_picture: a?.profile_picture ?? null,
     bio: (a as any)?.bio ?? null,
     current_role: a?.current_role ?? null,
@@ -186,20 +207,21 @@ router.get("/my/posts", async (req, res) => {
     const userId = req.headers["user-id"] as string;
     if (!userId) return res.status(401).json({ error: "Unauthorized" });
 
-    const { data, error } = await supabase
-      .from("blog_posts")
-      .select(`
-        *,
-        blog_categories(id, name, slug, color)
-      `)
-      .eq("author_id", userId)
-      .order("updated_at", { ascending: false });
-    if (error) throw error;
+    const [postsRes, author] = await Promise.all([
+      supabase
+        .from("blog_posts")
+        .select(`*, blog_categories(id, name, slug, color)`)
+        .eq("author_id", userId)
+        .order("updated_at", { ascending: false }),
+      fetchAuthor(userId),
+    ]);
+    if (postsRes.error) throw postsRes.error;
 
-    const posts = (data || []).map((p: any) => ({
+    const posts = (postsRes.data || []).map((p: any) => ({
       ...p,
       category: p.blog_categories ?? null,
       blog_categories: undefined,
+      author,
     }));
 
     res.json(posts);

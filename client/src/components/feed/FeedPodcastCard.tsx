@@ -74,7 +74,17 @@ export function FeedPodcastCard({
       className="group hover:shadow-md transition-all duration-200"
       style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)" }}
     >
-      <CardContent className="p-4">
+      <CardContent className="p-4 relative">
+        {/* Badge top-right of card */}
+        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
+          <Badge className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-50">
+            Podcast
+          </Badge>
+          {podcast.episode_number != null && (
+            <span className="text-xs text-gray-400 font-medium bg-white/80 px-1.5 py-0.5 rounded">Ep. {podcast.episode_number}</span>
+          )}
+        </div>
+
         <div
           className="flex gap-4 items-start cursor-pointer"
           onClick={navigate}
@@ -85,16 +95,7 @@ export function FeedPodcastCard({
           </div>
 
           {/* Content */}
-          <div className="flex-1 min-w-0 space-y-2">
-            {/* Badges row */}
-            <div className="flex items-center gap-2 flex-wrap">
-              <Badge className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-50">
-                Podcast
-              </Badge>
-              {podcast.episode_number != null && (
-                <span className="text-xs text-gray-400 font-medium">Ep. {podcast.episode_number}</span>
-              )}
-            </div>
+          <div className="flex-1 min-w-0 space-y-2 pr-16">
 
             {/* Title */}
             <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2 group-hover:text-purple-700 transition-colors">

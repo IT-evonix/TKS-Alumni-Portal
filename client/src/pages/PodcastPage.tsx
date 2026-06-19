@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useCallback, useRef } from "react";
 import { Mic2, Play, Search, ExternalLink, ChevronDown, ChevronUp, Eye, Calendar } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { PageHeading } from "@/components/common/PageHeading";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -158,11 +157,10 @@ export function PodcastPage({ slug }: PodcastPageProps) {
 
   return (
     <AppLayout currentPage="podcast">
-      <div className="max-w-6xl mx-auto py-8 px-4 sm:px-6">
+      <div className="max-w-[1400px] mx-auto py-8 px-4 sm:px-6">
         {/* Header */}
         <div className="mb-6">
-          <PageHeading firstWord="Alumni" secondWord="Podcast" className="mb-0" />
-          <p className="text-sm text-gray-500 mt-1">
+<p className="text-sm text-gray-500 mt-1">
             Stories, insights, and inspiration from the TKS alumni community.
           </p>
         </div>
@@ -234,7 +232,7 @@ export function PodcastPage({ slug }: PodcastPageProps) {
           </div>
         ) : (
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {episodes.map(ep => (
                 <EpisodeCard key={ep.id} episode={ep} onOpen={openEpisode} />
               ))}

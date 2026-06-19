@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useRef } from "react";
 import { PenSquare, BookOpen, ChevronLeft, ChevronRight, Edit, Bookmark } from "lucide-react";
 import { AppLayout } from "@/components/layout/AppLayout";
-import { PageHeading } from "@/components/common/PageHeading";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { BlogCard } from "@/components/blogs/BlogCard";
@@ -228,12 +227,11 @@ export function BlogsPage() {
 
   return (
     <AppLayout currentPage="blogs">
-      <div className="max-w-6xl mx-auto px-4 py-6 space-y-6">
+      <div className="max-w-[1400px] mx-auto px-4 py-6 space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between flex-wrap gap-3">
           <div>
-            <PageHeading firstWord="TKS Alumni" secondWord="Blogs" className="mb-0" />
-            <p className="text-sm text-gray-500 mt-0.5">Insights and stories from the TKS community</p>
+<p className="text-sm text-gray-500 mt-0.5">Insights and stories from the TKS community</p>
           </div>
           {user && (
             <Button
@@ -268,7 +266,7 @@ export function BlogsPage() {
             />
 
             {loading ? (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                 {[...Array(6)].map((_, i) => (
                   <div key={i} className="animate-pulse rounded-xl overflow-hidden border border-gray-200">
                     <div className="bg-gray-200" style={{ height: "160px" }} />
@@ -302,7 +300,7 @@ export function BlogsPage() {
               </div>
             ) : (
               <>
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {posts.map((post) => (
                     <BlogCard
                       key={post.id}
@@ -347,7 +345,7 @@ export function BlogsPage() {
           {user && (
             <TabsContent value="mine" className="mt-4">
               {myPostsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="animate-pulse rounded-xl overflow-hidden border border-gray-200">
                       <div className="bg-gray-200" style={{ height: "160px" }} />
@@ -372,7 +370,7 @@ export function BlogsPage() {
                   </Button>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {myPosts.map((post) => (
                     <div key={post.id} className="relative group">
                       <BlogCard post={post} showStatus />
@@ -413,7 +411,7 @@ export function BlogsPage() {
           {user && (
             <TabsContent value="saved" className="mt-4">
               {savedPostsLoading ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {[...Array(3)].map((_, i) => (
                     <div key={i} className="animate-pulse rounded-xl overflow-hidden border border-gray-200">
                       <div className="bg-gray-200" style={{ height: "160px" }} />
@@ -431,7 +429,7 @@ export function BlogsPage() {
                   <p className="text-sm mt-1">Bookmark posts from the All Posts tab to save them here.</p>
                 </div>
               ) : (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-5">
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
                   {savedPosts.map((post) => (
                     <BlogCard
                       key={post.id}

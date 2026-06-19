@@ -15,10 +15,11 @@ import {
   Users, CheckCircle, XCircle, Clock, Sparkles,
   ChevronDown, ChevronUp, Inbox, Star,
   CalendarPlus, Calendar, AlertTriangle,
+  BookOpen, MessageSquare, Github, Globe, Twitter, X as XIcon,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MentorshipRequest, MentorshipSession } from './mentorship-types';
-import { SkeletonCard, isValidMeetLink } from './mentorship-components';
+import { SkeletonCard, isValidMeetLink, isValidMeetingLink } from './mentorship-components';
 
 export const MentorDashboard = (): JSX.Element => {
   const { user } = useAuth();
@@ -34,11 +35,23 @@ export const MentorDashboard = (): JSX.Element => {
   const [scheduleModal, setScheduleModal] = useState<{ requestId: string; otherName: string } | null>(null);
   const [newSession, setNewSession] = useState({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
   const [availOpen, setAvailOpen] = useState(false);
-  const [availSettings, setAvailSettings] = useState({ available_days: '', session_type: 'video', meeting_link: '', max_mentees: 3 });
+  const [availSettings, setAvailSettings] = useState({
+    available_days: '',
+    session_type: 'video',
+    meeting_link: '',
+    max_mentees: 3,
+    mentorship_style: 'flexible' as 'structured' | 'ad_hoc' | 'accountability' | 'flexible',
+    help_topics: '[]',
+    github_url: '',
+    portfolio_url: '',
+    twitter_url: '',
+  });
+  const [helpTopicInput, setHelpTopicInput] = useState('');
   const [reviewModal, setReviewModal] = useState<{ sessionId: string; reviewedId: string; reviewedName: string } | null>(null);
   const [reviewInput, setReviewInput] = useState({ rating: 5, comment: '' });
   const [endConfirm, setEndConfirm] = useState<string | null>(null);
   const [disabling, setDisabling] = useState(false);
+  const [schedulingSession, setSchedulingSession] = useState(false);
 
   const headers = { 'user-id': user?.id || '' };
 
@@ -57,6 +70,11 @@ export const MentorDashboard = (): JSX.Element => {
             session_type: data.session_type || 'video',
             meeting_link: data.meeting_link || '',
             max_mentees: data.max_mentees ?? 3,
+            mentorship_style: data.mentorship_style || 'flexible',
+            help_topics: data.help_topics || '[]',
+            github_url: data.github_url || '',
+            portfolio_url: data.portfolio_url || '',
+            twitter_url: data.twitter_url || '',
           });
           setStatusChecked(true);
         }
@@ -72,7 +90,9 @@ export const MentorDashboard = (): JSX.Element => {
         const data = await res.json();
         setIncomingRequests(data.requests || []);
       }
-    } catch { /* silent */ }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load incoming requests.', variant: 'destructive' });
+    }
   }, [user?.id]);
 
   const fetchSessions = useCallback(async () => {
@@ -85,7 +105,9 @@ export const MentorDashboard = (): JSX.Element => {
         // Only mentor-side sessions
         setSessions((data.sessions || []).filter((s: MentorshipSession) => s.myRole === 'mentor'));
       }
-    } catch { /* silent */ } finally {
+    } catch {
+      toast({ title: 'Error', description: 'Failed to load sessions.', variant: 'destructive' });
+    } finally {
       setSessionsLoading(false);
     }
   }, [user?.id]);
@@ -137,6 +159,10 @@ export const MentorDashboard = (): JSX.Element => {
   };
 
   const saveAvailability = async () => {
+    if (availSettings.meeting_link && !isValidMeetingLink(availSettings.meeting_link)) {
+      toast({ title: 'Invalid link', description: 'Please enter a valid Calendly, Google Meet, Zoom, Teams, or other supported meeting link.', variant: 'destructive' });
+      return;
+    }
     try {
       const res = await fetch('/api/mentorship/my-availability', {
         method: 'PATCH',
@@ -184,6 +210,7 @@ export const MentorDashboard = (): JSX.Element => {
       toast({ title: 'Invalid meet link', description: 'Please enter a valid link from a supported platform.', variant: 'destructive' });
       return;
     }
+    setSchedulingSession(true);
     try {
       const res = await fetch('/api/mentorship/sessions', {
         method: 'POST',
@@ -207,6 +234,8 @@ export const MentorDashboard = (): JSX.Element => {
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to schedule session', variant: 'destructive' });
+    } finally {
+      setSchedulingSession(false);
     }
   };
 
@@ -521,7 +550,11 @@ export const MentorDashboard = (): JSX.Element => {
                     <label className="text-xs text-gray-600 mb-1 block">Meeting / Calendly Link</label>
                     <Input value={availSettings.meeting_link}
                       onChange={e => setAvailSettings(p => ({ ...p, meeting_link: e.target.value }))}
-                      placeholder="https://calendly.com/…" className="text-sm" />
+                      placeholder="https://calendly.com/…"
+                      className={`text-sm ${availSettings.meeting_link && !isValidMeetingLink(availSettings.meeting_link) ? 'border-red-400 focus-visible:ring-red-400' : ''}`} />
+                    {availSettings.meeting_link && !isValidMeetingLink(availSettings.meeting_link) && (
+                      <p className="text-xs text-red-500 mt-1">Enter a valid link (Calendly, Google Meet, Zoom, Teams, etc.)</p>
+                    )}
                   </div>
                   <div>
                     <label className="text-xs text-gray-600 mb-1 block">Max Mentees</label>
@@ -530,7 +563,88 @@ export const MentorDashboard = (): JSX.Element => {
                       className="text-sm" />
                   </div>
                 </div>
-                <Button onClick={saveAvailability} variant="brand" size="sm" className="min-h-[36px]">
+                {/* Mentorship Style */}
+                <div className="pt-3 border-t">
+                  <label className="text-xs text-gray-600 mb-1 block">Mentorship Style</label>
+                  <Select value={availSettings.mentorship_style} onValueChange={v => setAvailSettings(p => ({ ...p, mentorship_style: v as any }))}>
+                    <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="structured"><span className="flex items-center gap-2"><BookOpen className="w-3.5 h-3.5" /> Structured curriculum</span></SelectItem>
+                      <SelectItem value="ad_hoc"><span className="flex items-center gap-2"><MessageSquare className="w-3.5 h-3.5" /> Ad-hoc conversations</span></SelectItem>
+                      <SelectItem value="accountability"><span className="flex items-center gap-2"><CheckCircle className="w-3.5 h-3.5" /> Accountability partner</span></SelectItem>
+                      <SelectItem value="flexible"><span className="flex items-center gap-2"><Sparkles className="w-3.5 h-3.5" /> Flexible / mix</span></SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {/* Help Topics tag input */}
+                <div>
+                  <label className="text-xs text-gray-600 mb-1 block">What I Can Help With (press Enter to add)</label>
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {(() => {
+                      let topics: string[] = [];
+                      try { topics = JSON.parse(availSettings.help_topics || '[]'); } catch { topics = []; }
+                      return topics.map((t: string) => (
+                        <Badge key={t} variant="secondary" className="bg-blue-50 text-blue-700 border border-blue-200 gap-1 pl-2 pr-1 py-0.5">
+                          {t}
+                          <button type="button" onClick={() => {
+                            let ts: string[] = [];
+                            try { ts = JSON.parse(availSettings.help_topics || '[]'); } catch { ts = []; }
+                            setAvailSettings(p => ({ ...p, help_topics: JSON.stringify(ts.filter(x => x !== t)) }));
+                          }} className="hover:text-red-500 ml-0.5"><XIcon className="w-3 h-3" /></button>
+                        </Badge>
+                      ));
+                    })()}
+                  </div>
+                  <Input
+                    value={helpTopicInput}
+                    onChange={e => setHelpTopicInput(e.target.value)}
+                    onKeyDown={e => {
+                      if (e.key === 'Enter' || e.key === ',') {
+                        e.preventDefault();
+                        const val = helpTopicInput.trim().replace(/,$/, '');
+                        if (!val) return;
+                        let ts: string[] = [];
+                        try { ts = JSON.parse(availSettings.help_topics || '[]'); } catch { ts = []; }
+                        if (!ts.includes(val)) {
+                          setAvailSettings(p => ({ ...p, help_topics: JSON.stringify([...ts, val]) }));
+                        }
+                        setHelpTopicInput('');
+                      }
+                    }}
+                    placeholder="e.g. Interview prep, Startup fundraising…"
+                    className="text-sm"
+                  />
+                </div>
+
+                {/* Social Links */}
+                <div>
+                  <label className="text-xs text-gray-600 mb-2 block">Social Links</label>
+                  <p className="text-xs text-gray-400 -mt-1">LinkedIn is pulled from your profile. Add your other links below.</p>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="relative">
+                      <Github className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Input value={availSettings.github_url}
+                        onChange={e => setAvailSettings(p => ({ ...p, github_url: e.target.value }))}
+                        placeholder="GitHub URL" className="text-sm pl-8" />
+                    </div>
+                    <div className="relative">
+                      <Globe className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Input value={availSettings.portfolio_url}
+                        onChange={e => setAvailSettings(p => ({ ...p, portfolio_url: e.target.value }))}
+                        placeholder="Portfolio / Website URL" className="text-sm pl-8" />
+                    </div>
+                    <div className="relative">
+                      <Twitter className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                      <Input value={availSettings.twitter_url}
+                        onChange={e => setAvailSettings(p => ({ ...p, twitter_url: e.target.value }))}
+                        placeholder="Twitter / X URL" className="text-sm pl-8" />
+                    </div>
+                  </div>
+                </div>
+
+                <Button onClick={saveAvailability} variant="brand" size="sm" className="min-h-[36px]"
+                  disabled={!!(availSettings.meeting_link && !isValidMeetingLink(availSettings.meeting_link))}>
                   Save Availability
                 </Button>
               </div>
@@ -577,8 +691,8 @@ export const MentorDashboard = (): JSX.Element => {
             <h2 className="font-semibold text-lg">Schedule Session with {scheduleModal.otherName}</h2>
             <div className="space-y-3">
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Date & Time</label>
-                <Input type="datetime-local" value={newSession.scheduledAt}
+                <label htmlFor="mentor-session-date" className="text-xs text-gray-600 mb-1 block">Date & Time</label>
+                <Input id="mentor-session-date" type="datetime-local" value={newSession.scheduledAt}
                   min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
                   onChange={e => setNewSession(p => ({ ...p, scheduledAt: e.target.value }))}
                   className="text-sm" />
@@ -597,25 +711,25 @@ export const MentorDashboard = (): JSX.Element => {
                 </Select>
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">
+                <label htmlFor="mentor-session-meetlink" className="text-xs text-gray-600 mb-1 block">
                   Meet Link <span className="text-red-500">*</span>
                   <span className="ml-1 text-gray-400">(Google Meet, Zoom, Teams, Jitsi, Webex…)</span>
                 </label>
-                <Input type="url" value={newSession.meetLink}
+                <Input id="mentor-session-meetlink" type="url" value={newSession.meetLink}
                   onChange={e => setNewSession(p => ({ ...p, meetLink: e.target.value }))}
                   placeholder="https://meet.google.com/abc-defg-hij" className="text-sm" />
               </div>
               <div>
-                <label className="text-xs text-gray-600 mb-1 block">Agenda (optional)</label>
-                <Textarea value={newSession.agenda}
+                <label htmlFor="mentor-session-agenda" className="text-xs text-gray-600 mb-1 block">Agenda (optional)</label>
+                <Textarea id="mentor-session-agenda" value={newSession.agenda}
                   onChange={e => setNewSession(p => ({ ...p, agenda: e.target.value }))}
                   placeholder="Topics to cover…" className="text-sm min-h-[64px]" />
               </div>
             </div>
             <div className="flex gap-2">
               <Button onClick={createSession} variant="brand" className="flex-1"
-                disabled={!newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
-                <CalendarPlus className="w-4 h-4 mr-2" /> Schedule
+                disabled={schedulingSession || !newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
+                <CalendarPlus className="w-4 h-4 mr-2" /> {schedulingSession ? 'Scheduling…' : 'Schedule'}
               </Button>
               <Button variant="ghost" onClick={() => setScheduleModal(null)}>Cancel</Button>
             </div>

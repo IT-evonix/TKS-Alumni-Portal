@@ -20,7 +20,6 @@ import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHan
 import { validateTextLength } from "@/utils/validation";
 import { SkeletonPostCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
-import { PageHeading } from "@/components/common/PageHeading";
 import { FeedBlogCard } from "@/components/feed/FeedBlogCard";
 import { FeedPodcastCard } from "@/components/feed/FeedPodcastCard";
 import type { FeedItem } from "@/types/feed";
@@ -1052,6 +1051,34 @@ export const FeedPage = (): JSX.Element => {
     }
   };
 
+  const handleBlogBookmark = async (blogId: string) => {
+    const blog = blogs.find((b: any) => b.id === blogId);
+    if (!blog) return;
+    const wasBookmarked = blog.viewer_has_bookmarked ?? false;
+    setBlogs((prev: any[]) => prev.map((b: any) =>
+      b.id === blogId ? { ...b, viewer_has_bookmarked: !wasBookmarked } : b
+    ));
+    try {
+      const userId = user?.id || localStorage.getItem('userId') || '';
+      const token = localStorage.getItem('auth_token') || '';
+      const res = await fetch(`/api/blogs/${blogId}/bookmark`, {
+        method: 'POST',
+        headers: { 'user-id': userId, ...(token ? { Authorization: `Bearer ${token}` } : {}) },
+      });
+      if (!res.ok) throw new Error('Failed');
+      const data = await res.json();
+      setBlogs((prev: any[]) => prev.map((b: any) =>
+        b.id === blogId ? { ...b, viewer_has_bookmarked: data.bookmarked } : b
+      ));
+      toast({ title: data.bookmarked ? "Blog saved" : "Bookmark removed", description: data.bookmarked ? "Added to your saved blogs." : "Removed from saved blogs." });
+    } catch {
+      setBlogs((prev: any[]) => prev.map((b: any) =>
+        b.id === blogId ? { ...b, viewer_has_bookmarked: wasBookmarked } : b
+      ));
+      toast({ title: "Error", description: "Failed to update bookmark.", variant: "destructive" });
+    }
+  };
+
   const handlePodcastLike = async (podcastId: string) => {
     if (podcastLikingInFlight.current.has(podcastId)) return;
     podcastLikingInFlight.current.add(podcastId);
@@ -1153,11 +1180,10 @@ export const FeedPage = (): JSX.Element => {
           className="flex-1 w-full overflow-y-auto relative"
         >
           <div className="min-h-full xl:pr-[316px] transition-all duration-300 overflow-x-hidden">
-            <div className="max-w-[680px] mx-auto px-3 sm:px-4 md:px-5 pt-0 pb-4 sm:pb-5 md:pb-6 w-full">
+            <div className="max-w-[680px] xl:max-w-[820px] 2xl:max-w-[900px] mx-auto px-3 sm:px-4 md:px-5 pt-0 pb-4 sm:pb-5 md:pb-6 w-full">
 
-              {/* Alumni Feed header + Create Post */}
-              <div className="mb-4 flex items-center justify-between">
-                <PageHeading firstWord="Alumni" secondWord="Feed" className="mb-0" />
+              {/* Create Post */}
+              <div className="mb-4 flex items-center justify-end">
                 <Button
                   onClick={() => setShowPostModal(true)}
                   className="bg-[#008060] hover:bg-[#006b51] text-white font-semibold px-5 py-2 rounded-full shadow-sm transition-all flex items-center gap-2 text-sm"
@@ -1266,7 +1292,7 @@ export const FeedPage = (): JSX.Element => {
                 <div className="space-y-8">
                   {feedItems.map((item) => {
                     if (item._type === "blog") {
-                      return <FeedBlogCard key={`blog-${item.id}`} blog={item} />;
+                      return <FeedBlogCard key={`blog-${item.id}`} blog={item} onBookmark={handleBlogBookmark} />;
                     }
                     if (item._type === "podcast") {
                       return (

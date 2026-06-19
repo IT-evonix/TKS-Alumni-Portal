@@ -16,7 +16,6 @@ export const PageHeading: React.FC<PageHeadingProps> = ({
       <h1 className="text-xl sm:text-2xl md:text-3xl lg:text-4xl font-extrabold tracking-tight text-gray-900 drop-shadow-sm">
         {secondWord ? <>{firstWord} <span className="text-[#008060]">{secondWord}</span></> : <span className="text-[#008060]">{firstWord}</span>}
       </h1>
-      <div className="absolute -bottom-1 left-0 w-10 sm:w-12 h-0.5 sm:h-1 bg-gradient-to-r from-[#008060] to-transparent rounded-full" />
     </div>
   );
 };

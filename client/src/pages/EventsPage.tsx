@@ -12,7 +12,6 @@ import { useToast } from "@/hooks/use-toast";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { validateRequired, validateTextLength } from "@/utils/validation";
 import { SkeletonEventCard } from "@/components/common/SkeletonLoader";
-import { PageHeading } from "@/components/common/PageHeading";
 import { BackButton } from "@/components/common/BackButton";
 import { supabase } from "@/lib/supabase";
 
@@ -733,12 +732,8 @@ export const EventsPage = (): JSX.Element => {
       `}</style>
 
       <AppLayout currentPage="events">
-        <div className="p-3 sm:p-4 lg:p-6 max-w-7xl mx-auto">
-          {/* Page Heading */}
-          <div className="mb-6 sm:mb-8">
-            <PageHeading firstWord="Events" secondWord="Portal" />
-          </div>
-          {/* Back Button */}
+        <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto">
+{/* Back Button */}
           <div className="mb-4 sm:mb-6 lg:hidden">
             <BackButton />
           </div>
@@ -1045,9 +1040,9 @@ export const EventsPage = (): JSX.Element => {
           </div>
 
           {/* Events List */}
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 xl:grid-cols-2 gap-4">
             {isLoading ? (
-              <div className="space-y-4">
+              <div className="xl:col-span-2 space-y-4">
                 {[1, 2, 3].map((i) => (
                   <SkeletonEventCard key={i} />
                 ))}
@@ -1057,7 +1052,7 @@ export const EventsPage = (): JSX.Element => {
                 </div>
               </div>
             ) : events.length === 0 ? (
-              <Card className="border-dashed border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50">
+              <Card className="xl:col-span-2 border-dashed border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50">
                 <CardContent className="p-12 text-center">
                   <div className="max-w-md mx-auto space-y-6">
                     <div className="text-6xl mb-4">📅</div>
@@ -1099,9 +1094,9 @@ export const EventsPage = (): JSX.Element => {
                 return (
                   <Card key={event.id} id={`event-${event.id}`} className="overflow-hidden hover:shadow-lg transition-shadow max-w-full">
                     <CardContent className="p-0">
-                      <div className="flex flex-col md:flex-row">
+                      <div className="flex flex-col">
                         {/* Event Image */}
-                        <div className="md:w-48 lg:w-56 xl:w-64 h-48 md:h-auto flex-shrink-0 relative">
+                        <div className="h-48 flex-shrink-0 relative">
                           <img
                             src={event.cover_image || "/figmaAssets/rectangle-10.png"}
                             alt={event.title}
@@ -1111,7 +1106,7 @@ export const EventsPage = (): JSX.Element => {
 
                         {/* Event Details */}
                         <div className="flex-1 p-4 sm:p-6">
-                          <div className="flex flex-col md:flex-row justify-between gap-4">
+                          <div className="flex flex-col gap-4">
                             <div className="flex-1 min-w-0">
                               {/* Status Badge */}
                               <div className="flex items-center gap-2 mb-2">
@@ -1182,17 +1177,17 @@ export const EventsPage = (): JSX.Element => {
                             </div>
 
                             {/* Action Buttons */}
-                            <div className="flex md:flex-col gap-2 md:ml-4 min-w-[140px] sm:min-w-[160px]">
+                            <div className="flex flex-wrap gap-2">
                               <Button
                                 variant="brand"
-                                className="px-4 sm:px-6 py-2 text-xs sm:text-sm flex-1 md:flex-none min-h-[44px]"
+                                className="px-4 sm:px-6 py-2 text-xs sm:text-sm min-h-[44px]"
                                 onClick={() => handleViewDetails(event)}
                                 aria-label={`View details for ${event.title}`}
                               >
                                 View Details
                               </Button>
                               {status.label === "Upcoming" && registrationOpen && (
-                                <div className="flex flex-row md:flex-col gap-2 w-full md:mt-2">
+                                <div className="flex flex-row flex-wrap gap-2 w-full">
                                   <Button
                                     size="sm"
                                     onClick={() => handleQuickRsvp(event, 'attending')}

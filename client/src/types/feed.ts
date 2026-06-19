@@ -44,6 +44,7 @@ export interface FeedBlog {
   likes_count?: number;
   published_at: string;
   created_at?: string;
+  viewer_has_bookmarked?: boolean;
 }
 
 export interface FeedPodcast {
