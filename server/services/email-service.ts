@@ -868,8 +868,8 @@ TKS Alumni Portal Team
 function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
   if (!html.includes("data-embedded=")) return html;
 
-  const LABEL: Record<string, string> = { blog: "Blog Post", podcast: "Podcast", post: "Community Post" };
-  const ACCENT: Record<string, string> = { blog: "#7c3aed", podcast: "#e11d48", post: "#0284c7" };
+  const LABEL: Record<string, string> = { blog: "Blog Post", podcast: "Podcast", post: "Community Post", pdf: "PDF Document" };
+  const ACCENT: Record<string, string> = { blog: "#7c3aed", podcast: "#e11d48", post: "#0284c7", pdf: "#d97706" };
 
   return html.replace(
     /<div\s+data-embedded="([^"]*)"[^>]*data-embedded-type="([^"]*)"[^>]*data-embedded-id="([^"]*)"[^>]*data-embedded-url="([^"]*)"[^>]*data-embedded-cover="([^"]*)"[^>]*data-embedded-meta="([^"]*)"[^>]*>([\s\S]*?)<\/div>/gi,
@@ -880,7 +880,10 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
       const excerpt = excerptMatch ? excerptMatch[1].replace(/<[^>]*>/g, "").trim() : "";
       const label = LABEL[type] || "Featured";
       const accent = ACCENT[type] || "#008060";
-      const fullUrl = `${baseUrl.replace(/\/$/, "")}${url}`;
+      const ctaText = type === "pdf" ? "View PDF →" : "Read more →";
+      const fullUrl = type === "pdf" || /^https?:\/\//i.test(url)
+        ? url
+        : `${baseUrl.replace(/\/$/, "")}${url}`;
 
       const coverBlock = cover
         ? `<tr>
@@ -899,6 +902,9 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
         : "";
 
       const hasContent = title || excerpt;
+      const noContentFallback = type === "pdf"
+        ? `<p style="font-size:14px;color:#6b7280;margin:0 0 14px 0;">Click below to open the document.</p>`
+        : `<p style="font-size:14px;color:#9ca3af;margin:0 0 14px 0;">No preview available.</p>`;
       return `
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:16px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:4px solid ${accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
   <tr>
@@ -912,11 +918,11 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
       ${metaBlock}
       ${title ? `<h3 style="font-size:18px;font-weight:700;color:#111827;margin:0 0 8px 0;line-height:1.3;">${title}</h3>` : ""}
       ${excerptBlock}
-      ${!hasContent ? `<p style="font-size:14px;color:#9ca3af;margin:0 0 14px 0;">No preview available.</p>` : ""}
+      ${!hasContent ? noContentFallback : ""}
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
         <tr>
           <td style="background:${accent};border-radius:50px;">
-            <a href="${fullUrl}" style="display:inline-block;padding:10px 24px;font-size:13px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:50px;letter-spacing:0.02em;">Read more &rarr;</a>
+            <a href="${fullUrl}" style="display:inline-block;padding:10px 24px;font-size:13px;font-weight:700;color:#ffffff;text-decoration:none;border-radius:50px;letter-spacing:0.02em;">${ctaText}</a>
           </td>
         </tr>
       </table>

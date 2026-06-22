@@ -28,6 +28,57 @@ interface NewslettersPageProps {
   slug?: string;
 }
 
+const EMBED_LABEL: Record<string, string> = {
+  blog: "Blog Post", podcast: "Podcast", post: "Community Post", pdf: "PDF Document",
+};
+const EMBED_ACCENT: Record<string, string> = {
+  blog: "#7c3aed", podcast: "#e11d48", post: "#0284c7", pdf: "#d97706",
+};
+
+/** Convert data-embedded blocks to visible styled cards before DOMPurify strips data-* attributes. */
+function renderEmbeddedCards(html: string): string {
+  if (!html.includes("data-embedded=")) return html;
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(html, "text/html");
+  doc.querySelectorAll("[data-embedded]").forEach((el) => {
+    const type = el.getAttribute("data-embedded-type") || "blog";
+    const url = el.getAttribute("data-embedded-url") || "#";
+    const cover = el.getAttribute("data-embedded-cover") || "";
+    const meta = el.getAttribute("data-embedded-meta") || "";
+    const titleEl = el.querySelector("[data-embedded-title]");
+    const excerptEl = el.querySelector("[data-embedded-excerpt]");
+    const title = titleEl?.textContent?.trim() || "";
+    const excerpt = excerptEl?.textContent?.trim() || "";
+    const label = EMBED_LABEL[type] || "Featured";
+    const accent = EMBED_ACCENT[type] || "#008060";
+    const isPdf = type === "pdf";
+    const fullUrl = /^https?:\/\//i.test(url) ? url : url;
+
+    const card = doc.createElement("div");
+    card.setAttribute(
+      "style",
+      `margin:20px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:4px solid ${accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);`
+    );
+    card.innerHTML = `
+      <div style="padding:8px 20px;background:#f9fafb;border-bottom:1px solid #f0f0f0;">
+        <span style="font-size:11px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.1em;">${label}</span>
+      </div>
+      ${cover ? `<img src="${cover}" alt="" style="width:100%;height:180px;object-fit:cover;display:block;" />` : ""}
+      <div style="padding:18px 22px;">
+        ${meta ? `<p style="font-size:12px;color:#9ca3af;margin:0 0 6px 0;">${meta}</p>` : ""}
+        ${title ? `<p style="font-size:17px;font-weight:700;color:#111827;margin:0 0 8px 0;line-height:1.3;">${title}</p>` : ""}
+        ${excerpt ? `<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:0 0 14px 0;">${excerpt.slice(0, 200)}${excerpt.length > 200 ? "…" : ""}</p>` : ""}
+        ${!title && !excerpt ? `<p style="font-size:14px;color:#6b7280;margin:0 0 14px 0;">${isPdf ? "Click below to open the document." : "No preview available."}</p>` : ""}
+        <a href="${fullUrl}" target="_blank" rel="noopener noreferrer"
+          style="display:inline-block;padding:9px 22px;background:${accent};color:#fff;font-size:13px;font-weight:700;border-radius:50px;text-decoration:none;">
+          ${isPdf ? "View PDF →" : "Read more →"}
+        </a>
+      </div>`;
+    el.replaceWith(card);
+  });
+  return doc.body.innerHTML;
+}
+
 export function NewslettersPage({ slug }: NewslettersPageProps) {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -156,7 +207,7 @@ export function NewslettersPage({ slug }: NewslettersPageProps) {
             className="prose prose-sm sm:prose max-w-none text-gray-700
               prose-headings:text-gray-900 prose-a:text-[#008060] prose-a:underline
               prose-blockquote:border-l-[#008060] prose-blockquote:bg-green-50 prose-blockquote:py-1 prose-blockquote:pl-4"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(detail.content) }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderEmbeddedCards(detail.content), { ADD_ATTR: ["target", "rel"] }) }}
           />
 
           <hr className="border-gray-200 mt-8 mb-4" />
