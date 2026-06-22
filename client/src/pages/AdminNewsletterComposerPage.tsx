@@ -20,6 +20,7 @@ import {
 } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { utcToLocalDatetimeLocal } from "@/lib/dateUtils";
 // TipTap
 import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
@@ -49,6 +50,7 @@ interface NewsletterDetail {
 
 interface RecipientPreview {
   count: number;
+  serverCount: number;
   users: Array<{ id: string; email: string; name: string }>;
 }
 
@@ -707,7 +709,11 @@ export function AdminNewsletterComposerPage() {
   const [filterOptions, setFilterOptions] = useState<{ batches: string[]; departments: string[]; graduationYears: string[]; roles: string[] }>({ batches: [], departments: [], graduationYears: [], roles: [] });
   const [recipientPreview, setRecipientPreview] = useState<RecipientPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [showRecipientsModal, setShowRecipientsModal] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const isSavingRef = useRef(false);
+  const autosaveStatusTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [testSending, setTestSending] = useState(false);
   const [previewOpen, setPreviewOpen] = useState(false);
   const [previewConfirmOpen, setPreviewConfirmOpen] = useState(false);
@@ -735,7 +741,7 @@ export function AdminNewsletterComposerPage() {
         setRecipientGradYear(nl.recipient_graduation_year || "all");
         setRecipientDepartment(nl.recipient_department || "all");
         if (nl.scheduled_at) {
-          setScheduledAt(new Date(nl.scheduled_at).toISOString().slice(0, 16));
+          setScheduledAt(utcToLocalDatetimeLocal(nl.scheduled_at));
           setDeliveryMode("schedule");
         }
         // Parse articles
@@ -808,6 +814,8 @@ export function AdminNewsletterComposerPage() {
       }, 5000);
     } else if (newsletter?.status === "draft") {
       autosaveTimerRef.current = setTimeout(async () => {
+        if (isSavingRef.current) return;
+        setAutosaveStatus("saving");
         try {
           await fetch(`/api/admin/newsletters/${newsletterId}`, {
             method: "PUT", headers: getHeaders(),
@@ -818,7 +826,13 @@ export function AdminNewsletterComposerPage() {
               custom_recipient_emails: customEmails.map((e) => e.email),
             }),
           });
-        } catch { /* silent */ }
+          setAutosaveStatus("saved");
+        } catch {
+          setAutosaveStatus("error");
+        } finally {
+          if (autosaveStatusTimerRef.current) clearTimeout(autosaveStatusTimerRef.current);
+          autosaveStatusTimerRef.current = setTimeout(() => setAutosaveStatus("idle"), 3000);
+        }
       }, 5000);
     }
     return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current); };
@@ -841,7 +855,7 @@ export function AdminNewsletterComposerPage() {
       // Merge custom emails that aren't already in the server result
       const filterEmails = new Set((data.users ?? []).map((u: any) => u.email.toLowerCase()));
       const extraCount = customEmails.filter((e) => !filterEmails.has(e.email.toLowerCase())).length;
-      setRecipientPreview({ count: data.count + extraCount, users: data.users });
+      setRecipientPreview({ count: data.count + extraCount, serverCount: data.count, users: data.users });
     } catch (err: any) {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally { setPreviewLoading(false); }
@@ -859,7 +873,7 @@ export function AdminNewsletterComposerPage() {
     if (!recipientPreview) return;
     const filterEmails = new Set(recipientPreview.users.map((u) => u.email.toLowerCase()));
     const extraCount = customEmails.filter((e) => !filterEmails.has(e.email.toLowerCase())).length;
-    setRecipientPreview((prev) => prev ? { ...prev, count: prev.users.length + extraCount } : prev);
+    setRecipientPreview((prev) => prev ? { ...prev, count: (prev.serverCount ?? prev.users.length) + extraCount } : prev);
   }, [customEmails]);
 
   // validate takes the mode being submitted so it doesn't read stale state
@@ -903,6 +917,7 @@ export function AdminNewsletterComposerPage() {
     const err = validate(mode);
     if (err) { toast({ title: "Validation error", description: err, variant: "destructive" }); return; }
 
+    isSavingRef.current = true;
     setSaving(true);
     try {
       const body: Record<string, any> = {
@@ -949,6 +964,7 @@ export function AdminNewsletterComposerPage() {
       toast({ title: "Error", description: err.message, variant: "destructive" });
     } finally {
       setSaving(false);
+      isSavingRef.current = false;
     }
   };
 
@@ -996,6 +1012,9 @@ export function AdminNewsletterComposerPage() {
               <Button variant="outline" onClick={() => setPreviewOpen(true)} className="gap-2 xl:hidden">
                 <Eye className="w-4 h-4" /> Preview
               </Button>
+              {autosaveStatus === "saving" && <span className="text-xs text-gray-400 self-center">Saving draft…</span>}
+              {autosaveStatus === "saved" && <span className="text-xs text-green-500 self-center">Draft saved</span>}
+              {autosaveStatus === "error" && <span className="text-xs text-red-400 self-center">Autosave failed</span>}
               <Button variant="outline" onClick={() => navigate("/admin/newsletters")} disabled={saving}>Cancel</Button>
               <Button
                 variant="outline"
@@ -1172,14 +1191,62 @@ export function AdminNewsletterComposerPage() {
             </Button>
 
             {recipientPreview && (
-              <div className="text-sm text-gray-600 bg-gray-50 border rounded-md p-3">
-                <span className="font-medium text-gray-800">{recipientPreview.count}</span> recipients match these filters.
-                {recipientPreview.users.slice(0, 3).map((u) => (
-                  <span key={u.id} className="ml-1 text-xs text-gray-500">· {u.name}</span>
-                ))}
-                {recipientPreview.count > 3 && <span className="text-xs text-gray-400"> and {recipientPreview.count - 3} more</span>}
+              <div className="text-sm text-gray-600 bg-gray-50 border rounded-md p-3 flex items-center justify-between">
+                <span>
+                  <span className="font-medium text-gray-800">{recipientPreview.count}</span> recipients match these filters.
+                </span>
+                <Button variant="ghost" size="sm" className="text-[#008060] hover:text-[#006048] h-7 px-2 text-xs" onClick={() => setShowRecipientsModal(true)}>
+                  View all
+                </Button>
               </div>
             )}
+
+            {/* Recipients preview modal */}
+            <Dialog open={showRecipientsModal} onOpenChange={setShowRecipientsModal}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Recipients Preview</DialogTitle>
+                </DialogHeader>
+                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
+                  {recipientPreview && recipientPreview.users.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        Filter-matched ({recipientPreview.serverCount ?? recipientPreview.users.length})
+                      </p>
+                      <ul className="divide-y divide-gray-100 border rounded-md">
+                        {recipientPreview.users.map((u) => (
+                          <li key={u.id} className="flex items-center justify-between px-3 py-2 text-sm">
+                            <span className="font-medium text-gray-800">{u.name || "—"}</span>
+                            <span className="text-gray-500 text-xs">{u.email}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {customEmails.length > 0 && (
+                    <div>
+                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                        Custom recipients ({customEmails.length})
+                      </p>
+                      <ul className="divide-y divide-gray-100 border rounded-md">
+                        {customEmails.map((e) => (
+                          <li key={e.email} className="flex items-center justify-between px-3 py-2 text-sm">
+                            <span className="font-medium text-gray-800">{e.name || "—"}</span>
+                            <span className="text-gray-500 text-xs">{e.email}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                  {(!recipientPreview || (recipientPreview.users.length === 0 && customEmails.length === 0)) && (
+                    <p className="text-sm text-gray-500 text-center py-4">No recipients found.</p>
+                  )}
+                </div>
+                <DialogFooter>
+                  <Button variant="outline" size="sm" onClick={() => setShowRecipientsModal(false)}>Close</Button>
+                </DialogFooter>
+              </DialogContent>
+            </Dialog>
           </div>
 
           {/* Section 4: Delivery */}

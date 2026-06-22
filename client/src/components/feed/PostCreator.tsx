@@ -56,6 +56,8 @@ export const PostCreator: React.FC<PostCreatorProps> = ({
     { icon: "🎉", label: "Announce a milestone", prefill: "Excited to share that I've recently: " },
   ];
 
+  const activeAction = quickActions.find(a => postText.startsWith(a.prefill));
+
   return (
     <Card className="bg-white overflow-hidden w-full max-w-full mb-4 sm:mb-5 transition-shadow duration-200 hover:shadow-md" style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
       <CardContent className="p-4 sm:p-5">
@@ -63,23 +65,38 @@ export const PostCreator: React.FC<PostCreatorProps> = ({
         <p className="text-[13px] font-medium text-gray-400 mb-3">Share something with the community</p>
 
         {/* Quick-action chips */}
-        {!postText && (
-          <div className="flex flex-wrap gap-2 mb-4">
-            {quickActions.map((action) => (
+        <div className="flex flex-wrap gap-2 mb-4">
+          {quickActions.map((action) => {
+            const isActive = activeAction?.label === action.label;
+            return (
               <button
                 key={action.label}
                 type="button"
-                onClick={() => onPostTextChange(action.prefill)}
-                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium text-gray-600 transition-all duration-150 hover:text-[#008060] hover:border-[#008060]/40 hover:bg-[#e6f5f0]/60 active:scale-95 touch-manipulation"
-                style={{ border: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
+                onClick={() => {
+                  if (isActive) {
+                    // Deselect: strip the prefill prefix, keep any user text after it
+                    onPostTextChange(postText.slice(action.prefill.length));
+                  } else {
+                    // Switch: replace current prefill (if any) with new one, preserve trailing user text
+                    const trailingText = activeAction ? postText.slice(activeAction.prefill.length) : postText;
+                    onPostTextChange(action.prefill + trailingText);
+                  }
+                }}
+                className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[13px] font-medium transition-all duration-150 active:scale-95 touch-manipulation ${
+                  isActive
+                    ? 'text-[#008060] border-[#008060]/60 bg-[#e6f5f0]'
+                    : 'text-gray-600 hover:text-[#008060] hover:border-[#008060]/40 hover:bg-[#e6f5f0]/60'
+                }`}
+                style={{ border: `1px solid ${isActive ? 'rgba(0,128,96,0.4)' : 'var(--border-subtle)'}`, background: isActive ? '#e6f5f0' : 'var(--surface-subtle)' }}
                 aria-label={action.label}
+                aria-pressed={isActive}
               >
                 <span>{action.icon}</span>
                 <span>{action.label}</span>
               </button>
-            ))}
-          </div>
-        )}
+            );
+          })}
+        </div>
 
         {/* Top Section: Avatar and Input */}
         <div className="flex items-start gap-3 mb-4">

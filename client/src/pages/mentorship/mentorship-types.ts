@@ -55,6 +55,7 @@ export interface MentorshipSession {
   notes?: string;
   meet_link?: string;
   status: 'upcoming' | 'completed' | 'cancelled';
+  cancellation_reason?: string;
   myRole: 'mentor' | 'mentee';
   other?: { first_name?: string; last_name?: string; profile_picture?: string; current_role?: string; current_company?: string };
 }

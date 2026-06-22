@@ -184,8 +184,9 @@ export function AdminNewslettersPage() {
     failed: newsletters.filter((n) => n.status === "failed").length,
   };
 
-  const totalDelivered = newsletters.filter((n) => n.status === "sent").reduce((s, n) => s + n.sent_count, 0);
-  const totalRecipients = newsletters.filter((n) => n.status === "sent").reduce((s, n) => s + n.total_recipients, 0);
+  const completedNewsletters = newsletters.filter((n) => n.status === "sent" || n.status === "failed");
+  const totalDelivered = completedNewsletters.reduce((s, n) => s + (n.sent_count || 0), 0);
+  const totalRecipients = completedNewsletters.reduce((s, n) => s + (n.total_recipients || 0), 0);
   const totalOpens = newsletters.filter((n) => n.status === "sent").reduce((s, n) => s + (n.open_count || 0), 0);
   const overallRate = totalRecipients > 0 ? Math.round((totalDelivered / totalRecipients) * 100) : null;
 

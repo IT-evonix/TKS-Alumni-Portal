@@ -120,10 +120,10 @@ export function bundleNotifications(notifications: EnhancedNotification[]): (Enh
         .map(n => n.actor)
         .filter((actor): actor is NotificationActor => actor !== null && actor !== undefined);
 
-      // Remove duplicates based on actor fullName
+      // Remove duplicates — prefer actor id as key to avoid collapsing different null-named actors
       const uniqueActorsMap = new Map<string, NotificationActor>();
       actors.forEach(actor => {
-        const key = actor.fullName || `${actor.firstName} ${actor.lastName}`.trim() || 'Unknown';
+        const key = (actor as any).id || actor.fullName || `${actor.firstName} ${actor.lastName}`.trim() || `unknown-${Math.random()}`;
         if (!uniqueActorsMap.has(key)) {
           uniqueActorsMap.set(key, actor);
         }
@@ -141,7 +141,10 @@ export function bundleNotifications(notifications: EnhancedNotification[]): (Enh
         redirect_url: firstNotification.redirect_url,
         is_read: groupNotifications.every(n => n.is_read),
         read_at: groupNotifications.find(n => n.read_at)?.read_at || null,
-        created_at: groupNotifications[0].created_at, // Use most recent
+        created_at: groupNotifications.reduce((max, n) =>
+          new Date(n.created_at) > new Date(max) ? n.created_at : max,
+          groupNotifications[0].created_at
+        ),
         notifications: groupNotifications
       };
 
@@ -282,6 +285,8 @@ export function getNotificationTypeLabel(type: string): string {
     'badge_earned': 'Gamification',
     'badge_lost': 'Gamification',
     'gamification_point': 'Gamification',
+    'mentorship_request': 'Mentorship',
+    'mentorship_response': 'Mentorship',
   };
 
   return labels[type] || 'Other';
@@ -311,6 +316,8 @@ export function getNotificationTypeColor(type: string): string {
     'badge_earned': 'bg-amber-100 text-amber-700 border-amber-200',
     'badge_lost': 'bg-red-100 text-red-700 border-red-200',
     'gamification_point': 'bg-emerald-100 text-emerald-700 border-emerald-200',
+    'mentorship_request': 'bg-teal-100 text-teal-700 border-teal-200',
+    'mentorship_response': 'bg-teal-100 text-teal-700 border-teal-200',
   };
 
   return colors[type] || 'bg-gray-100 text-gray-700 border-gray-200';

@@ -36,7 +36,7 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
     .from("newsletters")
     .update({ status: "sending", updated_at: new Date().toISOString() })
     .eq("id", newsletterId)
-    .in("status", ["draft", "scheduled"])
+    .in("status", ["draft", "scheduled", "failed"])
     .select("id");
 
   if (flipErr) {
@@ -47,6 +47,8 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
     console.log(`[Newsletter] Skipping ${newsletterId} — another process already claimed it`);
     return;
   }
+
+  let resolvedTotalRecipients = 0;
 
   try {
     // 3. Resolve recipients from stored filter fields
@@ -85,6 +87,17 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
     }
 
     const totalRecipients = users.length;
+    resolvedTotalRecipients = totalRecipients;
+
+    if (totalRecipients === 0) {
+      await supabase
+        .from("newsletters")
+        .update({ status: "failed", updated_at: new Date().toISOString() })
+        .eq("id", newsletterId);
+      console.error(`[Newsletter] Aborting "${newsletter.title}" — no recipients resolved`);
+      return;
+    }
+
     console.log(`[Newsletter] Sending "${newsletter.title}" to ${totalRecipients} recipients`);
 
     // 4. Check email config before blasting (fail fast)
@@ -187,11 +200,14 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
     console.log(`[Newsletter] In-app notifications sent to ${notifiableUsers.length} users`);
   } catch (err: any) {
     console.error(`[Newsletter] Fatal error sending newsletter ${newsletterId}:`, err);
-    // Mark as failed so admin can retry
+    // Mark as failed so admin can retry; persist total_recipients if we resolved them before the error
     await supabase
       .from("newsletters")
       .update({
         status: "failed",
+        total_recipients: resolvedTotalRecipients > 0 ? resolvedTotalRecipients : undefined,
+        sent_count: 0,
+        failed_count: resolvedTotalRecipients > 0 ? resolvedTotalRecipients : undefined,
         updated_at: new Date().toISOString(),
       })
       .eq("id", newsletterId);

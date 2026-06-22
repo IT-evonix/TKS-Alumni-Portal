@@ -15,12 +15,12 @@ import {
   Users, MessageSquare, Filter, Search,
   CheckCircle, XCircle, Clock, Sparkles, ChevronDown, ChevronUp,
   UserCheck, Bookmark, BookmarkCheck, Star,
-  CalendarPlus, Calendar, ExternalLink, Video, Mail,
+  Calendar, ExternalLink, Video, Mail,
   AlertTriangle, GraduationCap, Building2, BookOpen, Linkedin, Github, Globe, Twitter,
 } from 'lucide-react';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { Mentor, MentorshipRequest, MentorshipSession } from './mentorship-types';
-import { SkeletonCard, MatchBar, StatusBadge, StarRating, isValidMeetLink } from './mentorship-components';
+import { SkeletonCard, MatchBar, StatusBadge, StarRating } from './mentorship-components';
 import { MentorProfileModal } from './MentorProfileModal';
 
 export const MenteeDashboard = (): JSX.Element => {
@@ -44,6 +44,7 @@ export const MenteeDashboard = (): JSX.Element => {
   const [goalOpen, setGoalOpen] = useState(false);
   const [pendingMentorIds, setPendingMentorIds] = useState<Set<string>>(new Set());
   const [connectedMentorIds, setConnectedMentorIds] = useState<Set<string>>(new Set());
+  const [declinedMentorIds, setDeclinedMentorIds] = useState<Set<string>>(new Set());
   const [myRequests, setMyRequests] = useState<MentorshipRequest[]>([]);
   const [requestsLoading, setRequestsLoading] = useState(false);
   const [requestMessage, setRequestMessage] = useState('');
@@ -52,15 +53,12 @@ export const MenteeDashboard = (): JSX.Element => {
   const [bookmarkedIds, setBookmarkedIds] = useState<Set<string>>(new Set());
   const [sessions, setSessions] = useState<MentorshipSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [scheduleModal, setScheduleModal] = useState<{ requestId: string; otherName: string } | null>(null);
-  const [newSession, setNewSession] = useState({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
   const [reviewModal, setReviewModal] = useState<{ sessionId: string; reviewedId: string; reviewedName: string } | null>(null);
   const [reviewInput, setReviewInput] = useState({ rating: 5, comment: '' });
   const [endConfirm, setEndConfirm] = useState<string | null>(null);
   const [becomingMentor, setBecomingMentor] = useState(false);
   const [bannerDismissed, setBannerDismissed] = useState(false);
   const [profileModalMentor, setProfileModalMentor] = useState<Mentor | null>(null);
-  const [schedulingSession, setSchedulingSession] = useState(false);
   const [mentorPage, setMentorPage] = useState(0);
   const [hasMoreMentors, setHasMoreMentors] = useState(false);
 
@@ -136,6 +134,10 @@ export const MenteeDashboard = (): JSX.Element => {
           .filter((r: MentorshipRequest) => r.status === 'accepted')
           .map((r: MentorshipRequest) => r.mentor_id));
         setConnectedMentorIds(connected);
+        const declined = new Set<string>((data.requests || [])
+          .filter((r: MentorshipRequest) => r.status === 'declined')
+          .map((r: MentorshipRequest) => r.mentor_id));
+        setDeclinedMentorIds(declined);
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to load your mentorship requests.', variant: 'destructive' });
@@ -195,15 +197,15 @@ export const MenteeDashboard = (): JSX.Element => {
 
   const handleFindMatches = () => fetchMentors(goalText);
 
-  const handleRequestMentorship = async (mentorId: string) => {
+  const handleRequestMentorship = async (mentorId: string, overrideGoal?: string, overrideMessage?: string) => {
     try {
       const res = await fetch('/api/mentorship/request', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
         body: JSON.stringify({
           mentorId,
-          message: requestMessage || undefined,
-          goalText: goalText || undefined,
+          message: (overrideMessage ?? requestMessage) || undefined,
+          goalText: (overrideGoal ?? goalText) || undefined,
           matchScore: mentors.find(m => m.user_id === mentorId)?.match_score,
         }),
       });
@@ -274,8 +276,12 @@ export const MenteeDashboard = (): JSX.Element => {
           data.bookmarked ? next.add(mentorId) : next.delete(mentorId);
           return next;
         });
+      } else {
+        toast({ title: 'Error', description: 'Could not update bookmark.', variant: 'destructive' });
       }
-    } catch { /* silent */ }
+    } catch {
+      toast({ title: 'Error', description: 'Could not update bookmark.', variant: 'destructive' });
+    }
   };
 
   const handleBecomeMentor = async () => {
@@ -300,48 +306,6 @@ export const MenteeDashboard = (): JSX.Element => {
     }
   };
 
-  const createSession = async () => {
-    if (!scheduleModal || !newSession.scheduledAt) return;
-    if (new Date(newSession.scheduledAt) <= new Date()) {
-      toast({ title: 'Invalid time', description: 'Please select a future date and time.', variant: 'destructive' });
-      return;
-    }
-    if (!newSession.meetLink) {
-      toast({ title: 'Meet link required', description: 'Please provide a meeting link.', variant: 'destructive' });
-      return;
-    }
-    if (!isValidMeetLink(newSession.meetLink)) {
-      toast({ title: 'Invalid meet link', description: 'Please enter a valid link from a supported platform.', variant: 'destructive' });
-      return;
-    }
-    setSchedulingSession(true);
-    try {
-      const res = await fetch('/api/mentorship/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
-        body: JSON.stringify({
-          requestId: scheduleModal.requestId,
-          scheduledAt: newSession.scheduledAt,
-          durationMinutes: newSession.durationMinutes,
-          agenda: newSession.agenda || undefined,
-          meetLink: newSession.meetLink || undefined,
-        }),
-      });
-      if (res.ok) {
-        setScheduleModal(null);
-        setNewSession({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
-        fetchSessions();
-        toast({ title: 'Session scheduled!', description: 'Your mentorship session has been scheduled.' });
-      } else {
-        const data = await res.json();
-        toast({ title: 'Error', description: data.error || 'Failed to schedule', variant: 'destructive' });
-      }
-    } catch {
-      toast({ title: 'Error', description: 'Failed to schedule session', variant: 'destructive' });
-    } finally {
-      setSchedulingSession(false);
-    }
-  };
 
   const updateSessionStatus = async (sessionId: string, status: 'completed' | 'cancelled') => {
     try {
@@ -353,8 +317,12 @@ export const MenteeDashboard = (): JSX.Element => {
       if (res.ok) {
         fetchSessions();
         toast({ title: status === 'completed' ? 'Marked complete' : 'Cancelled', description: `Session ${status}.` });
+      } else {
+        toast({ title: 'Error', description: 'Failed to update session. Please try again.', variant: 'destructive' });
       }
-    } catch { /* silent */ }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update session. Please try again.', variant: 'destructive' });
+    }
   };
 
   const submitReview = async () => {
@@ -388,6 +356,8 @@ export const MenteeDashboard = (): JSX.Element => {
   // ── Derived data ─────────────────────────────────────────────────────────────
 
   const filteredMentors = mentors.filter(m => {
+    if (declinedMentorIds.has(m.user_id)) return false;
+    if (connectedMentorIds.has(m.user_id)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
       const matchesSearch = (
@@ -654,7 +624,7 @@ export const MenteeDashboard = (): JSX.Element => {
               >
                 <ExternalLink className="w-3.5 h-3.5 mr-1.5" /> View Profile
               </Button>
-              {mentor.meeting_link && (
+              {mentor.meeting_link && connectedMentorIds.has(mentor.user_id) && (
                 <a href={mentor.meeting_link} target="_blank" rel="noopener noreferrer">
                   <Button variant="outline" size="sm" className="text-xs min-h-[36px]">
                     <Video className="w-3.5 h-3.5 mr-1" /> Book
@@ -688,15 +658,29 @@ export const MenteeDashboard = (): JSX.Element => {
                   <Button variant="ghost" onClick={() => setActiveRequestModal(null)} className="min-h-[40px]">Cancel</Button>
                 </div>
               </div>
+            ) : isPending ? (
+              (() => {
+                const pendingReq = myRequests.find(r => r.mentor_id === mentor.user_id && r.status === 'pending');
+                return (
+                  <Button
+                    variant="outline"
+                    className="w-full min-h-[40px] text-sm text-red-600 border-red-200 hover:bg-red-50"
+                    onClick={() => pendingReq && handleWithdrawRequest(pendingReq.id)}
+                  >
+                    <MessageSquare className="w-4 h-4 mr-2" />
+                    Withdraw Request
+                  </Button>
+                );
+              })()
             ) : (
               <Button
-                onClick={() => isPending ? null : setActiveRequestModal(mentor.user_id)}
-                variant={isPending ? 'outline' : 'brand'}
+                onClick={() => isFull ? null : setActiveRequestModal(mentor.user_id)}
+                variant="brand"
                 className="w-full min-h-[40px] text-sm"
-                disabled={isPending || isFull}
+                disabled={isFull}
               >
                 <MessageSquare className="w-4 h-4 mr-2" />
-                {isPending ? 'Request Pending' : isFull ? 'Mentor Full' : 'Request Mentorship'}
+                {isFull ? 'Mentor Full' : 'Request Mentorship'}
               </Button>
             )}
           </div>
@@ -740,12 +724,6 @@ export const MenteeDashboard = (): JSX.Element => {
                   </Button>
                 )}
                 {req.status === 'accepted' && (
-                  <Button size="sm" variant="outline" className="text-xs text-gray-600 min-h-[28px]"
-                    onClick={() => setScheduleModal({ requestId: req.id, otherName: `${req.mentor?.first_name} ${req.mentor?.last_name}` })}>
-                    <CalendarPlus className="w-3 h-3 mr-1" /> Schedule
-                  </Button>
-                )}
-                {req.status === 'accepted' && (
                   <Button size="sm" variant="outline"
                     className="text-xs text-red-600 border-red-100 hover:bg-red-50 min-h-[28px]"
                     onClick={() => setEndConfirm(req.id)}>
@@ -766,7 +744,7 @@ export const MenteeDashboard = (): JSX.Element => {
       <div className="text-center py-12 text-gray-500">
         <Calendar className="w-10 h-10 mx-auto mb-3 text-gray-300" />
         <p>No sessions scheduled yet.</p>
-        <p className="text-sm mt-1">Accept a mentorship and use "Schedule" to book a session.</p>
+        <p className="text-sm mt-1">Your mentor will schedule sessions once you are connected.</p>
       </div>
     );
     const upcoming = sessions.filter(s => s.status === 'upcoming');
@@ -802,16 +780,24 @@ export const MenteeDashboard = (): JSX.Element => {
           </div>
           {s.meet_link && <p className="text-xs bg-blue-50 rounded p-2 text-blue-700"><span className="font-medium">Meet Link: </span><a href={s.meet_link} target="_blank" rel="noopener noreferrer" className="underline hover:text-blue-900">{s.meet_link}</a></p>}
           {s.agenda && <p className="text-xs bg-gray-50 rounded p-2 text-gray-700"><span className="font-medium">Agenda: </span>{s.agenda}</p>}
+          {s.status === 'cancelled' && (
+            <div className="text-xs text-red-600 bg-red-50 rounded px-2 py-1 space-y-0.5">
+              <p className="flex items-center gap-1">
+                <XCircle className="w-3 h-3 flex-shrink-0" />
+                This session was cancelled by your mentor.
+              </p>
+              {s.cancellation_reason && (
+                <p className="text-gray-600 pl-4">Reason: {s.cancellation_reason}</p>
+              )}
+            </div>
+          )}
           {s.status === 'upcoming' && (
-            <div className="flex gap-2 flex-wrap">
+            <div className="flex gap-2 flex-wrap items-center">
               <Button size="sm" variant="brand" className="text-xs min-h-[30px]"
                 onClick={() => updateSessionStatus(s.id, 'completed')}>
                 <CheckCircle className="w-3 h-3 mr-1" /> Mark Complete
               </Button>
-              <Button size="sm" variant="outline" className="text-xs text-red-600 border-red-100 min-h-[30px]"
-                onClick={() => updateSessionStatus(s.id, 'cancelled')}>
-                <XCircle className="w-3 h-3 mr-1" /> Cancel
-              </Button>
+              <p className="text-xs text-gray-500 italic">To cancel or reschedule, contact your mentor.</p>
             </div>
           )}
           {s.status === 'completed' && (
@@ -895,7 +881,9 @@ export const MenteeDashboard = (): JSX.Element => {
           )}
 
           {/* Tabs */}
-          <Tabs defaultValue="discover">
+          <Tabs defaultValue="discover" onValueChange={(tab) => {
+            if (tab === 'discover') { setLoading(true); fetchMentors(goalText, 0); }
+          }}>
             <TabsList className="bg-gray-100 flex-wrap h-auto gap-1">
               <TabsTrigger value="discover" className="flex items-center gap-1.5">
                 <Search className="w-3.5 h-3.5" /> Discover
@@ -1099,59 +1087,6 @@ export const MenteeDashboard = (): JSX.Element => {
         </div>
       </div>
 
-      {/* Schedule Session Modal */}
-      {scheduleModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
-          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <h2 className="font-semibold text-lg">Schedule Session with {scheduleModal.otherName}</h2>
-            <div className="space-y-3">
-              <div>
-                <label htmlFor="mentee-session-date" className="text-xs text-gray-600 mb-1 block">Date & Time</label>
-                <Input id="mentee-session-date" type="datetime-local" value={newSession.scheduledAt}
-                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
-                  onChange={e => setNewSession(p => ({ ...p, scheduledAt: e.target.value }))}
-                  className="text-sm" />
-              </div>
-              <div>
-                <label className="text-xs text-gray-600 mb-1 block">Duration (minutes)</label>
-                <Select value={String(newSession.durationMinutes)}
-                  onValueChange={v => setNewSession(p => ({ ...p, durationMinutes: parseInt(v) }))}>
-                  <SelectTrigger className="text-sm"><SelectValue /></SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="30">30 min</SelectItem>
-                    <SelectItem value="45">45 min</SelectItem>
-                    <SelectItem value="60">60 min</SelectItem>
-                    <SelectItem value="90">90 min</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div>
-                <label htmlFor="mentee-session-meetlink" className="text-xs text-gray-600 mb-1 block">
-                  Meet Link <span className="text-red-500">*</span>
-                  <span className="ml-1 text-gray-400">(Google Meet, Zoom, Teams, Jitsi, Webex…)</span>
-                </label>
-                <Input id="mentee-session-meetlink" type="url" value={newSession.meetLink}
-                  onChange={e => setNewSession(p => ({ ...p, meetLink: e.target.value }))}
-                  placeholder="https://meet.google.com/abc-defg-hij" className="text-sm" />
-              </div>
-              <div>
-                <label htmlFor="mentee-session-agenda" className="text-xs text-gray-600 mb-1 block">Agenda (optional)</label>
-                <Textarea id="mentee-session-agenda" value={newSession.agenda}
-                  onChange={e => setNewSession(p => ({ ...p, agenda: e.target.value }))}
-                  placeholder="Topics to cover, questions to ask…" className="text-sm min-h-[64px]" />
-              </div>
-            </div>
-            <div className="flex gap-2">
-              <Button onClick={createSession} variant="brand" className="flex-1"
-                disabled={schedulingSession || !newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
-                <CalendarPlus className="w-4 h-4 mr-2" /> {schedulingSession ? 'Scheduling…' : 'Schedule'}
-              </Button>
-              <Button variant="ghost" onClick={() => setScheduleModal(null)}>Cancel</Button>
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* Review Modal */}
       {reviewModal && (
         <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
@@ -1210,9 +1145,13 @@ export const MenteeDashboard = (): JSX.Element => {
         <MentorProfileModal
           mentor={profileModalMentor}
           onClose={() => setProfileModalMentor(null)}
-          onRequest={(mentorId) => {
+          onRequest={(mentorId, goal, message) => {
             setProfileModalMentor(null);
-            setActiveRequestModal(mentorId);
+            handleRequestMentorship(mentorId, goal, message);
+          }}
+          onWithdraw={() => {
+            const req = myRequests.find(r => r.mentor_id === profileModalMentor.user_id && r.status === 'pending');
+            if (req) handleWithdrawRequest(req.id);
           }}
           isPending={pendingMentorIds.has(profileModalMentor.user_id)}
           isConnected={connectedMentorIds.has(profileModalMentor.user_id)}

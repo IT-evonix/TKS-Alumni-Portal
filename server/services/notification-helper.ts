@@ -171,6 +171,11 @@ export async function createNotification(params: CreateNotificationParams) {
             .single();
 
         if (error) {
+            // Unique constraint violation = a concurrent insert already created the same notification
+            if ((error as any).code === "23505") {
+                console.log(`[Notification] Skipping duplicate (concurrent insert): ${params.type} for user: ${params.userId}`);
+                return { error: null, data: null, skipped: true };
+            }
             console.error("[Notification] Failed to create notification:", {
                 error,
                 type: params.type,
@@ -317,6 +322,14 @@ export const NotificationType = {
     POST_DELETED: "post_deleted",
     /** Sent to recipients when admin publishes a newsletter */
     NEWSLETTER: "newsletter",
+    /** Sent to mentor when a mentee sends a mentorship request */
+    MENTORSHIP_REQUEST: "mentorship_request",
+    /** Sent to mentee when mentor accepts or rejects their request */
+    MENTORSHIP_RESPONSE: "mentorship_response",
+    /** Sent to the other party when a session is scheduled */
+    SESSION_SCHEDULED: "session_scheduled",
+    /** Sent to mentee when mentor cancels a session */
+    SESSION_CANCELLED: "session_cancelled",
 } as const;
 
 /**
@@ -335,6 +348,7 @@ export const NotificationRedirectUrl = {
     PODCASTS: "/podcasts",
     BLOGS: "/blogs",
     NEWSLETTERS: "/newsletters",
+    MENTORSHIP: "/mentorship",
 } as const;
 
 /**

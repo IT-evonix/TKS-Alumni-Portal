@@ -15,6 +15,7 @@ import { getBaseUrl } from "../utils/base-url";
 
 const recipientPreviewCache = new Map<string, { data: any; ts: number }>();
 const PREVIEW_CACHE_TTL = 30_000; // 30 seconds
+const MAX_PREVIEW_CACHE_SIZE = 100;
 
 // ==================== UTILITIES ====================
 
@@ -491,16 +492,11 @@ adminRouter.post("/recipients/preview-filters", async (req, res) => {
       return res.json(cached.data);
     }
 
-    // Run count-only and 5-row sample in parallel to avoid fetching all rows
-    const [countRes, sampleRes] = await Promise.all([
-      buildRecipientQuery(filters, true),
-      buildRecipientQuery(filters).limit(5),
-    ]);
+    const sampleRes = await buildRecipientQuery(filters).limit(500);
 
-    if (countRes.error) throw countRes.error;
     if (sampleRes.error) throw sampleRes.error;
 
-    const total = countRes.count ?? 0;
+    const total = (sampleRes.data ?? []).length;
     const sample = ((sampleRes.data ?? []) as any[]).map((u) => ({
       id: u.user_id,
       email: u.email,
@@ -510,6 +506,10 @@ adminRouter.post("/recipients/preview-filters", async (req, res) => {
     }));
 
     const responseData = { count: total, users: sample };
+    if (recipientPreviewCache.size >= MAX_PREVIEW_CACHE_SIZE) {
+      const oldestKey = recipientPreviewCache.keys().next().value;
+      if (oldestKey !== undefined) recipientPreviewCache.delete(oldestKey);
+    }
     recipientPreviewCache.set(cacheKey, { data: responseData, ts: Date.now() });
     res.json(responseData);
   } catch (err) {
@@ -611,7 +611,6 @@ publicRouter.get("/:slug", async (req, res) => {
       .from("newsletters")
       .select("id, title, slug, excerpt, content, cover_image, sent_at, sent_count, total_recipients, recipient_role")
       .eq("slug", req.params.slug)
-      .eq("status", "sent")
       .single();
 
     if (error || !data) return res.status(404).json({ error: "Newsletter not found" });

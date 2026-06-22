@@ -562,6 +562,7 @@ export const mentorshipSessions = pgTable("mentorship_sessions", {
   agenda: text("agenda"),
   notes: text("notes"),
   status: text("status").default("upcoming"), // upcoming | completed | cancelled
+  cancellationReason: text("cancellation_reason"),
   createdAt: timestamp("created_at").defaultNow(),
 });
 

@@ -23,7 +23,8 @@ interface ReviewData {
 interface Props {
   mentor: Mentor;
   onClose: () => void;
-  onRequest: (mentorId: string) => void;
+  onRequest: (mentorId: string, goalText: string, message: string) => void;
+  onWithdraw?: () => void;
   isPending: boolean;
   isConnected?: boolean;
   isFull: boolean;
@@ -44,7 +45,7 @@ const STYLE_MAP: Record<string, { icon: React.ReactNode; label: string; descript
 
 const ALL_DAYS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 
-export const MentorProfileModal = ({ mentor, onClose, onRequest, isPending, isConnected, isFull, currentUserId }: Props): JSX.Element => {
+export const MentorProfileModal = ({ mentor, onClose, onRequest, onWithdraw, isPending, isConnected, isFull, currentUserId }: Props): JSX.Element => {
   const [reviews, setReviews] = useState<ReviewData[]>([]);
   const [reviewsLoading, setReviewsLoading] = useState(true);
   const [requestFormOpen, setRequestFormOpen] = useState(false);
@@ -80,7 +81,7 @@ export const MentorProfileModal = ({ mentor, onClose, onRequest, isPending, isCo
   }, [mentor.user_id, currentUserId]);
 
   const handleSendRequest = () => {
-    onRequest(mentor.user_id);
+    onRequest(mentor.user_id, goalText, requestMessage);
   };
 
   return (
@@ -259,7 +260,7 @@ export const MentorProfileModal = ({ mentor, onClose, onRequest, isPending, isCo
                       {mentor.session_type === 'video' ? 'Video calls' : mentor.session_type === 'async' ? 'Async messaging' : 'Video or async'}
                     </span>
                   )}
-                  {mentor.meeting_link && (
+                  {mentor.meeting_link && isConnected && (
                     <a href={mentor.meeting_link} target="_blank" rel="noopener noreferrer"
                       className="flex items-center gap-1.5 text-blue-600 hover:text-blue-700 text-xs transition-colors">
                       <Calendar className="w-3.5 h-3.5" /> Book a call
@@ -355,14 +356,24 @@ export const MentorProfileModal = ({ mentor, onClose, onRequest, isPending, isCo
             <Button variant="ghost" onClick={onClose} className="flex-1">
               Close
             </Button>
-            <Button
-              variant={isConnected ? 'outline' : 'brand'}
-              className={`flex-1${isConnected ? ' text-green-700 border-green-200 bg-green-50' : ''}`}
-              disabled={isPending || isConnected || isFull}
-              onClick={() => !isPending && !isConnected && setRequestFormOpen(true)}
-            >
-              {isConnected ? 'Connected' : isPending ? 'Request Pending' : isFull ? 'Mentor Full' : 'Request Mentorship'}
-            </Button>
+            {isPending ? (
+              <Button
+                variant="outline"
+                className="flex-1 text-red-600 border-red-200 hover:bg-red-50"
+                onClick={() => { onWithdraw?.(); onClose(); }}
+              >
+                Withdraw Request
+              </Button>
+            ) : (
+              <Button
+                variant={isConnected ? 'outline' : 'brand'}
+                className={`flex-1${isConnected ? ' text-green-700 border-green-200 bg-green-50' : ''}`}
+                disabled={isConnected || isFull}
+                onClick={() => !isConnected && setRequestFormOpen(true)}
+              >
+                {isConnected ? 'Connected' : isFull ? 'Mentor Full' : 'Request Mentorship'}
+              </Button>
+            )}
           </div>
         )}
       </DialogContent>

@@ -21,6 +21,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import type { MentorshipRequest, MentorshipSession } from './mentorship-types';
 import { SkeletonCard, isValidMeetLink, isValidMeetingLink } from './mentorship-components';
 
+function toLocalDatetimeValue(date: Date): string {
+  return new Date(date.getTime() - date.getTimezoneOffset() * 60000).toISOString().slice(0, 16);
+}
+
 export const MentorDashboard = (): JSX.Element => {
   const { user } = useAuth();
   const { toast } = useToast();
@@ -52,6 +56,11 @@ export const MentorDashboard = (): JSX.Element => {
   const [endConfirm, setEndConfirm] = useState<string | null>(null);
   const [disabling, setDisabling] = useState(false);
   const [schedulingSession, setSchedulingSession] = useState(false);
+  const [editModal, setEditModal] = useState<{ sessionId: string; scheduledAt: string; meetLink: string; agenda: string } | null>(null);
+  const [editFields, setEditFields] = useState({ scheduledAt: '', meetLink: '', agenda: '' });
+  const [cancelDialogSession, setCancelDialogSession] = useState<string | null>(null);
+  const [cancelRemark, setCancelRemark] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   const headers = { 'user-id': user?.id || '' };
 
@@ -82,30 +91,30 @@ export const MentorDashboard = (): JSX.Element => {
       .catch(() => setLocation('/mentorship/mentee'));
   }, [user?.id]);
 
-  const fetchIncoming = useCallback(async () => {
+  const fetchIncoming = useCallback(async (signal?: AbortSignal) => {
     if (!user?.id) return;
     try {
-      const res = await fetch('/api/mentorship/incoming', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        setIncomingRequests(data.requests || []);
-      }
-    } catch {
+      const res = await fetch('/api/mentorship/incoming', { headers, signal });
+      if (!res.ok || res.bodyUsed) return;
+      const data = await res.json();
+      setIncomingRequests(data.requests || []);
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       toast({ title: 'Error', description: 'Failed to load incoming requests.', variant: 'destructive' });
     }
   }, [user?.id]);
 
-  const fetchSessions = useCallback(async () => {
+  const fetchSessions = useCallback(async (signal?: AbortSignal) => {
     if (!user?.id) return;
     setSessionsLoading(true);
     try {
-      const res = await fetch('/api/mentorship/sessions', { headers });
-      if (res.ok) {
-        const data = await res.json();
-        // Only mentor-side sessions
-        setSessions((data.sessions || []).filter((s: MentorshipSession) => s.myRole === 'mentor'));
-      }
-    } catch {
+      const res = await fetch('/api/mentorship/sessions', { headers, signal });
+      if (!res.ok || res.bodyUsed) return;
+      const data = await res.json();
+      // Only mentor-side sessions
+      setSessions((data.sessions || []).filter((s: MentorshipSession) => s.myRole === 'mentor'));
+    } catch (err: any) {
+      if (err?.name === 'AbortError') return;
       toast({ title: 'Error', description: 'Failed to load sessions.', variant: 'destructive' });
     } finally {
       setSessionsLoading(false);
@@ -114,8 +123,10 @@ export const MentorDashboard = (): JSX.Element => {
 
   useEffect(() => {
     if (isMentor && user?.id) {
-      fetchIncoming();
-      fetchSessions();
+      const controller = new AbortController();
+      fetchIncoming(controller.signal);
+      fetchSessions(controller.signal);
+      return () => controller.abort();
     }
   }, [isMentor, user?.id, fetchIncoming, fetchSessions]);
 
@@ -159,6 +170,11 @@ export const MentorDashboard = (): JSX.Element => {
   };
 
   const saveAvailability = async () => {
+    const selectedDays = (availSettings.available_days || '').split(',').map(d => d.trim()).filter(Boolean);
+    if (selectedDays.length === 0) {
+      toast({ title: 'No days selected', description: 'Please select at least one available day.', variant: 'destructive' });
+      return;
+    }
     if (availSettings.meeting_link && !isValidMeetingLink(availSettings.meeting_link)) {
       toast({ title: 'Invalid link', description: 'Please enter a valid Calendly, Google Meet, Zoom, Teams, or other supported meeting link.', variant: 'destructive' });
       return;
@@ -217,7 +233,7 @@ export const MentorDashboard = (): JSX.Element => {
         headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
         body: JSON.stringify({
           requestId: scheduleModal.requestId,
-          scheduledAt: newSession.scheduledAt,
+          scheduledAt: new Date(newSession.scheduledAt).toISOString(),
           durationMinutes: newSession.durationMinutes,
           agenda: newSession.agenda || undefined,
           meetLink: newSession.meetLink || undefined,
@@ -239,18 +255,69 @@ export const MentorDashboard = (): JSX.Element => {
     }
   };
 
-  const updateSessionStatus = async (sessionId: string, status: 'completed' | 'cancelled') => {
+  const updateSessionStatus = async (sessionId: string, status: 'completed' | 'cancelled', reason?: string) => {
     try {
+      const body: Record<string, any> = { status };
+      if (reason) body.cancellationReason = reason;
       const res = await fetch(`/api/mentorship/sessions/${sessionId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
-        body: JSON.stringify({ status }),
+        body: JSON.stringify(body),
       });
       if (res.ok) {
         fetchSessions();
         toast({ title: status === 'completed' ? 'Marked complete' : 'Cancelled', description: `Session ${status}.` });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: 'Error', description: data.error || 'Failed to update session.', variant: 'destructive' });
       }
-    } catch { /* silent */ }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update session. Please try again.', variant: 'destructive' });
+    }
+    if (status === 'cancelled') {
+      setCancelDialogSession(null);
+      setCancelRemark('');
+    }
+  };
+
+  const rescheduleSession = async () => {
+    if (!editModal) return;
+    if (!editFields.scheduledAt) {
+      toast({ title: 'Date required', description: 'Please select a new date and time.', variant: 'destructive' });
+      return;
+    }
+    if (new Date(editFields.scheduledAt) <= new Date()) {
+      toast({ title: 'Invalid time', description: 'Please select a future date and time.', variant: 'destructive' });
+      return;
+    }
+    if (editFields.meetLink && !isValidMeetLink(editFields.meetLink)) {
+      toast({ title: 'Invalid meet link', description: 'Please enter a valid link from a supported platform.', variant: 'destructive' });
+      return;
+    }
+    setSavingEdit(true);
+    try {
+      const res = await fetch(`/api/mentorship/sessions/${editModal.sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
+        body: JSON.stringify({
+          scheduledAt: new Date(editFields.scheduledAt).toISOString(),
+          meetLink: editFields.meetLink || undefined,
+          agenda: editFields.agenda || undefined,
+        }),
+      });
+      if (res.ok) {
+        setEditModal(null);
+        fetchSessions();
+        toast({ title: 'Session updated!', description: 'The session details have been updated.' });
+      } else {
+        const data = await res.json();
+        toast({ title: 'Error', description: data.error || 'Failed to update session', variant: 'destructive' });
+      }
+    } catch {
+      toast({ title: 'Error', description: 'Failed to update session', variant: 'destructive' });
+    } finally {
+      setSavingEdit(false);
+    }
   };
 
   const submitReview = async () => {
@@ -270,6 +337,7 @@ export const MentorDashboard = (): JSX.Element => {
         setReviewModal(null);
         setReviewInput({ rating: 5, comment: '' });
         toast({ title: 'Review submitted!' });
+        fetchSessions();
       } else {
         const data = await res.json();
         toast({ title: 'Error', description: data.error || 'Failed to submit review', variant: 'destructive' });
@@ -444,8 +512,15 @@ export const MentorDashboard = (): JSX.Element => {
                 onClick={() => updateSessionStatus(s.id, 'completed')}>
                 <CheckCircle className="w-3 h-3 mr-1" /> Mark Complete
               </Button>
+              <Button size="sm" variant="outline" className="text-xs min-h-[30px]"
+                onClick={() => {
+                  setEditModal({ sessionId: s.id, scheduledAt: s.scheduled_at, meetLink: s.meet_link || '', agenda: s.agenda || '' });
+                  setEditFields({ scheduledAt: s.scheduled_at ? toLocalDatetimeValue(new Date(s.scheduled_at)) : '', meetLink: s.meet_link || '', agenda: s.agenda || '' });
+                }}>
+                <CalendarPlus className="w-3 h-3 mr-1" /> Edit / Reschedule
+              </Button>
               <Button size="sm" variant="outline" className="text-xs text-red-600 border-red-100 min-h-[30px]"
-                onClick={() => updateSessionStatus(s.id, 'cancelled')}>
+                onClick={() => setCancelDialogSession(s.id)}>
                 <XCircle className="w-3 h-3 mr-1" /> Cancel
               </Button>
             </div>
@@ -686,14 +761,14 @@ export const MentorDashboard = (): JSX.Element => {
 
       {/* Schedule Session Modal */}
       {scheduleModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[150] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
             <h2 className="font-semibold text-lg">Schedule Session with {scheduleModal.otherName}</h2>
             <div className="space-y-3">
               <div>
                 <label htmlFor="mentor-session-date" className="text-xs text-gray-600 mb-1 block">Date & Time</label>
                 <Input id="mentor-session-date" type="datetime-local" value={newSession.scheduledAt}
-                  min={new Date(Date.now() + 60000).toISOString().slice(0, 16)}
+                  min={toLocalDatetimeValue(new Date(Date.now() + 60000))}
                   onChange={e => setNewSession(p => ({ ...p, scheduledAt: e.target.value }))}
                   className="text-sm" />
               </div>
@@ -739,7 +814,7 @@ export const MentorDashboard = (): JSX.Element => {
 
       {/* Review Modal */}
       {reviewModal && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[150] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
             <h2 className="font-semibold text-lg">Review {reviewModal.reviewedName}</h2>
             <div className="space-y-3">
@@ -771,9 +846,87 @@ export const MentorDashboard = (): JSX.Element => {
         </div>
       )}
 
+      {/* Edit / Reschedule Session Modal */}
+      {editModal && (
+        <div className="fixed inset-0 bg-black/40 z-[150] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <h2 className="font-semibold text-lg">Edit / Reschedule Session</h2>
+            <div className="space-y-3">
+              <div>
+                <label htmlFor="edit-session-date" className="text-xs text-gray-600 mb-1 block">Date & Time <span className="text-red-500">*</span></label>
+                <Input id="edit-session-date" type="datetime-local" value={editFields.scheduledAt}
+                  min={toLocalDatetimeValue(new Date(Date.now() + 60000))}
+                  onChange={e => setEditFields(p => ({ ...p, scheduledAt: e.target.value }))}
+                  className="text-sm" />
+              </div>
+              <div>
+                <label htmlFor="edit-session-meetlink" className="text-xs text-gray-600 mb-1 block">
+                  Meet Link
+                  <span className="ml-1 text-gray-400">(Google Meet, Zoom, Teams, Jitsi, Webex…)</span>
+                </label>
+                <Input id="edit-session-meetlink" type="url" value={editFields.meetLink}
+                  onChange={e => setEditFields(p => ({ ...p, meetLink: e.target.value }))}
+                  placeholder="https://meet.google.com/abc-defg-hij" className="text-sm" />
+              </div>
+              <div>
+                <label htmlFor="edit-session-agenda" className="text-xs text-gray-600 mb-1 block">Agenda (optional)</label>
+                <Textarea id="edit-session-agenda" value={editFields.agenda}
+                  onChange={e => setEditFields(p => ({ ...p, agenda: e.target.value }))}
+                  placeholder="Topics to cover…" className="text-sm min-h-[64px]" />
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button onClick={rescheduleSession} variant="brand" className="flex-1"
+                disabled={savingEdit || !editFields.scheduledAt}>
+                <CalendarPlus className="w-4 h-4 mr-2" /> {savingEdit ? 'Saving…' : 'Save Changes'}
+              </Button>
+              <Button variant="ghost" onClick={() => setEditModal(null)}>Cancel</Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Cancel Session Dialog */}
+      {cancelDialogSession && (
+        <div className="fixed inset-0 bg-black/40 z-[150] flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
+            <div className="flex items-center gap-3 text-red-600">
+              <XCircle className="w-5 h-5 flex-shrink-0" />
+              <h2 className="font-semibold text-lg">Cancel Session</h2>
+            </div>
+            <p className="text-sm text-gray-600">Please provide a reason for cancellation. This will be shared with the mentee.</p>
+            <div>
+              <label htmlFor="cancel-remark" className="text-xs text-gray-600 mb-1 block">
+                Reason <span className="text-red-500">*</span>
+              </label>
+              <Textarea
+                id="cancel-remark"
+                value={cancelRemark}
+                onChange={e => setCancelRemark(e.target.value)}
+                placeholder="e.g. Emergency, need to reschedule, unavailable at this time…"
+                className="text-sm min-h-[80px]"
+              />
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="destructive"
+                className="flex-1"
+                disabled={!cancelRemark.trim()}
+                onClick={() => updateSessionStatus(cancelDialogSession, 'cancelled', cancelRemark.trim())}
+              >
+                Confirm Cancel
+              </Button>
+              <Button variant="ghost" onClick={() => { setCancelDialogSession(null); setCancelRemark(''); }}>
+                Go Back
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* End Relationship Confirm */}
       {endConfirm && (
-        <div className="fixed inset-0 bg-black/40 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-black/40 z-[150] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-sm p-6 space-y-4">
             <div className="flex items-center gap-3 text-red-600">
               <AlertTriangle className="w-6 h-6 flex-shrink-0" />

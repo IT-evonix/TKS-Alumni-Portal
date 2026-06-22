@@ -244,7 +244,7 @@ function isValidEmail(email: string): boolean {
   if (!email || typeof email !== "string") return false;
   const trimmed = email.trim().toLowerCase();
   if (trimmed.length > 254) return false;
-  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+  const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
   return emailRegex.test(trimmed);
 }
 
@@ -885,7 +885,7 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
       const coverBlock = cover
         ? `<tr>
             <td style="padding:0;line-height:0;font-size:0;">
-              <img src="${cover}" alt="" width="540" style="display:block;width:100%;max-width:540px;height:auto;max-height:180px;object-fit:cover;border:0;" />
+              <img src="${cover}" alt="" width="540" height="180" style="display:block;width:100%;height:180px;border:0;" />
             </td>
           </tr>`
         : "";
@@ -898,10 +898,11 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
         ? `<p style="font-size:14px;color:#4b5563;line-height:1.6;margin:6px 0 14px 0;">${excerpt.slice(0, 160)}${excerpt.length > 160 ? "…" : ""}</p>`
         : "";
 
+      const hasContent = title || excerpt;
       return `
-<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:28px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:4px solid ${accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:16px 0;border:1px solid #e5e7eb;border-radius:10px;overflow:hidden;border-top:4px solid ${accent};box-shadow:0 2px 8px rgba(0,0,0,0.06);">
   <tr>
-    <td style="padding:6px 20px;background:#f9fafb;border-bottom:1px solid #f0f0f0;">
+    <td style="padding:8px 20px;background:#f9fafb;border-bottom:1px solid #f0f0f0;">
       <p style="font-size:10px;font-weight:700;color:${accent};text-transform:uppercase;letter-spacing:0.12em;margin:0;">${label}</p>
     </td>
   </tr>
@@ -911,6 +912,7 @@ function renderEmbeddedCardsForEmail(html: string, baseUrl: string): string {
       ${metaBlock}
       ${title ? `<h3 style="font-size:18px;font-weight:700;color:#111827;margin:0 0 8px 0;line-height:1.3;">${title}</h3>` : ""}
       ${excerptBlock}
+      ${!hasContent ? `<p style="font-size:14px;color:#9ca3af;margin:0 0 14px 0;">No preview available.</p>` : ""}
       <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin-top:14px;">
         <tr>
           <td style="background:${accent};border-radius:50px;">
@@ -1005,7 +1007,7 @@ export function generateNewsletterEmailHtml(
   const coverImageBlock = newsletter.cover_image
     ? `<tr>
         <td style="padding:0;line-height:0;font-size:0;overflow:hidden;">
-          <img src="${sanitizeForEmail(newsletter.cover_image)}" alt="${sanitizeForEmail(newsletter.title)}" width="600" class="cover-img" style="display:block;width:100%;max-width:600px;max-height:320px;height:auto;object-fit:cover;border:0;" />
+          <img src="${sanitizeForEmail(newsletter.cover_image)}" alt="${sanitizeForEmail(newsletter.title)}" width="600" height="280" class="cover-img" style="display:block;width:100%;height:280px;border:0;" />
         </td>
       </tr>
       <tr>
@@ -1067,7 +1069,7 @@ export function generateNewsletterEmailHtml(
                             <tr>
                               <td style="vertical-align:middle;padding-right:12px;">
                                 <div style="display:inline-block;background:#ffffff;border-radius:50%;padding:5px;box-shadow:0 2px 8px rgba(0,0,0,0.25);">
-                                  <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="38" height="38" style="display:block;width:38px;height:38px;border-radius:50%;object-fit:contain;border:0;" />
+                                  <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="38" height="38" style="display:block;width:38px;height:38px;border-radius:50%;border:0;" />
                                 </div>
                               </td>
                               <td style="vertical-align:middle;">
@@ -1107,10 +1109,10 @@ export function generateNewsletterEmailHtml(
 
           <!-- [C] CONTENT BODY -->
           <tr>
-            <td class="email-body" style="background:#ffffff;padding:40px 48px 8px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
+            <td class="email-body" style="background:#ffffff;padding:40px 48px 24px;border-left:1px solid #e2e8f0;border-right:1px solid #e2e8f0;">
               ${greeting}
               ${excerptBlock}
-              <hr style="border:none;border-top:2px solid #e5e7eb;margin:0 0 28px 0;">
+              <hr style="border:none;border-top:2px solid #e5e7eb;margin:0 0 16px 0;">
               <div style="font-size:15px;color:#374151;line-height:1.7;">
                 ${styledContent}
               </div>
@@ -1138,7 +1140,7 @@ export function generateNewsletterEmailHtml(
                 <tr>
                   <td class="footer-pad" style="padding:28px 36px 20px;text-align:center;">
                     <div style="display:inline-block;background:rgba(255,255,255,0.08);border-radius:50%;padding:8px;margin-bottom:12px;">
-                      <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;object-fit:contain;border:0;outline:none;" />
+                      <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="40" height="40" style="display:block;width:40px;height:40px;border-radius:50%;border:0;outline:none;" />
                     </div>
                     <p style="font-size:15px;font-weight:700;color:#ffffff;margin:0 0 6px 0;">The Kalyani School</p>
                     <p style="font-size:12px;color:rgba(255,255,255,0.55);margin:0 0 4px 0;line-height:1.6;">Manjari (Budruk), Near Hadapsar, Pune 412307, Maharashtra, India</p>
@@ -1182,4 +1184,64 @@ export function generateNewsletterEmailHtml(
   ${trackingPixel}
 </body>
 </html>`.trim();
+}
+
+/**
+ * Generate session cancellation email content (sent to mentee when mentor cancels).
+ */
+export function generateSessionCancelledEmail(
+  mentorName: string,
+  scheduledAt: string | Date,
+  baseUrl: string,
+  cancellationReason?: string
+): { subject: string; textBody: string; htmlBody: string } {
+  const subject = "Your Mentorship Session Has Been Cancelled";
+  const base = baseUrl.replace(/\/$/, "");
+  const dashboardUrl = `${base}/mentorship`;
+  const safeMentorName = sanitizeForEmail(mentorName);
+  const safeDate = sanitizeForEmail(
+    new Date(scheduledAt).toLocaleString("en-IN", { dateStyle: "full", timeStyle: "short" })
+  );
+  const reasonLine = cancellationReason ? `\nReason: ${cancellationReason}\n` : "";
+  const safeReason = cancellationReason ? sanitizeForEmail(cancellationReason) : "";
+
+  const textBody = `Hi,
+
+${mentorName} has cancelled your upcoming mentorship session that was scheduled for ${safeDate}.
+${reasonLine}
+Log in to your dashboard to contact your mentor or schedule a new session.
+
+${dashboardUrl}
+
+Best regards,
+TKS Alumni Portal Team`.trim();
+
+  const htmlBody = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Session Cancelled</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+  ${getEmailHeaderHtml(baseUrl)}
+  <div style="background: #ffffff; padding: 40px; border: 1px solid #e0e0e0; border-top: none; border-radius: 0 0 10px 10px;">
+    <h2 style="color: #c53030; margin-top: 0;">Mentorship Session Cancelled</h2>
+    <p>Hi,</p>
+    <p><strong>${safeMentorName}</strong> has cancelled your upcoming mentorship session that was scheduled for <strong>${safeDate}</strong>.</p>
+    ${safeReason ? `<p style="background:#fff7ed;border-left:3px solid #f97316;padding:10px 14px;border-radius:4px;font-size:14px;color:#7c2d12;"><strong>Reason:</strong> ${safeReason}</p>` : ""}
+    <p>You can log in to your dashboard to contact your mentor or request a new session.</p>
+    <div style="text-align: center; margin: 30px 0;">
+      <a href="${sanitizeForEmail(dashboardUrl)}" style="display: inline-block; background: linear-gradient(135deg, #008060 0%, #006b51 100%); color: white; padding: 14px 32px; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 16px;">Go to Mentorship Dashboard</a>
+    </div>
+    <p style="color: #666; font-size: 14px;">If you have any questions, you can reach out to your mentor directly through the portal.</p>
+    <hr style="border: none; border-top: 1px solid #e0e0e0; margin: 30px 0;">
+    <p style="color: #999; font-size: 12px; margin: 0;">Best regards,<br><strong>TKS Alumni Portal Team</strong></p>
+  </div>
+  ${getEmailFooterHtml(baseUrl, { showContact: true })}
+</body>
+</html>`.trim();
+
+  return { subject, textBody, htmlBody };
 }

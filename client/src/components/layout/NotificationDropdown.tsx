@@ -243,6 +243,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
         return <AlertTriangle className={`${iconClass} text-red-500`} />;
       case 'gamification_point':
         return <Star className={`${iconClass} text-emerald-500`} />;
+      case 'mentorship_request':
+      case 'mentorship_response':
+        return <UserPlus className={`${iconClass} text-teal-500`} />;
       default:
         return <Bell className={`${iconClass} text-gray-500`} />;
     }
@@ -267,6 +270,8 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
       case 'post_rejected':
       case 'post_deleted':
         return '/blogs';
+      case 'new_blog':
+        return '/admin/blogs';
       case 'event_rsvp':
       case 'event_reminder_24h':
       case 'event_reminder_1h':
@@ -461,13 +466,10 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
 
           case 'post_approved':
           case 'post_rejected':
-            // For post approval notifications, redirect to the post
-            redirectUrl = `/post/${relatedId}`;
-            break;
-
           case 'post_deleted':
-            // Post is gone — redirect to the blog listing
-            redirectUrl = '/blogs';
+          case 'new_blog':
+            // redirect_url is already set correctly by the server (e.g. /blogs/:slug)
+            // getRedirectUrl already picked it up — don't override it here
             break;
 
           case 'signup_approved':
@@ -483,6 +485,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
           case 'post_pending_approval':
             // For admin - post pending approval notification
             redirectUrl = '/admin/feed';
+            break;
+
+          case 'mentorship_request':
+          case 'mentorship_response':
+            redirectUrl = '/mentorship';
             break;
         }
       }
@@ -781,10 +788,9 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
                             <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-1.5">
                               {notification.created_at ? (
                                 (() => {
-                                  // Supabase timestamps may not include the Z (UTC identifier)
-                                  const dateStr = notification.created_at.endsWith('Z') 
-                                    ? notification.created_at 
-                                    : `${notification.created_at}Z`;
+                                  // Normalize Supabase timestamps to include timezone info
+                                  const rawTs = notification.created_at;
+                                  const dateStr = /[Z+\-]\d*$/.test(rawTs) ? rawTs : `${rawTs}Z`;
                                   const date = new Date(dateStr);
                                   return isNaN(date.getTime()) ? 'Just now' : formatDistanceToNow(date, { addSuffix: true });
                                 })()

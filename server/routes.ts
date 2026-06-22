@@ -35,7 +35,7 @@ import {
   NotificationType,
   NotificationRedirectUrl
 } from "./services/notification-helper";
-import { sendEmail, checkEmailConfig, getZeptoMailCreditsStatus, isZeptoMailCreditsError, generateAdminOtpEmail, generatePasswordResetEmail, generatePasswordSetupEmail, generateWelcomeConfirmationEmail } from "./services/email-service";
+import { sendEmail, checkEmailConfig, getZeptoMailCreditsStatus, isZeptoMailCreditsError, generateAdminOtpEmail, generatePasswordResetEmail, generatePasswordSetupEmail, generateWelcomeConfirmationEmail, generateSessionCancelledEmail } from "./services/email-service";
 import { getBaseUrl } from "./utils/base-url";
 import { transformToCamelCase } from "./utils/case-transform";
 import { parsePhoneNumber, validatePhoneNumber } from "./utils/phone-validation";
@@ -118,6 +118,20 @@ function getLinkedInRedirectUri(): string {
 
 function generateAdminOtpCode(): string {
   return crypto.randomInt(100000, 1000000).toString();
+}
+
+// Simple in-memory rate limiter for login endpoints
+const loginAttemptMap = new Map<string, { count: number; resetAt: number }>();
+function loginRateLimitCheck(ip: string): boolean {
+  const now = Date.now();
+  const entry = loginAttemptMap.get(ip);
+  if (!entry || now > entry.resetAt) {
+    loginAttemptMap.set(ip, { count: 1, resetAt: now + 15 * 60 * 1000 });
+    return true;
+  }
+  if (entry.count >= 10) return false;
+  entry.count++;
+  return true;
 }
 
 export async function registerRoutes(app: Express): Promise<Server> {
@@ -204,7 +218,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // File proxy endpoint to hide Supabase URLs
-  app.get("/api/storage/view", async (req, res) => {
+  app.get("/api/storage/view", requireAuth, async (req, res) => {
     try {
       const { bucket, path } = req.query;
 
@@ -607,6 +621,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Admin login route
   app.post("/api/auth/admin/login", async (req, res) => {
     try {
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.socket.remoteAddress || "unknown";
+      if (!loginRateLimitCheck(ip)) {
+        return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." });
+      }
+
       const { email, password } = req.body;
       const normalizedEmail = String(email || "").trim().toLowerCase();
 
@@ -658,10 +677,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials", debug: "Password incorrect" });
       }
 
-      // DEVELOPMENT ONLY: Hardcoded OTP to avoid sending actual emails.
-      // ⚠️ IMPORTANT: UNCOMMENT the line below and COMMENT OUT the '111111' line for PRODUCTION!
-      // const otpCode = generateAdminOtpCode();
-      const otpCode = "111111";
+      const otpCode = process.env.NODE_ENV === "production"
+        ? generateAdminOtpCode()
+        : "111111";
       const hashedOtp = await hashPassword(otpCode, 10);
       const expiresAt = new Date(Date.now() + ADMIN_LOGIN_OTP_EXPIRY_MINUTES * 60 * 1000);
       const ipAddress =
@@ -705,20 +723,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const emailContent = generateAdminOtpEmail(otpCode, userName, ADMIN_LOGIN_OTP_EXPIRY_MINUTES);
 
       try {
-        checkEmailConfig();
-        
-        // DEVELOPMENT ONLY: Bypassing actual email sending
-        // ⚠️ IMPORTANT: UNCOMMENT the sendEmail block below for PRODUCTION!
-        /*
-        await sendEmail({
-          to: user.email,
-          toName: userName,
-          subject: emailContent.subject,
-          textBody: emailContent.textBody,
-          htmlBody: emailContent.htmlBody,
-        });
-        */
-        console.log(`[DEVELOPMENT] Mock Email Sent: OTP for admin login is ${otpCode}`);
+        if (process.env.NODE_ENV === "production") {
+          checkEmailConfig();
+          await sendEmail({
+            to: user.email,
+            toName: userName,
+            subject: emailContent.subject,
+            textBody: emailContent.textBody,
+            htmlBody: emailContent.htmlBody,
+          });
+        } else {
+          console.log(`[DEVELOPMENT] Mock Email Sent: OTP for admin login is ${otpCode}`);
+        }
       } catch (emailError) {
         await supabase
           .from("password_reset_tokens")
@@ -798,10 +814,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Your account has been blocked." });
       }
 
-      // DEVELOPMENT ONLY: Hardcoded OTP to avoid sending actual emails.
-      // ⚠️ IMPORTANT: UNCOMMENT the line below and COMMENT OUT the '111111' line for PRODUCTION!
-      // const otpCode = generateAdminOtpCode();
-      const otpCode = "111111";
+      const otpCode = process.env.NODE_ENV === "production"
+        ? generateAdminOtpCode()
+        : "111111";
       const hashedOtp = await hashPassword(otpCode, 10);
       const expiresAt = new Date(Date.now() + ADMIN_LOGIN_OTP_EXPIRY_MINUTES * 60 * 1000);
       const ipAddress =
@@ -845,20 +860,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const emailContent = generateAdminOtpEmail(otpCode, userName, ADMIN_LOGIN_OTP_EXPIRY_MINUTES);
 
       try {
-        checkEmailConfig();
-        
-        // DEVELOPMENT ONLY: Bypassing actual email sending
-        // ⚠️ IMPORTANT: UNCOMMENT the sendEmail block below for PRODUCTION!
-        /*
-        await sendEmail({
-          to: user.email,
-          toName: userName,
-          subject: emailContent.subject,
-          textBody: emailContent.textBody,
-          htmlBody: emailContent.htmlBody,
-        });
-        */
-        console.log(`[DEVELOPMENT] Mock Email Sent: Resent OTP for admin login is ${otpCode}`);
+        if (process.env.NODE_ENV === "production") {
+          checkEmailConfig();
+          await sendEmail({
+            to: user.email,
+            toName: userName,
+            subject: emailContent.subject,
+            textBody: emailContent.textBody,
+            htmlBody: emailContent.htmlBody,
+          });
+        } else {
+          console.log(`[DEVELOPMENT] Mock Email Sent: Resent OTP for admin login is ${otpCode}`);
+        }
       } catch (emailError) {
         await supabase
           .from("password_reset_tokens")
@@ -1012,6 +1025,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Login route
   app.post("/api/auth/login", async (req, res) => {
     try {
+      const ip = (req.headers["x-forwarded-for"] as string)?.split(",")[0] || req.socket.remoteAddress || "unknown";
+      if (!loginRateLimitCheck(ip)) {
+        return res.status(429).json({ error: "Too many login attempts. Please try again in 15 minutes." });
+      }
+
       const { email, password } = req.body;
 
       // console.log("Login attempt for:", email);
@@ -2319,6 +2337,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get public alumni profile by ID
 
   // Alumni profile routes
+  const ALUMNI_PROFILE_ALLOWED_FIELDS = new Set([
+    "first_name", "last_name", "bio", "location", "linkedin_url", "website_url",
+    "skills", "responsibilities", "achievements", "graduation_year", "major",
+    "company", "role", "is_mentor", "max_mentees", "expertise_areas", "help_topics",
+    "availability_note", "meeting_link", "profile_picture_url", "resume_url",
+    "gender", "cohort", "program", "industry", "interests", "is_open_to_work",
+    "newsletter_unsubscribed",
+  ]);
+
   app.post("/api/alumni/profile", async (req, res) => {
     try {
       const userId = req.headers["user-id"] as string;
@@ -2327,11 +2354,15 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No user ID provided" });
       }
 
+      const safeBody = Object.fromEntries(
+        Object.entries(req.body).filter(([k]) => ALUMNI_PROFILE_ALLOWED_FIELDS.has(k))
+      );
+
       const { data: alumni, error } = await supabase
         .from("alumni")
         .insert({
           user_id: userId,
-          ...req.body,
+          ...safeBody,
         })
         .select("*")
         .single();
@@ -2364,10 +2395,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No user ID provided" });
       }
 
+      const safeBody = Object.fromEntries(
+        Object.entries(req.body).filter(([k]) => ALUMNI_PROFILE_ALLOWED_FIELDS.has(k))
+      );
+
       const { data: alumni, error } = await supabase
         .from("alumni")
         .update({
-          ...req.body,
+          ...safeBody,
           updated_at: new Date().toISOString(),
         })
         .eq("user_id", userId)
@@ -11252,14 +11287,14 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(409).json({ error: "You already have a pending request with this mentor." });
       }
 
-      const { error } = await supabase.from("mentorship_requests").insert({
+      const { data: newRequest, error } = await supabase.from("mentorship_requests").insert({
         mentee_id: userId,
         mentor_id: mentorId,
         status: "pending",
         message: message || null,
         goal_text: goalText || null,
         match_score: matchScore || null,
-      });
+      }).select().single();
 
       if (error) {
         console.error("Request mentorship error:", error);
@@ -11276,17 +11311,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `${menteeAlumni.first_name} ${menteeAlumni.last_name}`
         : "Someone";
 
-      // Send real-time notification to mentor
-      const io = (global as any).io;
-      if (io) {
-        io.to(`user:${mentorId}`).emit("notification", {
-          type: "mentorship_request",
-          title: "New Mentorship Request",
-          content: goalText
-            ? `${menteeName}: "${goalText.slice(0, 80)}${goalText.length > 80 ? "…" : ""}"`
-            : `${menteeName} wants you as their mentor!`,
-        });
-      }
+      // Notify mentor — persisted + real-time + push
+      await createAndEmitNotification({
+        userId: mentorId,
+        type: NotificationType.MENTORSHIP_REQUEST,
+        title: "New Mentorship Request",
+        content: goalText
+          ? `${menteeName}: "${goalText.slice(0, 80)}${goalText.length > 80 ? "…" : ""}"`
+          : `${menteeName} wants you as their mentor!`,
+        relatedId: newRequest.id,
+        redirectUrl: NotificationRedirectUrl.MENTORSHIP,
+        actorId: userId,
+      });
 
       res.json({ message: "Request sent" });
     } catch (error) {
@@ -11384,10 +11420,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Invalid status" });
       }
 
-      // Fetch request to verify mentor ownership and get mentee_id
+      // Fetch request to verify mentor ownership and get mentee_id + current status
       const { data: mentorshipReq } = await supabase
         .from("mentorship_requests")
-        .select("mentor_id, mentee_id")
+        .select("mentor_id, mentee_id, status")
         .eq("id", id)
         .single();
 
@@ -11425,6 +11461,34 @@ export async function registerRoutes(app: Express): Promise<Server> {
           .from("alumni")
           .update({ mentee_count: (mentorRow?.mentee_count ?? 0) + 1 })
           .eq("user_id", userId);
+
+        // Re-check after increment to guard against concurrent accepts exceeding capacity
+        const { data: checkRow } = await supabase
+          .from("alumni")
+          .select("mentee_count, max_mentees")
+          .eq("user_id", userId)
+          .single();
+        if ((checkRow?.mentee_count ?? 0) > (checkRow?.max_mentees ?? 3)) {
+          // Roll back: revert request to pending and decrement count
+          await supabase.from("mentorship_requests").update({ status: "pending", updated_at: new Date().toISOString() }).eq("id", id);
+          await supabase.from("alumni")
+            .update({ mentee_count: Math.max(0, (checkRow?.mentee_count ?? 1) - 1) })
+            .eq("user_id", userId);
+          return res.status(409).json({ error: "Mentor reached capacity. Please try again." });
+        }
+      }
+
+      // If transitioning away from "accepted", decrement mentee_count
+      if (mentorshipReq.status === "accepted" && status !== "accepted") {
+        const { data: currentRow } = await supabase
+          .from("alumni")
+          .select("mentee_count")
+          .eq("user_id", userId)
+          .single();
+        await supabase
+          .from("alumni")
+          .update({ mentee_count: Math.max(0, (currentRow?.mentee_count ?? 1) - 1) })
+          .eq("user_id", userId);
       }
 
       // Fetch mentor name for notification
@@ -11437,17 +11501,18 @@ export async function registerRoutes(app: Express): Promise<Server> {
         ? `${mentorAlumni.first_name} ${mentorAlumni.last_name}`
         : "Your mentor";
 
-      // Notify mentee
-      const io = (global as any).io;
-      if (io) {
-        io.to(`user:${mentorshipReq.mentee_id}`).emit("notification", {
-          type: "mentorship_response",
-          title: status === "accepted" ? "Mentorship Request Accepted!" : "Mentorship Request Declined",
-          content: status === "accepted"
-            ? `${mentorName} accepted your mentorship request.`
-            : `${mentorName} declined your mentorship request.`,
-        });
-      }
+      // Notify mentee — persisted + real-time + push
+      await createAndEmitNotification({
+        userId: mentorshipReq.mentee_id,
+        type: NotificationType.MENTORSHIP_RESPONSE,
+        title: status === "accepted" ? "Mentorship Request Accepted!" : "Mentorship Request Declined",
+        content: status === "accepted"
+          ? `${mentorName} accepted your mentorship request.`
+          : `${mentorName} declined your mentorship request.`,
+        relatedId: id,
+        redirectUrl: NotificationRedirectUrl.MENTORSHIP,
+        actorId: userId,
+      });
 
       res.json({ message: `Request ${status}` });
     } catch (error) {
@@ -11673,8 +11738,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!mentorshipReq || mentorshipReq.status !== "accepted") {
         return res.status(400).json({ error: "Session requires an accepted mentorship relationship." });
       }
-      if (mentorshipReq.mentor_id !== userId && mentorshipReq.mentee_id !== userId) {
-        return res.status(403).json({ error: "Not authorised" });
+      if (mentorshipReq.mentor_id !== userId) {
+        return res.status(403).json({ error: "Only mentors can schedule sessions." });
+      }
+
+      // Fall back to mentor's default meeting link if none provided
+      let resolvedMeetLink = meetLink || null;
+      if (!resolvedMeetLink) {
+        const { data: mentorAlumni } = await supabase
+          .from("alumni")
+          .select("meeting_link")
+          .eq("user_id", mentorshipReq.mentor_id)
+          .single();
+        resolvedMeetLink = mentorAlumni?.meeting_link ?? null;
       }
 
       const { data: session, error } = await supabase.from("mentorship_sessions").insert({
@@ -11684,7 +11760,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         scheduled_at: scheduledAt,
         duration_minutes: durationMinutes || 60,
         agenda: agenda || null,
-        meet_link: meetLink || null,
+        meet_link: resolvedMeetLink,
         status: "upcoming",
       }).select().single();
 
@@ -11755,11 +11831,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
 
       const { id } = req.params;
-      const { status, notes, agenda, scheduledAt } = req.body;
+      const { status, notes, agenda, scheduledAt, meetLink, cancellationReason } = req.body;
 
       const { data: session } = await supabase
         .from("mentorship_sessions")
-        .select("mentor_id, mentee_id")
+        .select("mentor_id, mentee_id, scheduled_at")
         .eq("id", id)
         .single();
 
@@ -11767,14 +11843,74 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Not authorised" });
       }
 
+      const isMentor = session.mentor_id === userId;
+
+      // Only mentors can cancel a session
+      if (status === "cancelled" && !isMentor) {
+        return res.status(403).json({ error: "Only the mentor can cancel a session." });
+      }
+
+      // Require a cancellation reason when cancelling
+      if (status === "cancelled" && !cancellationReason?.trim()) {
+        return res.status(400).json({ error: "A cancellation reason is required." });
+      }
+
       const updates: Record<string, any> = {};
       if (status) updates.status = status;
       if (notes !== undefined) updates.notes = notes;
       if (agenda !== undefined) updates.agenda = agenda;
       if (scheduledAt) updates.scheduled_at = scheduledAt;
+      if (meetLink !== undefined) updates.meet_link = meetLink;
+      if (cancellationReason?.trim()) updates.cancellation_reason = cancellationReason.trim();
 
       const { error } = await supabase.from("mentorship_sessions").update(updates).eq("id", id);
       if (error) return res.status(500).json({ error: "Failed to update session" });
+
+      // Send cancellation notification to mentee when mentor cancels
+      if (status === "cancelled" && isMentor) {
+        const { data: mentorAlumni } = await supabase
+          .from("alumni").select("first_name, last_name").eq("user_id", userId).single();
+        const mentorName = mentorAlumni ? `${mentorAlumni.first_name} ${mentorAlumni.last_name}` : "Your mentor";
+
+        const cancelContent = cancellationReason?.trim()
+          ? `${mentorName} has cancelled your upcoming mentorship session. Reason: ${cancellationReason.trim()}`
+          : `${mentorName} has cancelled your upcoming mentorship session.`;
+        await createAndEmitNotification({
+          userId: session.mentee_id,
+          type: NotificationType.SESSION_CANCELLED,
+          title: "Session Cancelled",
+          content: cancelContent,
+          relatedId: id,
+          redirectUrl: "/mentorship",
+          actorId: userId,
+        });
+
+        const { data: menteeUser } = await supabase
+          .from("users").select("email").eq("id", session.mentee_id).single();
+        const { data: menteeAlumni } = await supabase
+          .from("alumni").select("first_name, last_name").eq("user_id", session.mentee_id).single();
+
+        if (menteeUser?.email) {
+          try {
+            const baseUrl = getBaseUrl();
+            const { subject, textBody, htmlBody } = generateSessionCancelledEmail(
+              mentorName,
+              session.scheduled_at,
+              baseUrl,
+              cancellationReason?.trim()
+            );
+            await sendEmail({
+              to: menteeUser.email,
+              toName: menteeAlumni ? `${menteeAlumni.first_name} ${menteeAlumni.last_name}` : undefined,
+              subject,
+              textBody,
+              htmlBody,
+            });
+          } catch (emailErr) {
+            console.error("[Session] Failed to send cancellation email:", emailErr);
+          }
+        }
+      }
 
       res.json({ message: "Session updated" });
     } catch (error) {
@@ -11793,7 +11929,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!sessionId || !reviewedId || !rating) {
         return res.status(400).json({ error: "sessionId, reviewedId, and rating required" });
       }
-      if (rating < 1 || rating > 5) return res.status(400).json({ error: "Rating must be 1-5" });
+      if (!Number.isInteger(Number(rating)) || Number(rating) < 1 || Number(rating) > 5) {
+        return res.status(400).json({ error: "Rating must be an integer between 1 and 5" });
+      }
 
       // Verify user was in session
       const { data: session } = await supabase
