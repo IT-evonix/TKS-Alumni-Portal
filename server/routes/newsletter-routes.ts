@@ -141,14 +141,14 @@ adminRouter.get("/user-search", async (req, res) => {
     const [alumniRes, usersRes] = await Promise.all([
       supabase
         .from("alumni")
-        .select("user_id, email, first_name, last_name")
+        .select("user_id, email, first_name, last_name, batch, users(user_role)")
         .or(`email.ilike.%${q}%,first_name.ilike.%${q}%,last_name.ilike.%${q}%`)
         .not("email", "is", null)
         .neq("email", "")
         .limit(25),
       supabase
         .from("users")
-        .select("id, email, username")
+        .select("id, email, username, user_role")
         .or(`email.ilike.%${q}%,username.ilike.%${q}%`)
         .not("email", "is", null)
         .neq("email", "")
@@ -158,20 +158,26 @@ adminRouter.get("/user-search", async (req, res) => {
     if (alumniRes.error) throw alumniRes.error;
     // usersRes errors are non-fatal — we still return alumni results
     const seen = new Set<string>();
-    const merged: { id: string; email: string; name: string }[] = [];
+    const merged: { id: string; email: string; name: string; role?: string; batch?: string }[] = [];
 
     for (const u of alumniRes.data ?? []) {
       const email = (u.email as string).toLowerCase();
       if (!seen.has(email)) {
         seen.add(email);
-        merged.push({ id: u.user_id, email: u.email, name: `${u.first_name || ""} ${u.last_name || ""}`.trim() });
+        const userRow = Array.isArray(u.users) ? u.users[0] : u.users;
+        merged.push({
+          id: u.user_id, email: u.email,
+          name: `${u.first_name || ""} ${u.last_name || ""}`.trim(),
+          role: (userRow as any)?.user_role ?? undefined,
+          batch: u.batch ?? undefined,
+        });
       }
     }
     for (const u of (usersRes.data ?? [])) {
       const email = (u.email as string).toLowerCase();
       if (!seen.has(email)) {
         seen.add(email);
-        merged.push({ id: u.id, email: u.email, name: u.username || "" });
+        merged.push({ id: u.id, email: u.email, name: u.username || "", role: u.user_role ?? undefined });
       }
     }
 

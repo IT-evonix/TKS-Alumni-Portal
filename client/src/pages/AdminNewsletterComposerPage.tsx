@@ -15,6 +15,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter,
 } from "@/components/ui/dialog";
+import { Separator } from "@/components/ui/separator";
 import {
   Sheet, SheetContent, SheetHeader, SheetTitle,
 } from "@/components/ui/sheet";
@@ -75,11 +76,15 @@ interface EmbeddedItem {
 }
 
 interface CustomEmail {
-  uid: string;   // local key
+  uid: string;
   email: string;
-  name: string;  // display name — empty for external
+  name: string;
   isExternal: boolean;
+  role?: string;
+  batch?: string;
 }
+
+type SearchUser = { id: string; email: string; name: string; role?: string; batch?: string };
 
 function makeId() {
   return Math.random().toString(36).slice(2, 10);
@@ -426,6 +431,15 @@ function ContentPickerPanel({
 }
 
 // ---- Custom email recipients panel ----
+function RecipientInitials({ name, email, variant }: { name: string; email: string; variant: "internal" | "external" }) {
+  const letter = (name || email)[0]?.toUpperCase() ?? "?";
+  return (
+    <div className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 text-xs font-bold ${variant === "internal" ? "bg-[#008060]/10 text-[#008060]" : "bg-amber-100 text-amber-700"}`}>
+      {letter}
+    </div>
+  );
+}
+
 function CustomEmailsPanel({
   getHeaders,
   customEmails,
@@ -436,17 +450,20 @@ function CustomEmailsPanel({
   onChange: (emails: CustomEmail[]) => void;
 }) {
   const { toast } = useToast();
+  const [addMode, setAddMode] = useState<"search" | "external">("search");
   const [searchQuery, setSearchQuery] = useState("");
-  const [searchResults, setSearchResults] = useState<{ id: string; email: string; name: string }[]>([]);
+  const [searchResults, setSearchResults] = useState<SearchUser[]>([]);
   const [searching, setSearching] = useState(false);
   const [freeEmail, setFreeEmail] = useState("");
-  const [editingUid, setEditingUid] = useState<string | null>(null);
-  const [editValue, setEditValue] = useState("");
+  const [freeName, setFreeName] = useState("");
+  const [bulkPasteMode, setBulkPasteMode] = useState(false);
+  const [bulkText, setBulkText] = useState("");
+  const [editState, setEditState] = useState<{ uid: string; email: string; name: string } | null>(null);
+  const searchInputRef = useRef<HTMLInputElement>(null);
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const addedEmails = new Set(customEmails.map((e) => e.email.toLowerCase()));
 
-  // Debounced user search
   useEffect(() => {
     if (searchTimer.current) clearTimeout(searchTimer.current);
     if (!searchQuery.trim() || searchQuery.trim().length < 2) { setSearchResults([]); return; }
@@ -461,142 +478,278 @@ function CustomEmailsPanel({
     return () => { if (searchTimer.current) clearTimeout(searchTimer.current); };
   }, [searchQuery, getHeaders]);
 
-  const addUser = (u: { id: string; email: string; name: string }) => {
+  const addUser = (u: SearchUser) => {
     if (addedEmails.has(u.email.toLowerCase())) return;
-    onChange([...customEmails, { uid: makeId(), email: u.email, name: u.name, isExternal: false }]);
+    onChange([...customEmails, { uid: makeId(), email: u.email, name: u.name, isExternal: false, role: u.role, batch: u.batch }]);
     setSearchQuery("");
     setSearchResults([]);
+    setTimeout(() => searchInputRef.current?.focus(), 0);
   };
 
   const addFreeEmail = () => {
-    const trimmed = freeEmail.trim();
-    if (!trimmed) return;
-    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
+    const trimmedEmail = freeEmail.trim();
+    if (!trimmedEmail) return;
+    if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       toast({ title: "Invalid email", description: "Please enter a valid email address", variant: "destructive" });
       return;
     }
-    if (addedEmails.has(trimmed.toLowerCase())) {
+    if (addedEmails.has(trimmedEmail.toLowerCase())) {
       toast({ title: "Already added", description: "This email is already in the list", variant: "destructive" });
       return;
     }
-    onChange([...customEmails, { uid: makeId(), email: trimmed, name: "", isExternal: true }]);
+    onChange([...customEmails, { uid: makeId(), email: trimmedEmail, name: freeName.trim(), isExternal: true }]);
     setFreeEmail("");
+    setFreeName("");
+  };
+
+  const applyBulkPaste = () => {
+    const tokens = bulkText
+      .split(/[\n,;\s]+/)
+      .map((t) => t.trim())
+      .filter((t) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(t));
+    const totalTokens = bulkText.split(/[\n,;\s]+/).filter((t) => t.trim()).length;
+    const invalid = totalTokens - tokens.length;
+    const newOnes = tokens.filter((e) => !addedEmails.has(e.toLowerCase()));
+    const dupes = tokens.length - newOnes.length;
+    const added: CustomEmail[] = newOnes.map((e) => ({ uid: makeId(), email: e, name: "", isExternal: true }));
+    if (added.length) onChange([...customEmails, ...added]);
+    setBulkText("");
+    setBulkPasteMode(false);
+    const parts = [dupes > 0 && `${dupes} duplicate(s) skipped`, invalid > 0 && `${invalid} invalid skipped`].filter(Boolean).join(", ");
+    toast({ title: `${added.length} email${added.length !== 1 ? "s" : ""} added`, description: parts || undefined });
   };
 
   const removeEmail = (uid: string) => onChange(customEmails.filter((e) => e.uid !== uid));
 
-  const startEdit = (item: CustomEmail) => { setEditingUid(item.uid); setEditValue(item.email); };
-  const saveEdit = (uid: string) => {
-    const trimmed = editValue.trim();
-    if (!trimmed || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmed)) {
-      toast({ title: "Invalid email", description: "Please enter a valid email address", variant: "destructive" });
-      return;
+  const saveEdit = () => {
+    if (!editState) return;
+    const trimmedEmail = editState.email.trim();
+    if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
+      toast({ title: "Invalid email", variant: "destructive" }); return;
     }
-    const alreadyExists = customEmails.some((e) => e.uid !== uid && e.email.toLowerCase() === trimmed.toLowerCase());
-    if (alreadyExists) {
-      toast({ title: "Duplicate", description: "This email is already in the list", variant: "destructive" });
-      return;
+    if (customEmails.some((e) => e.uid !== editState.uid && e.email.toLowerCase() === trimmedEmail.toLowerCase())) {
+      toast({ title: "Duplicate email", variant: "destructive" }); return;
     }
-    onChange(customEmails.map((e) => e.uid === uid ? { ...e, email: trimmed } : e));
-    setEditingUid(null);
+    onChange(customEmails.map((e) => e.uid === editState.uid ? { ...e, email: trimmedEmail, name: editState.name.trim() } : e));
+    setEditState(null);
   };
+
+  const internal = customEmails.filter((e) => !e.isExternal);
+  const external = customEmails.filter((e) => e.isExternal);
 
   return (
     <div className="space-y-4">
-      {/* Search existing users */}
-      <div>
-        <Label className="text-xs font-semibold text-gray-600">Search existing users</Label>
-        <div className="relative mt-1">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
-          <input
-            type="text" value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search by name or email…"
-            className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
-          />
-          {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />}
-        </div>
-        {searchResults.length > 0 && (
-          <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100 max-h-48 overflow-y-auto">
-            {searchResults.map((u) => {
-              const already = addedEmails.has(u.email.toLowerCase());
-              return (
-                <div key={u.id} className="flex items-center gap-3 px-3 py-2.5 hover:bg-gray-50">
-                  <div className="flex-1 min-w-0">
-                    {u.name && <p className="text-sm font-medium text-gray-900 truncate">{u.name}</p>}
-                    <p className="text-xs text-gray-500 truncate">{u.email}</p>
+      {/* Mode toggle */}
+      <div className="flex gap-1 p-1 bg-gray-100 rounded-lg">
+        {(["search", "external"] as const).map((mode) => (
+          <button
+            key={mode} type="button"
+            onClick={() => { setAddMode(mode); setSearchQuery(""); setSearchResults([]); setFreeEmail(""); setFreeName(""); setBulkPasteMode(false); }}
+            className={`flex-1 text-xs font-medium py-1.5 px-3 rounded-md transition-colors ${addMode === mode ? "bg-white text-gray-900 shadow-sm" : "text-gray-500 hover:text-gray-700"}`}>
+            {mode === "search" ? "Search users" : "External email"}
+          </button>
+        ))}
+      </div>
+
+      {/* Search tab */}
+      {addMode === "search" && (
+        <div>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+            <input
+              ref={searchInputRef}
+              type="text" value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search by name or email…"
+              className="w-full pl-9 pr-8 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+            />
+            {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />}
+          </div>
+          {searchResults.length > 0 && (
+            <div className="mt-1 border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100 max-h-52 overflow-y-auto shadow-sm">
+              {searchResults.map((u) => {
+                const already = addedEmails.has(u.email.toLowerCase());
+                return (
+                  <div key={u.id} className={`flex items-center gap-3 px-3 py-2.5 ${already ? "bg-gray-50" : "hover:bg-gray-50"}`}>
+                    <RecipientInitials name={u.name} email={u.email} variant="internal" />
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium text-gray-900 truncate">{u.name || u.email}</p>
+                      {u.name && <p className="text-xs text-gray-500 truncate">{u.email}</p>}
+                      {(u.role || u.batch) && (
+                        <div className="flex gap-1 mt-0.5 flex-wrap">
+                          {u.role && <span className="text-[10px] bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full font-medium">{u.role}</span>}
+                          {u.batch && <span className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded-full font-medium">{u.batch}</span>}
+                        </div>
+                      )}
+                    </div>
+                    <button type="button" onClick={() => addUser(u)} disabled={already}
+                      className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${already ? "bg-gray-100 text-gray-400 cursor-default" : "bg-[#008060] text-white hover:bg-[#006b51]"}`}>
+                      {already ? "Added" : "Add"}
+                    </button>
                   </div>
-                  <button type="button" onClick={() => addUser(u)} disabled={already}
-                    className={`flex-shrink-0 text-xs px-2.5 py-1 rounded-md font-medium transition-colors ${already ? "bg-gray-100 text-gray-400 cursor-default" : "bg-[#008060] text-white hover:bg-[#006b51]"}`}>
-                    {already ? "Added" : "Add"}
+                );
+              })}
+            </div>
+          )}
+          {searchQuery.length >= 2 && !searching && searchResults.length === 0 && (
+            <p className="text-xs text-gray-400 text-center mt-2 py-1">No users found for "{searchQuery}"</p>
+          )}
+        </div>
+      )}
+
+      {/* External email tab */}
+      {addMode === "external" && (
+        <div className="space-y-3">
+          {!bulkPasteMode ? (
+            <>
+              <div className="space-y-2">
+                <input
+                  type="email" value={freeEmail}
+                  onChange={(e) => setFreeEmail(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFreeEmail(); } }}
+                  placeholder="Email address *"
+                  className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+                />
+                <div className="flex gap-2">
+                  <input
+                    type="text" value={freeName}
+                    onChange={(e) => setFreeName(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFreeEmail(); } }}
+                    placeholder="Display name (optional)"
+                    className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+                  />
+                  <button type="button" onClick={addFreeEmail}
+                    className="flex items-center gap-1.5 px-3 py-2 bg-[#008060] text-white text-sm rounded-md hover:bg-[#006b51] transition-colors font-medium flex-shrink-0">
+                    <UserPlus className="w-3.5 h-3.5" /> Add
                   </button>
                 </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* Add external email */}
-      <div>
-        <Label className="text-xs font-semibold text-gray-600">Add external email</Label>
-        <div className="flex gap-2 mt-1">
-          <input
-            type="email" value={freeEmail}
-            onChange={(e) => setFreeEmail(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addFreeEmail(); } }}
-            placeholder="external@example.com"
-            className="flex-1 border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
-          />
-          <button type="button" onClick={addFreeEmail}
-            className="flex items-center gap-1.5 px-3 py-2 bg-[#008060] text-white text-sm rounded-md hover:bg-[#006b51] transition-colors font-medium">
-            <UserPlus className="w-3.5 h-3.5" /> Add
-          </button>
-        </div>
-      </div>
-
-      {/* Current list */}
-      {customEmails.length > 0 && (
-        <div className="space-y-1.5">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">{customEmails.length} custom recipient{customEmails.length !== 1 ? "s" : ""}</p>
-          <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
-            {customEmails.map((item) => (
-              <div key={item.uid} className="flex items-center gap-3 px-3 py-2.5">
-                {editingUid === item.uid ? (
-                  <>
-                    <input
-                      type="email" value={editValue}
-                      onChange={(e) => setEditValue(e.target.value)}
-                      onKeyDown={(e) => { if (e.key === "Enter") saveEdit(item.uid); if (e.key === "Escape") setEditingUid(null); }}
-                      autoFocus
-                      className="flex-1 border border-[#008060] rounded-md px-2 py-1 text-sm focus:outline-none"
-                    />
-                    <button type="button" onClick={() => saveEdit(item.uid)} className="text-xs px-2 py-1 bg-[#008060] text-white rounded-md hover:bg-[#006b51]">Save</button>
-                    <button type="button" onClick={() => setEditingUid(null)} className="text-xs px-2 py-1 border border-gray-200 rounded-md text-gray-500 hover:bg-gray-50">Cancel</button>
-                  </>
-                ) : (
-                  <>
-                    <div className="flex-1 min-w-0">
-                      {item.name && <p className="text-sm font-medium text-gray-900 truncate">{item.name}</p>}
-                      <p className={`text-xs truncate ${item.name ? "text-gray-500" : "text-gray-900 text-sm font-medium"}`}>{item.email}</p>
-                      {item.isExternal && <span className="text-xs text-amber-600 font-medium">External</span>}
-                    </div>
-                    <button type="button" onClick={() => startEdit(item)} className="p-1.5 text-gray-400 hover:text-[#008060] hover:bg-green-50 rounded-md transition-colors" title="Edit email">
-                      <Pencil className="w-3.5 h-3.5" />
-                    </button>
-                    <button type="button" onClick={() => removeEmail(item.uid)} className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Remove">
-                      <X className="w-3.5 h-3.5" />
-                    </button>
-                  </>
-                )}
               </div>
-            ))}
-          </div>
+              <button type="button" onClick={() => setBulkPasteMode(true)}
+                className="text-xs text-[#008060] hover:underline font-medium">
+                + Paste multiple emails
+              </button>
+            </>
+          ) : (
+            <div className="space-y-2">
+              <p className="text-xs text-gray-500">Paste emails separated by commas, semicolons, or new lines.</p>
+              <textarea
+                value={bulkText} onChange={(e) => setBulkText(e.target.value)}
+                placeholder={"a@example.com\nb@example.com, c@example.com"}
+                rows={4} autoFocus
+                className="w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060] resize-none"
+              />
+              <div className="flex gap-2">
+                <button type="button" onClick={applyBulkPaste} disabled={!bulkText.trim()}
+                  className="px-3 py-1.5 bg-[#008060] text-white text-xs rounded-md hover:bg-[#006b51] font-medium disabled:opacity-40">
+                  Add all
+                </button>
+                <button type="button" onClick={() => { setBulkPasteMode(false); setBulkText(""); }}
+                  className="px-3 py-1.5 border border-gray-200 text-gray-500 text-xs rounded-md hover:bg-gray-50">
+                  Cancel
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Custom recipient list */}
+      {customEmails.length > 0 && (
+        <div className="space-y-3 border-t border-gray-100 pt-3">
+          {internal.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">Internal — {internal.length}</p>
+              <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+                {internal.map((item) => (
+                  <div key={item.uid} className="px-3 py-2.5">
+                    {editState?.uid === item.uid ? (
+                      <div className="space-y-1.5">
+                        <input type="text" value={editState.name} onChange={(e) => setEditState({ ...editState, name: e.target.value })}
+                          placeholder="Display name" className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-[#008060]" />
+                        <input type="email" value={editState.email} onChange={(e) => setEditState({ ...editState, email: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditState(null); }}
+                          placeholder="Email address" className="w-full border border-[#008060] rounded px-2 py-1 text-sm focus:outline-none" autoFocus />
+                        <div className="flex gap-1.5">
+                          <button type="button" onClick={saveEdit} className="text-xs px-2.5 py-1 bg-[#008060] text-white rounded-md hover:bg-[#006b51]">Save</button>
+                          <button type="button" onClick={() => setEditState(null)} className="text-xs px-2.5 py-1 border border-gray-200 rounded-md text-gray-500 hover:bg-gray-50">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <RecipientInitials name={item.name} email={item.email} variant="internal" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{item.name || item.email}</p>
+                          {item.name && <p className="text-xs text-gray-500 truncate">{item.email}</p>}
+                          {(item.role || item.batch) && (
+                            <div className="flex gap-1 mt-0.5 flex-wrap">
+                              {item.role && <span className="text-[10px] bg-violet-50 text-violet-600 px-1.5 py-0.5 rounded-full font-medium">{item.role}</span>}
+                              {item.batch && <span className="text-[10px] bg-sky-50 text-sky-600 px-1.5 py-0.5 rounded-full font-medium">{item.batch}</span>}
+                            </div>
+                          )}
+                        </div>
+                        <button type="button" onClick={() => setEditState({ uid: item.uid, email: item.email, name: item.name })}
+                          className="p-1.5 text-gray-400 hover:text-[#008060] hover:bg-green-50 rounded-md transition-colors" title="Edit">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => removeEmail(item.uid)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Remove">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {external.length > 0 && (
+            <div>
+              <p className="text-[10px] font-semibold text-gray-400 uppercase tracking-widest mb-1.5">External — {external.length}</p>
+              <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100">
+                {external.map((item) => (
+                  <div key={item.uid} className="px-3 py-2.5">
+                    {editState?.uid === item.uid ? (
+                      <div className="space-y-1.5">
+                        <input type="text" value={editState.name} onChange={(e) => setEditState({ ...editState, name: e.target.value })}
+                          placeholder="Display name" className="w-full border border-gray-200 rounded px-2 py-1 text-sm focus:outline-none focus:border-[#008060]" />
+                        <input type="email" value={editState.email} onChange={(e) => setEditState({ ...editState, email: e.target.value })}
+                          onKeyDown={(e) => { if (e.key === "Enter") saveEdit(); if (e.key === "Escape") setEditState(null); }}
+                          placeholder="Email address" className="w-full border border-[#008060] rounded px-2 py-1 text-sm focus:outline-none" autoFocus />
+                        <div className="flex gap-1.5">
+                          <button type="button" onClick={saveEdit} className="text-xs px-2.5 py-1 bg-[#008060] text-white rounded-md hover:bg-[#006b51]">Save</button>
+                          <button type="button" onClick={() => setEditState(null)} className="text-xs px-2.5 py-1 border border-gray-200 rounded-md text-gray-500 hover:bg-gray-50">Cancel</button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center gap-3">
+                        <RecipientInitials name={item.name} email={item.email} variant="external" />
+                        <div className="flex-1 min-w-0">
+                          {item.name
+                            ? <><p className="text-sm font-medium text-gray-900 truncate">{item.name}</p><p className="text-xs text-gray-500 truncate">{item.email}</p></>
+                            : <p className="text-sm font-medium text-gray-900 truncate">{item.email}</p>
+                          }
+                        </div>
+                        <button type="button" onClick={() => setEditState({ uid: item.uid, email: item.email, name: item.name })}
+                          className="p-1.5 text-gray-400 hover:text-[#008060] hover:bg-green-50 rounded-md transition-colors" title="Edit">
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button type="button" onClick={() => removeEmail(item.uid)}
+                          className="p-1.5 text-gray-400 hover:text-red-500 hover:bg-red-50 rounded-md transition-colors" title="Remove">
+                          <X className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       )}
 
       {customEmails.length === 0 && (
-        <p className="text-xs text-gray-400 text-center py-3">No custom recipients added yet</p>
+        <p className="text-xs text-gray-400 text-center py-2">No custom recipients added yet</p>
       )}
     </div>
   );
@@ -734,6 +887,7 @@ export function AdminNewsletterComposerPage() {
   const [recipientPreview, setRecipientPreview] = useState<RecipientPreview | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
   const [showRecipientsModal, setShowRecipientsModal] = useState(false);
+  const [modalSearch, setModalSearch] = useState("");
   const [saving, setSaving] = useState(false);
   const [autosaveStatus, setAutosaveStatus] = useState<"idle" | "saving" | "saved" | "error">("idle");
   const isSavingRef = useRef(false);
@@ -1239,11 +1393,21 @@ export function AdminNewsletterComposerPage() {
 
           {/* Section 5: Recipients */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
-            <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Recipients</h2>
-
-            {/* Filter dropdowns */}
             <div>
-              <p className="text-xs font-medium text-gray-500 mb-2">Filter by attribute</p>
+              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Recipients</h2>
+              <p className="text-xs text-gray-400 mt-0.5">Send to all users matching filters below, plus any specific individuals added as custom recipients.</p>
+            </div>
+
+            {/* Filter-based */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Filter-based</p>
+                {previewLoading && (
+                  <span className="flex items-center gap-1 text-xs text-gray-400">
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Updating…
+                  </span>
+                )}
+              </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                 <div>
                   <Label className="text-xs">Role</Label>
@@ -1286,14 +1450,40 @@ export function AdminNewsletterComposerPage() {
                   </Select>
                 </div>
               </div>
+
+              {/* Active filter chips */}
+              {[
+                { key: "role", label: recipientRole, clear: () => setRecipientRole("all") },
+                { key: "batch", label: recipientBatch, clear: () => setRecipientBatch("all") },
+                { key: "year", label: recipientGradYear, clear: () => setRecipientGradYear("all") },
+                { key: "dept", label: recipientDepartment, clear: () => setRecipientDepartment("all") },
+              ].filter((c) => c.label !== "all").length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { key: "role", label: recipientRole, clear: () => setRecipientRole("all") },
+                    { key: "batch", label: recipientBatch, clear: () => setRecipientBatch("all") },
+                    { key: "year", label: recipientGradYear, clear: () => setRecipientGradYear("all") },
+                    { key: "dept", label: recipientDepartment, clear: () => setRecipientDepartment("all") },
+                  ].filter((c) => c.label !== "all").map((chip) => (
+                    <span key={chip.key} className="inline-flex items-center gap-1 bg-[#008060]/10 text-[#008060] text-xs font-medium px-2.5 py-1 rounded-full">
+                      {chip.label}
+                      <button type="button" onClick={chip.clear} className="ml-0.5 hover:text-red-500 transition-colors">
+                        <X className="w-3 h-3" />
+                      </button>
+                    </span>
+                  ))}
+                </div>
+              )}
             </div>
 
-            {/* Custom emails */}
-            <div className="border-t border-gray-100 pt-4">
-              <div className="flex items-center justify-between mb-3">
-                <p className="text-xs font-medium text-gray-500">Custom recipients</p>
+            <Separator />
+
+            {/* Custom recipients */}
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Custom recipients</p>
                 {customEmails.length > 0 && (
-                  <span className="text-xs font-medium text-[#008060] bg-green-50 px-2 py-0.5 rounded-full">{customEmails.length} added</span>
+                  <span className="bg-green-50 text-[#008060] text-xs font-medium px-2 py-0.5 rounded-full">{customEmails.length}</span>
                 )}
               </div>
               <CustomEmailsPanel
@@ -1303,55 +1493,95 @@ export function AdminNewsletterComposerPage() {
               />
             </div>
 
-{recipientPreview && (
-              <div className="text-sm text-gray-600 bg-gray-50 border rounded-md p-3 flex items-center justify-between">
-                <span>
-                  <span className="font-medium text-gray-800">{recipientPreview.count}</span> recipients match these filters.
-                </span>
-                <Button variant="ghost" size="sm" className="text-[#008060] hover:text-[#006048] h-7 px-2 text-xs" onClick={() => setShowRecipientsModal(true)}>
-                  View all
+            {/* Total recipient count */}
+            {(recipientPreview || customEmails.length > 0) && (
+              <div className="bg-gray-50 border border-gray-200 rounded-lg p-3 flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="w-4 h-4 text-gray-400 flex-shrink-0" />
+                  <span className="text-sm text-gray-700">
+                    <span className="font-semibold text-gray-900">{recipientPreview?.count ?? 0}</span> filter-matched
+                    {customEmails.length > 0 && (
+                      <> + <span className="font-semibold text-gray-900">{customEmails.length}</span> custom</>
+                    )}
+                    {" "}= <span className="font-semibold text-[#008060]">{(recipientPreview?.count ?? 0) + customEmails.length} total</span>
+                  </span>
+                </div>
+                <Button variant="ghost" size="sm" className="text-[#008060] hover:text-[#006048] h-7 px-2 text-xs"
+                  onClick={() => { setModalSearch(""); setShowRecipientsModal(true); }}>
+                  View sample
                 </Button>
               </div>
             )}
 
             {/* Recipients preview modal */}
-            <Dialog open={showRecipientsModal} onOpenChange={setShowRecipientsModal}>
-              <DialogContent className="max-w-lg">
+            <Dialog open={showRecipientsModal} onOpenChange={(open) => { setShowRecipientsModal(open); if (!open) setModalSearch(""); }}>
+              <DialogContent className="max-w-xl">
                 <DialogHeader>
                   <DialogTitle>Recipients Preview</DialogTitle>
+                  <p className="text-xs text-gray-500 mt-1">
+                    Showing a sample of up to 500 filter-matched users. Total estimated:{" "}
+                    <strong>{recipientPreview?.count ?? 0}</strong> (filter) + <strong>{customEmails.length}</strong> (custom) = <strong>{(recipientPreview?.count ?? 0) + customEmails.length}</strong>
+                  </p>
                 </DialogHeader>
-                <div className="space-y-4 max-h-[60vh] overflow-y-auto pr-1">
-                  {recipientPreview && recipientPreview.users.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        Filter-matched ({recipientPreview.serverCount ?? recipientPreview.users.length})
-                      </p>
-                      <ul className="divide-y divide-gray-100 border rounded-md">
-                        {recipientPreview.users.map((u) => (
-                          <li key={u.id} className="flex items-center justify-between px-3 py-2 text-sm">
-                            <span className="font-medium text-gray-800">{u.name || "—"}</span>
-                            <span className="text-gray-500 text-xs">{u.email}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {customEmails.length > 0 && (
-                    <div>
-                      <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
-                        Custom recipients ({customEmails.length})
-                      </p>
-                      <ul className="divide-y divide-gray-100 border rounded-md">
-                        {customEmails.map((e) => (
-                          <li key={e.email} className="flex items-center justify-between px-3 py-2 text-sm">
-                            <span className="font-medium text-gray-800">{e.name || "—"}</span>
-                            <span className="text-gray-500 text-xs">{e.email}</span>
-                          </li>
-                        ))}
-                      </ul>
-                    </div>
-                  )}
-                  {(!recipientPreview || (recipientPreview.users.length === 0 && customEmails.length === 0)) && (
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
+                  <input
+                    value={modalSearch} onChange={(e) => setModalSearch(e.target.value)}
+                    placeholder="Filter this list…"
+                    className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+                  />
+                </div>
+                <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+                  {recipientPreview && recipientPreview.users.length > 0 && (() => {
+                    const q = modalSearch.toLowerCase();
+                    const filtered = q
+                      ? recipientPreview.users.filter((u) => u.name?.toLowerCase().includes(q) || u.email.toLowerCase().includes(q))
+                      : recipientPreview.users;
+                    return filtered.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          Filter-matched ({recipientPreview.serverCount ?? recipientPreview.users.length}){q && ` — showing ${filtered.length} match${filtered.length !== 1 ? "es" : ""}`}
+                        </p>
+                        <ul className="divide-y divide-gray-100 border rounded-md">
+                          {filtered.map((u) => (
+                            <li key={u.id} className="flex items-center gap-3 px-3 py-2">
+                              <RecipientInitials name={u.name} email={u.email} variant="internal" />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{u.name || "—"}</p>
+                                <p className="text-xs text-gray-500 truncate">{u.email}</p>
+                              </div>
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null;
+                  })()}
+                  {customEmails.length > 0 && (() => {
+                    const q = modalSearch.toLowerCase();
+                    const filtered = q
+                      ? customEmails.filter((e) => e.name?.toLowerCase().includes(q) || e.email.toLowerCase().includes(q))
+                      : customEmails;
+                    return filtered.length > 0 ? (
+                      <div>
+                        <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide mb-2">
+                          Custom recipients ({customEmails.length}){q && ` — showing ${filtered.length}`}
+                        </p>
+                        <ul className="divide-y divide-gray-100 border rounded-md">
+                          {filtered.map((e) => (
+                            <li key={e.uid} className="flex items-center gap-3 px-3 py-2">
+                              <RecipientInitials name={e.name} email={e.email} variant={e.isExternal ? "external" : "internal"} />
+                              <div className="flex-1 min-w-0">
+                                <p className="text-sm font-medium text-gray-800 truncate">{e.name || e.email}</p>
+                                {e.name && <p className="text-xs text-gray-500 truncate">{e.email}</p>}
+                              </div>
+                              {e.isExternal && <span className="text-[10px] bg-amber-50 text-amber-600 px-1.5 py-0.5 rounded-full font-medium flex-shrink-0">External</span>}
+                            </li>
+                          ))}
+                        </ul>
+                      </div>
+                    ) : null;
+                  })()}
+                  {(!recipientPreview || recipientPreview.users.length === 0) && customEmails.length === 0 && (
                     <p className="text-sm text-gray-500 text-center py-4">No recipients found.</p>
                   )}
                 </div>
