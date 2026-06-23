@@ -991,7 +991,11 @@ export function generateNewsletterEmailHtml(
 ): string {
   const base = baseUrl.replace(/\/$/, "");
   const logoUrl = EMAIL_LOGO_URL || `${base}/tks_logo.png`;
-  const archiveUrl = `${base}/newsletters/${encodeURIComponent(newsletter.slug)}`;
+  const pdfMatch = newsletter.content.match(/data-embedded-type="pdf"[^>]*data-embedded-url="([^"]+)"/i)
+    || newsletter.content.match(/data-embedded-url="([^"]+)"[^>]*data-embedded-type="pdf"/i);
+  const archiveUrl = pdfMatch
+    ? pdfMatch[1].replace(/%22/g, '"')
+    : `${base}/newsletters/${encodeURIComponent(newsletter.slug)}`;
   const contactUrl = `${base}/contact`;
   const contentWithCards = renderEmbeddedCardsForEmail(newsletter.content, base);
   const styledContent = inlineStyleHtml(contentWithCards);
@@ -1131,7 +1135,7 @@ export function generateNewsletterEmailHtml(
               <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="margin:0 auto;">
                 <tr>
                   <td style="background:linear-gradient(135deg,#006845 0%,#008060 100%);border-radius:50px;box-shadow:0 6px 20px rgba(0,128,96,0.35);">
-                    <a href="${sanitizeForEmail(archiveUrl)}" style="display:inline-block;padding:16px 44px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.03em;border-radius:50px;">Read Full Newsletter &rarr;</a>
+                    <a href="${sanitizeForEmail(archiveUrl)}" style="display:inline-block;padding:16px 44px;font-size:16px;font-weight:700;color:#ffffff;text-decoration:none;letter-spacing:0.03em;border-radius:50px;">${pdfMatch ? "View PDF &rarr;" : "Read Full Newsletter &rarr;"}</a>
                   </td>
                 </tr>
               </table>

@@ -104,7 +104,8 @@ export async function sendNewsletter(newsletterId: string): Promise<void> {
     checkEmailConfig();
 
     const baseUrl = getBaseUrl();
-    const textBody = newsletter.content.replace(/<[^>]*>/gm, "").replace(/\s+/g, " ").trim();
+    const strippedText = newsletter.content.replace(/<[^>]*>/gm, "").replace(/\s+/g, " ").trim();
+    const textBody = strippedText || (newsletter.excerpt ? newsletter.excerpt.trim() : newsletter.title);
 
     // 5. Send emails in batches to respect ZeptoMail rate limits.
     // HTML is generated per-user to include personalised greeting + unique unsubscribe/tracking links.

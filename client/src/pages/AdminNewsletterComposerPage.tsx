@@ -85,6 +85,23 @@ function makeId() {
   return Math.random().toString(36).slice(2, 10);
 }
 
+function normalizePdfUrl(raw: string): string {
+  return raw.replace(
+    /^(https:\/\/drive\.google\.com\/file\/d\/[^/?#]+)\/(view|edit)[^#]*/i,
+    "$1/preview"
+  );
+}
+
+function driveFileId(url: string): string | null {
+  const m = url.match(/drive\.google\.com\/file\/d\/([^/?#]+)/i);
+  return m ? m[1] : null;
+}
+
+function driveThumbnailUrl(url: string): string | null {
+  const id = driveFileId(url);
+  return id ? `https://drive.google.com/thumbnail?id=${id}&sz=w400` : null;
+}
+
 function articlesToHtml(articles: Article[]): string {
   return articles
     .map(
@@ -287,13 +304,7 @@ function ContentPickerPanel({
   const searchTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const attachedIds = new Set(attachedItems.map((i) => i.id));
 
-  // PDF-specific state
-  const [pdfUrl, setPdfUrl] = useState("");
-  const [pdfTitle, setPdfTitle] = useState("");
-  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
-
   const search = useCallback(async (type: EmbedType, q: string) => {
-    if (type === "pdf") return;
     setSearching(true); setResults([]);
     try {
       let url = "";
@@ -315,21 +326,6 @@ function ContentPickerPanel({
 
   const handleTabChange = (type: EmbedType) => {
     setActiveType(type); setQuery(""); setResults([]);
-    if (type !== "pdf") { setPdfUrl(""); setPdfTitle(""); setPdfPreviewUrl(""); }
-  };
-
-  const attachPdf = () => {
-    const trimmedUrl = pdfUrl.trim();
-    if (!trimmedUrl) return;
-    // Encode any double-quotes in the URL so it doesn't break the data-embedded-url="..." attribute
-    const safeUrl = trimmedUrl.replace(/"/g, "%22");
-    onAttach({
-      embedId: makeId(), type: "pdf",
-      id: makeId(), title: pdfTitle.trim(),
-      excerpt: "", coverImage: "", meta: "",
-      url: safeUrl,
-    });
-    setPdfUrl(""); setPdfTitle(""); setPdfPreviewUrl("");
   };
 
   const buildItem = (type: EmbedType, raw: any): EmbeddedItem => {
@@ -352,74 +348,17 @@ function ContentPickerPanel({
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap gap-1 p-1 bg-gray-100 rounded-lg w-fit">
-        {(["blog", "podcast", "post", "pdf"] as EmbedType[]).map((t) => {
+        {(["blog", "podcast", "post"] as EmbedType[]).map((t) => {
           const cfg = EMBED_TYPE_CONFIG[t]; const Icon = cfg.icon;
           return (
             <button key={t} type="button" onClick={() => handleTabChange(t)}
               className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all ${activeType === t ? `bg-white shadow-sm ${cfg.color}` : "text-gray-500 hover:text-gray-700"}`}>
-              <Icon className="w-3.5 h-3.5" />{t === "pdf" ? "PDF" : `${cfg.label}s`}
+              <Icon className="w-3.5 h-3.5" />{cfg.label}s
             </button>
           );
         })}
       </div>
 
-      {/* PDF attach panel */}
-      {activeType === "pdf" && (
-        <div className="space-y-3">
-          <div>
-            <Label className="text-xs font-semibold text-gray-600">PDF URL <span className="text-red-400">*</span></Label>
-            <input
-              type="url" value={pdfUrl}
-              onChange={(e) => setPdfUrl(e.target.value)}
-              placeholder="https://example.com/document.pdf"
-              className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
-            />
-          </div>
-          <div>
-            <Label className="text-xs font-semibold text-gray-600">Label <span className="text-gray-400 font-normal">(optional)</span></Label>
-            <input
-              type="text" value={pdfTitle}
-              onChange={(e) => setPdfTitle(e.target.value)}
-              placeholder="e.g. Annual Report 2025"
-              className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
-            />
-          </div>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => setPdfPreviewUrl(pdfUrl)}
-              disabled={!pdfUrl.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <Eye className="w-3.5 h-3.5" /> Preview
-            </button>
-            <button
-              type="button"
-              onClick={attachPdf}
-              disabled={!pdfUrl.trim()}
-              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#008060] text-white rounded-md text-xs font-medium hover:bg-[#006b51] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
-            >
-              <Plus className="w-3.5 h-3.5" /> Attach PDF
-            </button>
-          </div>
-          {pdfPreviewUrl && (
-            <div className="space-y-2">
-              <p className="text-xs text-amber-600 flex items-start gap-1">
-                <span className="mt-px">⚠</span>
-                <span>Preview may not display for all URLs due to browser security (X-Frame-Options). The email will always include a working link.</span>
-              </p>
-              <iframe
-                src={pdfPreviewUrl}
-                className="w-full h-72 rounded-lg border border-gray-200 bg-gray-50"
-                title="PDF Preview"
-              />
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* Search panel for blog / podcast / post */}
-      {activeType !== "pdf" && (
       <div className="relative">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400" />
         <input type="text" value={query} onChange={(e) => setQuery(e.target.value)}
@@ -427,8 +366,7 @@ function ContentPickerPanel({
           className="w-full pl-9 pr-3 py-2 border border-gray-200 rounded-md text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]" />
         {searching && <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 animate-spin" />}
       </div>
-      )}
-      {activeType !== "pdf" && results.length > 0 && (
+      {results.length > 0 && (
         <div className="border border-gray-200 rounded-lg overflow-hidden divide-y divide-gray-100 max-h-64 overflow-y-auto">
           {results.map((raw) => {
             const item = buildItem(activeType, raw);
@@ -456,17 +394,17 @@ function ContentPickerPanel({
           })}
         </div>
       )}
-      {activeType !== "pdf" && !searching && query && results.length === 0 && (
+      {!searching && query && results.length === 0 && (
         <p className="text-xs text-gray-400 text-center py-4">No {EMBED_TYPE_CONFIG[activeType].label.toLowerCase()}s found for "{query}"</p>
       )}
-      {activeType !== "pdf" && !query && results.length === 0 && (
+      {!query && results.length === 0 && (
         <p className="text-xs text-gray-400 text-center py-4">Search to find {EMBED_TYPE_CONFIG[activeType].label.toLowerCase()}s to attach</p>
       )}
-      {attachedItems.length > 0 && (
+      {attachedItems.filter((i) => i.type !== "pdf").length > 0 && (
         <div className="space-y-2">
-          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Attached ({attachedItems.length})</p>
+          <p className="text-xs font-semibold text-gray-500 uppercase tracking-wide">Attached ({attachedItems.filter((i) => i.type !== "pdf").length})</p>
           <div className="space-y-1.5">
-            {attachedItems.map((item) => {
+            {attachedItems.filter((i) => i.type !== "pdf").map((item) => {
               const cfg = EMBED_TYPE_CONFIG[item.type]; const Icon = cfg.icon;
               return (
                 <div key={item.embedId} className="flex items-center gap-2.5 p-2.5 border border-gray-200 rounded-lg bg-white">
@@ -788,6 +726,9 @@ export function AdminNewsletterComposerPage() {
   const [deliveryMode, setDeliveryMode] = useState<"draft" | "schedule" | "send_now">("draft");
   const [scheduledAt, setScheduledAt] = useState("");
   const [articles, setArticles] = useState<Article[]>([{ id: makeId(), title: "", image: "", content: "" }]);
+  const [pdfUrl, setPdfUrl] = useState("");
+  const [pdfTitle, setPdfTitle] = useState("");
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
   const [embeddedItems, setEmbeddedItems] = useState<EmbeddedItem[]>([]);
   const [filterOptions, setFilterOptions] = useState<{ batches: string[]; departments: string[]; graduationYears: string[]; roles: string[] }>({ batches: [], departments: [], graduationYears: [], roles: [] });
   const [recipientPreview, setRecipientPreview] = useState<RecipientPreview | null>(null);
@@ -882,6 +823,21 @@ export function AdminNewsletterComposerPage() {
       .catch(() => {});
   }, []);
 
+  const attachPdf = () => {
+    const trimmedUrl = pdfUrl.trim();
+    if (!trimmedUrl) return;
+    const normalized = normalizePdfUrl(trimmedUrl);
+    const safeUrl = normalized.replace(/"/g, "%22");
+    const thumbnail = driveThumbnailUrl(trimmedUrl);
+    setEmbeddedItems((prev) => [...prev, {
+      embedId: makeId(), type: "pdf",
+      id: makeId(), title: pdfTitle.trim(),
+      excerpt: "", coverImage: thumbnail ?? "", meta: "",
+      url: safeUrl,
+    }]);
+    setPdfUrl(""); setPdfTitle(""); setPdfPreviewUrl("");
+  };
+
   const getContent = () =>
     articlesToHtml(articles) + (embeddedItems.length ? "\n" + embeddedItemsToHtml(embeddedItems) : "");
 
@@ -962,8 +918,9 @@ export function AdminNewsletterComposerPage() {
   // validate takes the mode being submitted so it doesn't read stale state
   const validate = (mode: "draft" | "schedule" | "send_now") => {
     if (!title.trim() || title.trim().length < 3) return "Title must be at least 3 characters";
+    const hasPdf = embeddedItems.some((i) => i.type === "pdf");
     const allText = articles.map((a) => a.content.replace(/<[^>]*>/g, "").trim()).join(" ");
-    if (allText.length < 10) return "At least one article must have content (at least 10 characters)";
+    if (!hasPdf && allText.length < 10) return "At least one article must have content (at least 10 characters)";
     if (mode === "schedule" && !scheduledAt) return "Scheduled date/time is required";
     if (mode === "schedule" && scheduledAt) {
       const utc = new Date(scheduledAt + "+05:30");
@@ -1161,10 +1118,88 @@ export function AdminNewsletterComposerPage() {
               )}
             </div>
 
-            {/* Articles */}
+          </div>
+
+          {/* Section 2: PDF Link */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">PDF Link</h2>
+              {embeddedItems.some((i) => i.type === "pdf") && (
+                <span className="text-xs font-medium text-amber-600 bg-amber-50 px-2 py-0.5 rounded-full">PDF attached</span>
+              )}
+            </div>
+            <div className="space-y-3">
+              <div>
+                <Label className="text-xs font-semibold text-gray-600">PDF URL <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <input
+                  type="url" value={pdfUrl}
+                  onChange={(e) => setPdfUrl(e.target.value)}
+                  placeholder="Paste any PDF URL or Google Drive share link"
+                  className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+                />
+                <p className="mt-1 text-xs text-gray-400">Google Drive links are supported — just paste the share link as-is.</p>
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-gray-600">Label <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <input
+                  type="text" value={pdfTitle}
+                  onChange={(e) => setPdfTitle(e.target.value)}
+                  placeholder="e.g. Annual Report 2025"
+                  className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+                />
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setPdfPreviewUrl(normalizePdfUrl(pdfUrl))}
+                  disabled={!pdfUrl.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-50 disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Eye className="w-3.5 h-3.5" /> Preview
+                </button>
+                <button
+                  type="button"
+                  onClick={attachPdf}
+                  disabled={!pdfUrl.trim()}
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-[#008060] text-white rounded-md text-xs font-medium hover:bg-[#006b51] disabled:opacity-40 disabled:cursor-not-allowed transition-colors"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Attach PDF
+                </button>
+              </div>
+              {pdfPreviewUrl && (
+                <div className="space-y-2">
+                  <p className="text-xs text-amber-600 flex items-start gap-1">
+                    <span className="mt-px">⚠</span>
+                    <span>Preview may not display for all URLs due to browser security (X-Frame-Options). The email will always include a working link.</span>
+                  </p>
+                  <iframe
+                    src={pdfPreviewUrl}
+                    className="w-full h-72 rounded-lg border border-gray-200 bg-gray-50"
+                    title="PDF Preview"
+                  />
+                </div>
+              )}
+              {embeddedItems.filter((i) => i.type === "pdf").map((item) => (
+                <div key={item.embedId} className="flex items-center gap-2.5 p-2.5 border border-amber-200 rounded-lg bg-amber-50">
+                  <FileText className="w-4 h-4 text-amber-600 flex-shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-xs font-medium text-gray-800 truncate">{item.title || item.url}</p>
+                    <p className="text-xs text-amber-600">PDF Document</p>
+                  </div>
+                  <a href={item.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-gray-600 p-1" title="Preview"><Link2 className="w-3 h-3" /></a>
+                  <button type="button" onClick={() => setEmbeddedItems((prev) => prev.filter((i) => i.embedId !== item.embedId))} className="text-gray-400 hover:text-red-500 p-1" title="Remove"><X className="w-3.5 h-3.5" /></button>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Section 3: Articles */}
+          <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Articles / Sections *</Label>
+                <Label className="text-sm font-semibold text-gray-700 uppercase tracking-wide">
+                  Articles / Sections {embeddedItems.some((i) => i.type === "pdf") ? <span className="text-gray-400 font-normal normal-case text-xs">(optional — PDF attached)</span> : "*"}
+                </Label>
                 <span className="text-xs text-gray-400">{articles.length} article{articles.length !== 1 ? "s" : ""}</span>
               </div>
               <div className="space-y-3">
@@ -1186,12 +1221,12 @@ export function AdminNewsletterComposerPage() {
             </div>
           </div>
 
-          {/* Section 2: Attach Content */}
+          {/* Section 4: Attach Content */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-4">
             <div className="flex items-center justify-between">
               <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Attach Content</h2>
-              {embeddedItems.length > 0 && (
-                <span className="text-xs font-medium text-[#008060] bg-green-50 px-2 py-0.5 rounded-full">{embeddedItems.length} attached</span>
+              {embeddedItems.filter((i) => i.type !== "pdf").length > 0 && (
+                <span className="text-xs font-medium text-[#008060] bg-green-50 px-2 py-0.5 rounded-full">{embeddedItems.filter((i) => i.type !== "pdf").length} attached</span>
               )}
             </div>
             <p className="text-xs text-gray-400">Attach published blogs, podcasts, or feed posts to feature them in this newsletter.</p>
@@ -1202,7 +1237,7 @@ export function AdminNewsletterComposerPage() {
             />
           </div>
 
-          {/* Section 3: Recipients */}
+          {/* Section 5: Recipients */}
           <div className="bg-white rounded-xl border border-gray-200 p-6 space-y-5">
             <h2 className="text-sm font-semibold text-gray-700 uppercase tracking-wide">Recipients</h2>
 
@@ -1268,12 +1303,7 @@ export function AdminNewsletterComposerPage() {
               />
             </div>
 
-            <Button variant="outline" size="sm" onClick={previewRecipients} disabled={previewLoading} className="gap-2">
-              {previewLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Users className="w-3.5 h-3.5" />}
-              Preview Recipients
-            </Button>
-
-            {recipientPreview && (
+{recipientPreview && (
               <div className="text-sm text-gray-600 bg-gray-50 border rounded-md p-3 flex items-center justify-between">
                 <span>
                   <span className="font-medium text-gray-800">{recipientPreview.count}</span> recipients match these filters.
