@@ -28,8 +28,8 @@ export const MenteeDashboard = (): JSX.Element => {
   const { toast } = useToast();
   const [, setLocation] = useLocation();
 
-  // Guard: redirect mentors to mentor dashboard
   const [statusChecked, setStatusChecked] = useState(false);
+  const [isMentor, setIsMentor] = useState(false);
 
   const [mentors, setMentors] = useState<Mentor[]>([]);
   const [loading, setLoading] = useState(true);
@@ -69,17 +69,14 @@ export const MenteeDashboard = (): JSX.Element => {
 
   const headers = { 'user-id': user?.id || '' };
 
-  // On mount: check if user is already a mentor and redirect
+  // On mount: check mentor status for toggle button (no redirect — dual-role is allowed)
   useEffect(() => {
     if (!user?.id) return;
     fetch('/api/mentorship/my-status', { headers })
       .then(r => r.ok ? r.json() : null)
       .then(data => {
-        if (data?.is_mentor) {
-          setLocation('/mentorship/mentor');
-        } else {
-          setStatusChecked(true);
-        }
+        if (data?.is_mentor) setIsMentor(true);
+        setStatusChecked(true);
       })
       .catch(() => setStatusChecked(true));
   }, [user?.id]);
@@ -135,7 +132,7 @@ export const MenteeDashboard = (): JSX.Element => {
           .map((r: MentorshipRequest) => r.mentor_id));
         setConnectedMentorIds(connected);
         const declined = new Set<string>((data.requests || [])
-          .filter((r: MentorshipRequest) => r.status === 'declined')
+          .filter((r: MentorshipRequest) => r.status === 'rejected')
           .map((r: MentorshipRequest) => r.mentor_id));
         setDeclinedMentorIds(declined);
       }
@@ -857,10 +854,17 @@ export const MenteeDashboard = (): JSX.Element => {
               <PageHeading firstWord="Find" secondWord="a Mentor" className="mb-0" />
               <p className="text-sm sm:text-base text-gray-600 mt-1">AI-powered mentor matching for your career goals</p>
             </div>
+            {isMentor && (
+              <Button variant="outline" size="sm" className="flex items-center gap-2 border-[#008060] text-[#008060] hover:bg-[#008060]/10"
+                onClick={() => setLocation('/mentorship/mentor')}>
+                <Users className="w-4 h-4" />
+                Switch to Mentor Dashboard
+              </Button>
+            )}
           </div>
 
-          {/* Become a Mentor banner for eligible users */}
-          {(isAlumni || isFaculty) && !bannerDismissed && (
+          {/* Become a Mentor banner for eligible users who are not already mentors */}
+          {(isAlumni || isFaculty) && !isMentor && !bannerDismissed && (
             <div className="bg-gradient-to-r from-[#008060]/10 to-[#006b51]/10 border border-[#008060]/20 rounded-xl p-4 flex items-center justify-between gap-4">
               <div className="flex items-center gap-3">
                 <GraduationCap className="w-5 h-5 text-[#008060] flex-shrink-0" />

@@ -30,12 +30,12 @@ export function FeedBlogCard({ blog, onBookmark }: FeedBlogCardProps) {
   return (
     <Card
       className="group overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200"
-      style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)" }}
+      style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)", borderLeft: "3px solid #008060" }}
       onClick={navigate}
     >
       {/* Cover image */}
       {blog.cover_image && !coverError ? (
-        <div className="relative w-full bg-gray-100 overflow-hidden" style={{ paddingTop: "40%" }}>
+        <div className="relative w-full bg-gray-100 overflow-hidden aspect-video">
           <img
             src={blog.cover_image}
             alt={blog.title}
@@ -62,8 +62,7 @@ export function FeedBlogCard({ blog, onBookmark }: FeedBlogCardProps) {
         </div>
       ) : (
         <div
-          className="relative w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center"
-          style={{ height: "120px" }}
+          className="relative w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center aspect-video"
         >
           <BookOpen className="w-10 h-10 text-[#008060]/25" />
           {/* Badges overlaid top-right */}
@@ -125,6 +124,9 @@ export function FeedBlogCard({ blog, onBookmark }: FeedBlogCardProps) {
             </Avatar>
             <div className="min-w-0">
               <p className="text-xs font-medium text-gray-700 truncate">{authorName}</p>
+              {blog.author?.current_role && (
+                <p className="text-xs text-gray-400 truncate">{blog.author.current_role}</p>
+              )}
               <p className="text-xs text-gray-400">{formatDate(blog.published_at)}</p>
             </div>
           </div>

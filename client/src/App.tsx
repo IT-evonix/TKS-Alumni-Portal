@@ -128,16 +128,12 @@ const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ 
 const NotFound = lazy(() => import("@/pages/not-found").then(m => ({ default: m.default })));
 
 const MentorshipRedirect = () => {
-  const { user, isStudent } = useAuth();
+  const { user } = useAuth();
   const [, setLocation] = useLocation();
   useEffect(() => {
-    if (!user?.id) return; // Wait for auth to hydrate before acting
-    if (isStudent) { setLocation('/feed'); return; }
-    fetch('/api/mentorship/my-status', { headers: { 'user-id': user.id } })
-      .then(r => r.ok ? r.json() : null)
-      .then(data => setLocation(data?.is_mentor ? '/mentorship/mentor' : '/mentorship/mentee'))
-      .catch(() => setLocation('/mentorship/mentee'));
-  }, [user?.id, isStudent]);
+    if (!user?.id) return;
+    setLocation('/mentorship/mentee');
+  }, [user?.id]);
   return <PageLoader />;
 };
 

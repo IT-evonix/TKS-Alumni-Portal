@@ -2,7 +2,9 @@ import React, { useState, useEffect, useMemo, useRef, useCallback } from 'react'
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { MapPin, Globe } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Skeleton } from '@/components/ui/skeleton';
+import { MapPin, Globe, RefreshCw } from 'lucide-react';
 import maplibregl from 'maplibre-gl';
 import 'maplibre-gl/dist/maplibre-gl.css';
 import { supabase } from '@/lib/supabase';
@@ -18,6 +20,7 @@ interface AlumniData {
   current_city?: string;
   current_state?: string;
   current_country?: string;
+  location_type?: string;
 }
 
 const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
@@ -168,7 +171,15 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
             8, 3,
             15, 8
           ],
-          'circle-color': '#10b981', // emerald-500
+          'circle-color': [
+            'match', ['get', 'location_type'],
+            'Home', '#3b82f6',
+            'University', '#8b5cf6',
+            'Job', '#10b981',
+            'Internship', '#f59e0b',
+            'Other', '#6b7280',
+            '#10b981'
+          ] as any,
           'circle-stroke-color': '#ffffff',
           'circle-stroke-width': [
             'interpolate',
@@ -294,10 +305,22 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
         const alumniListHtml = features.map(f => {
           const props = f.properties as any;
           const name = `${props.first_name || ''} ${props.last_name || ''}`.trim() || 'Alumnus';
+          const locationTypeBadgeColors: Record<string, string> = {
+            Home: 'background:#dbeafe;color:#1d4ed8;border:1px solid #bfdbfe',
+            University: 'background:#ede9fe;color:#6d28d9;border:1px solid #ddd6fe',
+            Job: 'background:#d1fae5;color:#065f46;border:1px solid #a7f3d0',
+            Internship: 'background:#fef3c7;color:#92400e;border:1px solid #fde68a',
+            Other: 'background:#f3f4f6;color:#374151;border:1px solid #e5e7eb',
+          };
+          const locType = props.location_type || '';
+          const badgeStyle = locType && locationTypeBadgeColors[locType] ? locationTypeBadgeColors[locType] : '';
+          const locTypeBadge = locType
+            ? `<span style="font-size:10px;padding:1px 6px;border-radius:9999px;margin-left:6px;${badgeStyle}">${locType}</span>`
+            : '';
           return `
           <div style="display: flex; justify-content: space-between; margin-bottom: 8px; gap: 12px; align-items: center; padding: 10px 12px; background: #f8fafc; border-radius: 8px; border: 1px solid #e2e8f0; transition: all 0.2s ease;">
             <div style="display: flex; flex-direction: column; min-width: 0;">
-              <span style="font-weight: 600; color: #0f172a; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}</span>
+              <span style="font-weight: 600; color: #0f172a; font-size: 13px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${name}${locTypeBadge}</span>
               <span style="font-size: 11px; color: #64748b; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${props.label}</span>
             </div>
             <div style="display: flex; gap: 6px; flex-shrink: 0;">
@@ -368,8 +391,8 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
           </style>
           <div style="color: #0f172a; padding: 0px; width: 100%; min-width: 200px; font-family: inherit; box-sizing: border-box;">
             <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 12px; border-bottom: 2px solid #f1f5f9; padding-bottom: 12px; padding-right: 24px;">
-              <div style="background: #fffbeb; color: #d97706; width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; font-size: 18px; border: 1px solid #fef3c7;">
-                📍
+              <div style="background:#ecfdf5;color:#008060;width:36px;height:36px;border-radius:10px;display:flex;align-items:center;justify-content:center;border:1px solid #d1fae5;flex-shrink:0;">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 10c0 6-8 12-8 12S4 16 4 10a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></svg>
               </div>
               <div>
                 <h3 style="margin: 0;  font-size: 15px; font-weight: 800; color: #0f172a; letter-spacing: -0.01em;">Location Details</h3>
@@ -441,7 +464,8 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
           label: alumnus.location_label || 'Unknown Location',
           city: alumnus.current_city || '',
           state: alumnus.current_state || '',
-          country: alumnus.current_country || ''
+          country: alumnus.current_country || '',
+          location_type: alumnus.location_type || ''
         }
       }))
     };
@@ -513,7 +537,11 @@ const MapWrapper = ({ data, view, viewVersion, onBoundsChange, showHeatmap }: {
   return <div ref={containerRef} className="w-full h-full rounded-2xl" />;
 };
 
-export default function AlumniHeatMap() {
+interface AlumniHeatMapProps {
+  onDataLoad?: (stats: { totalAlumni: number; countries: number; continents: number }) => void;
+}
+
+export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
   const [alumniData, setAlumniData] = useState<AlumniData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -532,6 +560,34 @@ export default function AlumniHeatMap() {
       const data = await res.json();
       const loadedAlumni = data.alumni || [];
       setAlumniData(loadedAlumni);
+
+      if (onDataLoad) {
+        const uniqueCountries = new Set(
+          loadedAlumni.map((a: AlumniData) => a.current_country || '').filter(Boolean)
+        );
+        const CONTINENT_MAP: Record<string, string> = {
+          'United States':'NA','Canada':'NA','Mexico':'NA',
+          'Brazil':'SA','Argentina':'SA','Colombia':'SA','Chile':'SA','Peru':'SA',
+          'United Kingdom':'EU','Germany':'EU','France':'EU','Spain':'EU','Italy':'EU',
+          'Netherlands':'EU','Sweden':'EU','Norway':'EU','Denmark':'EU','Finland':'EU',
+          'Switzerland':'EU','Austria':'EU','Belgium':'EU','Portugal':'EU','Poland':'EU',
+          'China':'AS','Japan':'AS','India':'AS','South Korea':'AS','Indonesia':'AS',
+          'Pakistan':'AS','Vietnam':'AS','Thailand':'AS','Malaysia':'AS','Singapore':'AS',
+          'Philippines':'AS','Taiwan':'AS','Hong Kong':'AS','Israel':'AS','Turkey':'AS',
+          'Saudi Arabia':'AS','UAE':'AS','Qatar':'AS',
+          'Nigeria':'AF','Egypt':'AF','Ghana':'AF','Kenya':'AF','South Africa':'AF',
+          'Ethiopia':'AF','Morocco':'AF','Tanzania':'AF',
+          'Australia':'OC','New Zealand':'OC',
+        };
+        const uniqueContinents = new Set(
+          Array.from(uniqueCountries).map(c => CONTINENT_MAP[c as keyof typeof CONTINENT_MAP] || null).filter(Boolean)
+        );
+        onDataLoad({
+          totalAlumni: loadedAlumni.length,
+          countries: uniqueCountries.size,
+          continents: uniqueContinents.size,
+        });
+      }
 
       // Auto-fit to show all alumni on the globe on first load
       if (isInitial && loadedAlumni.length > 0) {
@@ -568,6 +624,7 @@ export default function AlumniHeatMap() {
     const channel = supabase
       .channel('alumni-map-changes')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'alumni' }, () => fetchData(false))
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'alumni_locations' }, () => fetchData(false))
       .subscribe();
     return () => { supabase.removeChannel(channel); };
   }, [fetchData]);
@@ -620,30 +677,46 @@ export default function AlumniHeatMap() {
   }, [alumniData, mapBounds]);
 
   if (loading) return (
-    <div className="p-0 space-y-6 w-full max-w-5xl mx-auto animate-pulse">
-      {/* Search Header Skeleton */}
-      <div className="w-full h-12 bg-slate-200 rounded-xl max-w-md"></div>
-      
-      {/* Main Card Skeleton */}
-      <div className="overflow-hidden border border-slate-200 shadow-sm rounded-xl">
-        <div className="grid grid-cols-1 md:grid-cols-4 md:h-[600px]">
+    <div className="p-0 space-y-6 w-full max-w-5xl mx-auto">
+      <div className="overflow-hidden border border-slate-200 shadow-sm rounded-2xl">
+        <div className="flex flex-col-reverse lg:flex-row w-full h-[600px] min-h-[500px]">
+
           {/* Sidebar Skeleton */}
-          <div className="col-span-1 bg-white border-b md:border-b-0 md:border-r border-slate-100 p-5 flex flex-col gap-4 h-[300px] md:h-full">
-            <div className="w-1/2 h-6 bg-slate-200 rounded"></div>
-            <div className="w-full h-8 bg-slate-100 rounded"></div>
-            <div className="space-y-3 mt-4">
-              <div className="w-full h-16 bg-slate-100 rounded-lg"></div>
-              <div className="w-full h-16 bg-slate-100 rounded-lg"></div>
-              <div className="w-full h-16 bg-slate-100 rounded-lg"></div>
+          <div className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-slate-100 bg-white/60 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0 p-4 gap-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2">
+                <Skeleton className="w-5 h-5 rounded-full" />
+                <Skeleton className="w-28 h-5 rounded" />
+                <Skeleton className="w-14 h-5 rounded-full" />
+              </div>
+              <Skeleton className="w-20 h-8 rounded-lg" />
+            </div>
+            <Skeleton className="w-36 h-3 rounded mt-1" />
+            <div className="space-y-2 mt-1">
+              {[1, 2, 3, 4].map(i => (
+                <div key={i} className="flex items-center justify-between p-3 rounded-lg border border-slate-100">
+                  <div className="space-y-1.5 flex-1 pr-3">
+                    <Skeleton className="w-3/4 h-4 rounded" />
+                    <Skeleton className="w-1/2 h-3 rounded" />
+                  </div>
+                  <Skeleton className="w-16 h-5 rounded-full" />
+                </div>
+              ))}
             </div>
           </div>
+
           {/* Map Area Skeleton */}
-          <div className="col-span-3 h-[400px] md:h-full relative bg-slate-100 flex items-center justify-center">
-            <div className="flex flex-col items-center justify-center space-y-4">
-              <div className="animate-spin rounded-full h-10 w-10 border-b-2 border-primary"></div>
-              <p className="text-slate-500 font-medium text-sm">Loading global network...</p>
+          <div className="flex-1 h-[55%] lg:h-full relative overflow-hidden rounded-tr-2xl rounded-br-2xl">
+            <div
+              className="w-full h-full animate-pulse"
+              style={{ background: 'linear-gradient(135deg, #e8f4f0 0%, #d1ece4 30%, #e8f4f0 60%, #d1ece4 100%)' }}
+            />
+            <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
+              <div className="w-12 h-12 rounded-full border-2 border-[#008060]/30 border-t-[#008060] animate-spin" />
+              <p className="text-sm font-medium text-[#008060]/70 tracking-wide">Loading global network…</p>
             </div>
           </div>
+
         </div>
       </div>
     </div>
@@ -658,41 +731,55 @@ export default function AlumniHeatMap() {
 
           {/* Sidebar */}
           <div className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0">
-            <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <Globe className="w-5 h-5 text-primary" /> Directory
-              </h3>
-              <Button variant="ghost" size="sm" onClick={() => {
-                if (alumniData.length > 0) {
-                  let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
-                  alumniData.forEach(a => {
-                    if (a.longitude < minLng) minLng = a.longitude;
-                    if (a.longitude > maxLng) maxLng = a.longitude;
-                    if (a.latitude < minLat) minLat = a.latitude;
-                    if (a.latitude > maxLat) maxLat = a.latitude;
-                  });
-                  if (minLng !== maxLng || minLat !== maxLat) {
-                    setMapView({
-                      center: [(minLng + maxLng) / 2 as number, (minLat + maxLat) / 2 as number],
-                      zoom: 1,
-                      bounds: [[minLng, minLat], [maxLng, maxLat]]
+            <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between gap-2">
+              <div className="flex items-center gap-2 min-w-0">
+                <Globe className="w-5 h-5 text-primary shrink-0" />
+                <h3 className="font-bold text-base leading-none">Global Directory</h3>
+                {alumniData.length > 0 && (
+                  <span className="inline-flex items-center bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full leading-none whitespace-nowrap">
+                    {alumniData.length} alumni
+                  </span>
+                )}
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex items-center gap-1.5 text-xs h-8 px-2.5 shrink-0 border-border hover:border-primary/40 hover:text-primary transition-colors"
+                onClick={() => {
+                  if (alumniData.length > 0) {
+                    let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+                    alumniData.forEach(a => {
+                      if (a.longitude < minLng) minLng = a.longitude;
+                      if (a.longitude > maxLng) maxLng = a.longitude;
+                      if (a.latitude < minLat) minLat = a.latitude;
+                      if (a.latitude > maxLat) maxLat = a.latitude;
                     });
+                    if (minLng !== maxLng || minLat !== maxLat) {
+                      setMapView({
+                        center: [(minLng + maxLng) / 2 as number, (minLat + maxLat) / 2 as number],
+                        zoom: 1,
+                        bounds: [[minLng, minLat], [maxLng, maxLat]]
+                      });
+                      setViewVersion(v => v + 1);
+                    }
+                  } else {
+                    setMapView({ center: [0, 20], zoom: 1 });
                     setViewVersion(v => v + 1);
                   }
-                } else {
-                  setMapView({ center: [0, 20], zoom: 1 });
-                  setViewVersion(v => v + 1);
-                }
-              }}>Reset</Button>
+                }}
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Reset
+              </Button>
             </div>
 
             <div className="flex-1 overflow-y-auto p-4 space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider mb-4">
+              <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3 px-1 select-none">
                 {mapBounds && mapBounds.zoom < 4 ? 'Countries in View' : (mapBounds && mapBounds.zoom < 7 ? 'States / Regions in View' : 'Cities / Locations in View')}
               </p>
               {sidebarItems.length > 0 ? sidebarItems.map(item => (
                 <div key={item.label}
-                  className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all border shadow-sm border-border/50"
+                  className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all duration-200 border shadow-sm border-border/50 hover:border-primary/30 border-l-[3px] border-l-transparent hover:border-l-primary group"
                   onClick={() => {
                     const z = mapBounds ? mapBounds.zoom : 1;
                     const isCountryLevel = z < 4;
@@ -750,15 +837,28 @@ export default function AlumniHeatMap() {
                       </span>
                     )}
                   </div>
-                  <Badge variant="secondary" className="bg-primary/10 text-primary whitespace-nowrap shrink-0">
-                    {item.count} Alumni
+                  <Badge
+                    key={`${item.label}-${item.count}`}
+                    variant="secondary"
+                    className="bg-primary/10 text-primary whitespace-nowrap shrink-0"
+                  >
+                    {item.count} {item.count === 1 ? 'Alumnus' : 'Alumni'}
                   </Badge>
                 </div>
               )) : (
-                <div className="p-6 mt-4 text-center border border-dashed border-border rounded-xl bg-muted/30">
-                  <MapPin className="w-8 h-8 text-muted-foreground/50 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-foreground">No Alumni in View</p>
-                  <p className="text-xs text-muted-foreground mt-1">Try zooming out or panning to a different location.</p>
+                <div className="p-6 mt-4 text-center border border-dashed border-border rounded-xl bg-muted/20">
+                  <div className="relative w-12 h-12 mx-auto mb-3">
+                    <div className="absolute inset-0 rounded-full bg-muted/60 flex items-center justify-center">
+                      <MapPin className="w-6 h-6 text-muted-foreground/40" />
+                    </div>
+                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center">
+                      <span className="text-[9px] font-bold text-muted-foreground/50">0</span>
+                    </div>
+                  </div>
+                  <p className="text-sm font-semibold text-foreground">No Alumni in View</p>
+                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-[180px] mx-auto">
+                    Zoom out or pan the map to discover alumni in other areas.
+                  </p>
                 </div>
               )}
             </div>
@@ -775,39 +875,32 @@ export default function AlumniHeatMap() {
             />
  
             {/* Legend - Sleek Gradient Bar */}
-            <div 
-              className={`absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 bg-background/95 backdrop-blur-md px-3 py-2 sm:px-4 sm:py-3 rounded-xl border border-border/50 shadow-lg w-[130px] sm:w-[220px] transition-all duration-300 ${!showHeatmap ? 'opacity-65' : ''}`}
+            <div
+              className={`absolute bottom-3 right-3 sm:bottom-4 sm:right-4 z-10 bg-background/95 backdrop-blur-md px-3 py-2.5 sm:px-4 sm:py-3 rounded-xl border border-border/50 shadow-lg w-[150px] sm:w-[230px] transition-all duration-300 ${!showHeatmap ? 'opacity-65' : ''}`}
             >
-              <div 
-                className="flex items-center gap-1.5 sm:gap-2 mb-1.5 sm:mb-2 cursor-pointer select-none"
-                onClick={() => setShowHeatmap(!showHeatmap)}
-              >
-                <input 
-                  type="checkbox" 
-                  checked={showHeatmap} 
-                  onChange={() => {}} // Controlled by div click
-                  className="rounded border-border text-primary focus:ring-primary h-3 w-3 sm:h-3.5 sm:w-3.5 cursor-pointer accent-primary"
-                />
-                <h4 className="text-[9px] sm:text-[10px] font-bold uppercase tracking-wider text-muted-foreground">
+              <div className="flex items-center justify-between gap-3 mb-2">
+                <h4 className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground leading-none">
                   <span className="inline sm:hidden">Density</span>
                   <span className="hidden sm:inline">Heatmap Density</span>
                 </h4>
-              </div>
-              <div className="space-y-1.5 sm:space-y-2">
-                {/* The gradient bar */}
-                <div 
-                  className="w-full h-1.5 sm:h-2 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] transition-all duration-300" 
-                  style={{ 
-                    background: 'linear-gradient(to right, #10b981, #fbbf24, #f97316, #ef4444)',
-                    filter: showHeatmap ? 'none' : 'grayscale(100%) opacity(30%)'
-                  }} 
+                <Switch
+                  checked={showHeatmap}
+                  onCheckedChange={setShowHeatmap}
+                  className="scale-75 origin-right"
+                  aria-label="Toggle heatmap density layer"
                 />
-                {/* Labels beneath the bar */}
-                <div className="flex justify-between items-center text-[8px] sm:text-[10px] font-bold text-muted-foreground px-0.5">
-                  <span>Low</span>
-                  <span className="hidden sm:inline">Medium</span>
-                  <span>High</span>
-                </div>
+              </div>
+              <div
+                className="w-full h-2 rounded-full shadow-[inset_0_1px_2px_rgba(0,0,0,0.1)] transition-all duration-300"
+                style={{
+                  background: 'linear-gradient(to right, #10b981, #fbbf24, #f97316, #ef4444)',
+                  filter: showHeatmap ? 'none' : 'grayscale(100%) opacity(30%)'
+                }}
+              />
+              <div className="flex justify-between items-center text-[9px] sm:text-[10px] font-bold text-muted-foreground px-0.5 mt-1.5">
+                <span>Low</span>
+                <span className="hidden sm:inline">Medium</span>
+                <span>High</span>
               </div>
             </div>
           </div>

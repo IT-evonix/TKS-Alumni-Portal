@@ -84,16 +84,31 @@ export const FeedPage = (): JSX.Element => {
   const [posts, setPosts] = useState<any[]>([]);
   const [blogs, setBlogs] = useState<any[]>([]);
   const [podcasts, setPodcasts] = useState<any[]>([]);
+  const [feedFilter, setFeedFilter] = useState<"all" | "post" | "blog" | "podcast">("all");
+  const [feedLimit, setFeedLimit] = useState(30);
 
   // Merged, chronologically sorted feed items
-  const feedItems = useMemo<FeedItem[]>(() => {
+  const allFeedItems = useMemo<FeedItem[]>(() => {
     const taggedPosts = posts.map((p: any) => ({ ...p, _type: "post" as const, _sortDate: p.created_at }));
     const taggedBlogs = blogs.map((b: any) => ({ ...b, _type: "blog" as const, _sortDate: b.published_at }));
     const taggedPodcasts = podcasts.map((p: any) => ({ ...p, _type: "podcast" as const, _sortDate: p.published_at ?? p.created_at }));
     return [...taggedPosts, ...taggedBlogs, ...taggedPodcasts]
-      .sort((a, b) => new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime())
-      .slice(0, 30);
+      .sort((a, b) => new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime());
   }, [posts, blogs, podcasts]);
+
+  const feedItems = useMemo<FeedItem[]>(() => {
+    const filtered = feedFilter === "all" ? allFeedItems : allFeedItems.filter(i => i._type === feedFilter);
+    return filtered.slice(0, feedLimit);
+  }, [allFeedItems, feedFilter, feedLimit]);
+
+  const tabCounts = useMemo(() => ({
+    all: allFeedItems.length,
+    post: allFeedItems.filter(i => i._type === "post").length,
+    blog: allFeedItems.filter(i => i._type === "blog").length,
+    podcast: allFeedItems.filter(i => i._type === "podcast").length,
+  }), [allFeedItems]);
+
+  useEffect(() => { setFeedLimit(30); }, [feedFilter]);
 
   // Post creation states
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -1288,6 +1303,29 @@ export const FeedPage = (): JSX.Element => {
                   </Card>
                 )}
 
+                {/* Content-type filter tabs */}
+                {!isLoadingPosts && !error && allFeedItems.length > 0 && (
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {(["all", "post", "blog", "podcast"] as const).map((type) => {
+                      const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts" };
+                      const isActive = feedFilter === type;
+                      return (
+                        <button
+                          key={type}
+                          onClick={() => setFeedFilter(type)}
+                          className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                            isActive
+                              ? "bg-[#008060] text-white border-[#008060]"
+                              : "bg-white text-gray-600 border-gray-200 hover:border-[#008060]/40 hover:text-[#008060]"
+                          }`}
+                        >
+                          {labels[type]} ({tabCounts[type]})
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+
                 {/* Feed — posts, blogs, and podcasts interleaved by date */}
                 <div className="space-y-8">
                   {feedItems.map((item) => {
@@ -1330,6 +1368,16 @@ export const FeedPage = (): JSX.Element => {
                     );
                   })}
                 </div>
+
+                {/* Load more */}
+                {!isLoadingPosts && feedItems.length === feedLimit && (
+                  <button
+                    onClick={() => setFeedLimit(prev => prev + 20)}
+                    className="w-full py-2.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-[#008060]/40 hover:text-[#008060] transition-colors bg-white"
+                  >
+                    Load more
+                  </button>
+                )}
               </div>
 
               {/* Mobile Carousel Sections */}

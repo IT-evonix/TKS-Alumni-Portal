@@ -24,6 +24,7 @@ import { InterestPicker } from "@/components/profile/InterestPicker";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { BackButton } from "@/components/common/BackButton";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
+import { LocationManager } from "@/components/profile/LocationManager";
 import { validateName, validateEmail, validateLinkedInURL, validateTextLength, sanitizeString, validateGitHubURL, validateTwitterURL, validateWebsiteURL } from "@/utils/validation";
 import { getGraduationYearOptions } from "@/constants/graduationYear";
 
@@ -1591,6 +1592,16 @@ export const UserProfilePage = (): JSX.Element => {
                     Search and select your exact location. This powers the interactive Alumni Map.
                   </p>
                 </div>
+              </div>
+
+              <div className="border-t pt-5">
+                <div className="flex items-center gap-2 mb-1">
+                  <h4 className="text-sm font-semibold">Additional Locations</h4>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Add multiple locations (Home, University, Job, Internship) — each appears as a separate pin on the Alumni Map.
+                </p>
+                <LocationManager userId={user!.id} disabled={isPreviewMode} />
               </div>
 
               {/* Added Employment Status and Experience */}

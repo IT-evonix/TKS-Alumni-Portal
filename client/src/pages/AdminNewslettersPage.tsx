@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import {
   Plus, Send, Trash2, Edit, Clock, CheckCircle, AlertCircle,
-  Users, Loader2, Newspaper, Calendar, MailOpen, TrendingUp, FileText,
+  Users, Loader2, Newspaper, Calendar, MailOpen, TrendingUp, FileText, Bell, LogOut, ArrowLeft,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
@@ -14,6 +14,8 @@ import {
 } from "@/components/ui/alert-dialog";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 // ---- Types ----
 interface Newsletter {
@@ -36,9 +38,11 @@ interface Newsletter {
 }
 
 export function AdminNewslettersPage() {
-  const { user, adminUser } = useAuth();
+  const { user, adminUser, logoutAdmin } = useAuth();
   const { toast } = useToast();
   const [, navigate] = useLocation();
+  const { unreadCount } = useNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [newsletters, setNewsletters] = useState<Newsletter[]>([]);
   const [loading, setLoading] = useState(true);
@@ -191,31 +195,75 @@ export function AdminNewslettersPage() {
   const overallRate = totalRecipients > 0 ? Math.round((totalDelivered / totalRecipients) * 100) : null;
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-white">
       <AdminSidebar currentPage="newsletters" />
 
-      <div className="flex-1 overflow-auto min-w-0">
-        {/* Page header */}
-        <div className="bg-white border-b border-gray-200 px-6 py-5">
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-8 py-4 sticky top-0 z-40 shadow-sm transition-all duration-300">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="p-2.5 bg-sky-50 rounded-xl">
-                <Newspaper className="w-6 h-6 text-sky-600" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => navigate("/admin/dashboard")}
+                className="hover:bg-gray-100"
+                aria-label="Back to Dashboard"
+              >
+                <ArrowLeft className="h-5 w-5 text-gray-700" />
+              </Button>
+              <h2 className="text-xl font-semibold text-gray-900">Newsletters</h2>
+            </div>
+            <div className="flex items-center gap-4">
+              <Button
+                onClick={() => navigate("/admin/newsletters/new")}
+                className="bg-[#008060] hover:bg-[#006b51] text-white gap-2"
+                size="sm"
+              >
+                <Plus className="w-4 h-4" />
+                New Newsletter
+              </Button>
+              <div className="relative z-[70]">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`relative min-w-[44px] min-h-[44px] rounded-full transition-colors ${
+                    unreadCount > 0
+                      ? "text-[#008060] hover:bg-[#008060]/10 hover:text-[#006b51] ring-2 ring-[#008060]/30"
+                      : "text-gray-600 hover:text-[#008060] hover:bg-gray-100"
+                  }`}
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+                >
+                  <Bell className="w-5 h-5" strokeWidth={2} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white animate-pulse">
+                      {unreadCount > 99 ? "99+" : unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+                {showNotifications && <NotificationDropdown onClose={() => setShowNotifications(false)} />}
               </div>
-              <div>
-                <h1 className="text-xl font-bold text-gray-900 leading-tight">Newsletters</h1>
-                <p className="text-sm text-gray-500">Create and send newsletters to alumni</p>
+              <Button
+                variant="outline"
+                className="text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all"
+                onClick={() => logoutAdmin()}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Log Out
+              </Button>
+              <div className="hidden md:flex items-center gap-3 pl-4 border-l border-gray-200">
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-gray-900">{adminUser?.username || "Admin"}</p>
+                  <p className="text-xs text-gray-500">Administrator</p>
+                </div>
+                <div className="w-10 h-10 bg-gradient-to-br from-[#008060] to-[#006b51] rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white font-semibold">{adminUser?.username?.charAt(0).toUpperCase() || "A"}</span>
+                </div>
               </div>
             </div>
-            <Button
-              onClick={() => navigate("/admin/newsletters/new")}
-              className="bg-[#008060] hover:bg-[#006b51] text-white gap-2"
-            >
-              <Plus className="w-4 h-4" />
-              New Newsletter
-            </Button>
           </div>
-        </div>
+        </header>
 
         <div className="p-6 space-y-6">
           {/* ZeptoMail credit warning */}

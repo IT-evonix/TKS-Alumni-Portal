@@ -197,11 +197,55 @@ router.get('/map-data', async (req, res) => {
     // Filter out users who still don't have lat/lng even after geocoding
     const finalAlumni = validAlumni.filter(a => a.latitude != null && a.longitude != null);
 
+    // Fetch additional locations from alumni_locations table
+    const { data: extraLocations } = await db
+      .from('alumni_locations')
+      .select(`
+        id,
+        alumni_id,
+        label_type,
+        city,
+        state,
+        country,
+        latitude,
+        longitude,
+        location_label,
+        alumni!inner (
+          id,
+          user_id,
+          first_name,
+          last_name,
+          users!inner (
+            user_role
+          )
+        )
+      `)
+      .eq('alumni.users.user_role', 'alumni')
+      .not('latitude', 'is', null)
+      .not('longitude', 'is', null);
+
+    const mappedExtra = (extraLocations || []).map((row: any) => ({
+      id: row.alumni.id,
+      user_id: row.alumni.user_id,
+      first_name: row.alumni.first_name,
+      last_name: row.alumni.last_name,
+      latitude: Number(row.latitude),
+      longitude: Number(row.longitude),
+      location_label: row.location_label || [row.city, row.state, row.country].filter(Boolean).join(', '),
+      current_city: row.city,
+      current_state: row.state,
+      current_country: row.country,
+      location_type: row.label_type,
+    }));
+
+    const allAlumni = [...finalAlumni, ...mappedExtra];
+    const distinctAlumniIds = new Set(allAlumni.map(a => a.user_id)).size;
+
     res.json({
       success: true,
-      alumni: finalAlumni,
+      alumni: allAlumni,
       statistics: {
-        total: finalAlumni.length
+        total: distinctAlumniIds
       }
     });
 

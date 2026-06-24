@@ -569,11 +569,18 @@ export const MentorDashboard = (): JSX.Element => {
               <PageHeading firstWord="Mentor" secondWord="Dashboard" className="mb-0" />
               <p className="text-sm sm:text-base text-gray-600 mt-1">Manage your mentees, sessions, and availability</p>
             </div>
-            <Button onClick={handleDisableMentor} variant="destructive" disabled={disabling}
-              className="w-full sm:w-auto min-h-[44px] text-sm sm:text-base">
-              <Users className="w-4 h-4 mr-2" />
-              {disabling ? 'Disabling…' : 'Disable Mentor Status'}
-            </Button>
+            <div className="flex flex-col sm:flex-row gap-2 w-full sm:w-auto">
+              <Button variant="outline" size="sm" className="flex items-center gap-2 border-[#008060] text-[#008060] hover:bg-[#008060]/10 min-h-[44px]"
+                onClick={() => setLocation('/mentorship/mentee')}>
+                <BookOpen className="w-4 h-4" />
+                Find a Mentor
+              </Button>
+              <Button onClick={handleDisableMentor} variant="destructive" disabled={disabling}
+                className="w-full sm:w-auto min-h-[44px] text-sm sm:text-base">
+                <Users className="w-4 h-4 mr-2" />
+                {disabling ? 'Disabling…' : 'Disable Mentor Status'}
+              </Button>
+            </div>
           </div>
 
           {/* Availability settings panel */}

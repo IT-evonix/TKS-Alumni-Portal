@@ -757,11 +757,11 @@ function CustomEmailsPanel({
 
 // ---- Shared newsletter preview body (used in sticky panel + slide-over) ----
 function NewsletterPreviewBody({
-  coverImage, title, excerpt, articles, embeddedItems,
+  title, excerpt, articles, embeddedItems,
   recipientPreview, previewLoading,
   recipientRole, recipientBatch, recipientGradYear, recipientDepartment, customEmails,
 }: {
-  coverImage: string; title: string; excerpt: string;
+  title: string; excerpt: string;
   articles: Article[]; embeddedItems: EmbeddedItem[];
   recipientPreview: RecipientPreview | null; previewLoading: boolean;
   recipientRole: string; recipientBatch: string; recipientGradYear: string;
@@ -769,9 +769,6 @@ function NewsletterPreviewBody({
 }) {
   return (
     <div className="p-5 space-y-5">
-      {coverImage && (
-        <img src={coverImage} alt="Cover" className="w-full h-36 object-cover rounded-lg" onError={(e) => (e.currentTarget.style.display = "none")} />
-      )}
       <div>
         <h2 className="text-lg font-bold text-gray-900 leading-tight">
           {title || <span className="text-gray-300 italic font-normal">Newsletter title…</span>}
@@ -870,7 +867,6 @@ export function AdminNewsletterComposerPage() {
 
   const [title, setTitle] = useState("");
   const [excerpt, setExcerpt] = useState("");
-  const [coverImage, setCoverImage] = useState("");
   const [recipientRole, setRecipientRole] = useState("all");
   const [recipientBatch, setRecipientBatch] = useState("all");
   const [recipientGradYear, setRecipientGradYear] = useState("all");
@@ -913,7 +909,6 @@ export function AdminNewsletterComposerPage() {
         setNewsletter(nl);
         setTitle(nl.title || "");
         setExcerpt(nl.excerpt || "");
-        setCoverImage(nl.cover_image || "");
         setRecipientRole(nl.recipient_role || "all");
         setRecipientBatch(nl.recipient_batch || "all");
         setRecipientGradYear(nl.recipient_graduation_year || "all");
@@ -951,7 +946,6 @@ export function AdminNewsletterComposerPage() {
           setHasDraft(true);
           setTitle(d.title || "");
           setExcerpt(d.excerpt || "");
-          setCoverImage(d.coverImage || "");
           setRecipientRole(d.recipientRole || "all");
           setRecipientBatch(d.recipientBatch || "all");
           setRecipientGradYear(d.recipientGradYear || "all");
@@ -1002,7 +996,7 @@ export function AdminNewsletterComposerPage() {
     if (!isEdit) {
       autosaveTimerRef.current = setTimeout(() => {
         localStorage.setItem(autosaveKey, JSON.stringify({
-          title, excerpt, articles, embeddedItems, coverImage, recipientRole, recipientBatch, recipientGradYear, recipientDepartment, customEmails,
+          title, excerpt, articles, embeddedItems, recipientRole, recipientBatch, recipientGradYear, recipientDepartment, customEmails,
         }));
       }, 5000);
     } else if (newsletter?.status === "draft") {
@@ -1013,7 +1007,7 @@ export function AdminNewsletterComposerPage() {
           await fetch(`/api/admin/newsletters/${newsletterId}`, {
             method: "PUT", headers: getHeaders(),
             body: JSON.stringify({
-              title, excerpt, content: getContent(), cover_image: coverImage,
+              title, excerpt, content: getContent(),
               recipient_role: recipientRole, recipient_batch: recipientBatch,
               recipient_graduation_year: recipientGradYear, recipient_department: recipientDepartment,
               custom_recipient_emails: customEmails.map((e) => e.email),
@@ -1029,7 +1023,7 @@ export function AdminNewsletterComposerPage() {
       }, 5000);
     }
     return () => { if (autosaveTimerRef.current) clearTimeout(autosaveTimerRef.current); };
-  }, [title, excerpt, articles, embeddedItems, coverImage, recipientRole, recipientBatch, recipientGradYear, recipientDepartment, customEmails]);
+  }, [title, excerpt, articles, embeddedItems, recipientRole, recipientBatch, recipientGradYear, recipientDepartment, customEmails]);
 
   const clearDraft = () => localStorage.removeItem(autosaveKey);
 
@@ -1118,7 +1112,6 @@ export function AdminNewsletterComposerPage() {
         title: title.trim(),
         excerpt: excerpt.trim() || null,
         content: getContent(),
-        cover_image: coverImage.trim() || null,
         recipient_role: recipientRole,
         recipient_batch: recipientBatch,
         recipient_graduation_year: recipientGradYear,
@@ -1264,13 +1257,6 @@ export function AdminNewsletterComposerPage() {
               <p className="text-xs text-gray-400 mt-1">{excerpt.length}/300</p>
             </div>
 
-            <div>
-              <Label htmlFor="nl-cover">Cover Image URL <span className="text-gray-400 font-normal">(optional)</span></Label>
-              <Input id="nl-cover" value={coverImage} onChange={(e) => setCoverImage(e.target.value)} placeholder="https://…" className="mt-1" />
-              {coverImage && (
-                <img src={coverImage} alt="Cover preview" className="mt-2 rounded-md h-24 object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
-              )}
-            </div>
 
           </div>
 
@@ -1657,7 +1643,7 @@ export function AdminNewsletterComposerPage() {
               <span className="ml-2 text-xs font-medium text-gray-400 tracking-wide">Live Preview</span>
             </div>
             <NewsletterPreviewBody
-              coverImage={coverImage} title={title} excerpt={excerpt}
+              title={title} excerpt={excerpt}
               articles={articles} embeddedItems={embeddedItems}
               recipientPreview={recipientPreview} previewLoading={previewLoading}
               recipientRole={recipientRole} recipientBatch={recipientBatch}
@@ -1677,7 +1663,7 @@ export function AdminNewsletterComposerPage() {
             <SheetTitle className="text-xs font-medium text-gray-400 tracking-wide">Live Preview</SheetTitle>
           </SheetHeader>
           <NewsletterPreviewBody
-            coverImage={coverImage} title={title} excerpt={excerpt}
+            title={title} excerpt={excerpt}
             articles={articles} embeddedItems={embeddedItems}
             recipientPreview={recipientPreview} previewLoading={previewLoading}
             recipientRole={recipientRole} recipientBatch={recipientBatch}
@@ -1705,9 +1691,6 @@ export function AdminNewsletterComposerPage() {
 
             {/* Preview card */}
             <div className="border border-gray-200 rounded-xl overflow-hidden bg-white shadow-sm">
-              {coverImage && (
-                <img src={coverImage} alt="Cover" className="w-full h-40 object-cover" onError={(e) => (e.currentTarget.style.display = "none")} />
-              )}
               <div className="p-5 space-y-5">
                 <div>
                   <h2 className="text-lg font-bold text-gray-900 leading-tight">{title || <span className="text-gray-400 italic">Untitled</span>}</h2>

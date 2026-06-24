@@ -838,4 +838,192 @@ router.post("/update", async (req, res) => {
     }
 });
 
+// ==================== LOCATIONS ROUTES ====================
+
+const VALID_LABEL_TYPES = ['Home', 'University', 'Job', 'Internship', 'Other'] as const;
+
+// Get all locations for a user
+router.get("/locations", async (req, res) => {
+    try {
+        const userId = req.headers["user-id"] as string;
+        if (!userId) {
+            return res.status(401).json({ error: "No user ID provided" });
+        }
+
+        const alumniId = await getAlumniId(userId);
+        if (!alumniId) {
+            return res.status(404).json({ error: "Alumni profile not found" });
+        }
+
+        const { data: locations, error } = await supabase
+            .from("alumni_locations")
+            .select("*")
+            .eq("alumni_id", alumniId)
+            .order("created_at", { ascending: true });
+
+        if (error) {
+            console.error("Get locations error:", error);
+            return res.status(500).json({ error: "Failed to fetch locations" });
+        }
+
+        res.json({ locations: transformToCamelCase(locations || []) });
+    } catch (error) {
+        console.error("Get locations error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// Add a new location
+router.post("/locations", async (req, res) => {
+    try {
+        const userId = req.headers["user-id"] as string;
+        if (!userId) {
+            return res.status(401).json({ error: "No user ID provided" });
+        }
+
+        const { labelType, city, state, country, latitude, longitude, locationLabel } = req.body;
+
+        if (!labelType || !VALID_LABEL_TYPES.includes(labelType)) {
+            return res.status(400).json({ error: `labelType must be one of: ${VALID_LABEL_TYPES.join(', ')}` });
+        }
+        if (latitude == null || longitude == null) {
+            return res.status(400).json({ error: "latitude and longitude are required" });
+        }
+
+        const alumniId = await getAlumniId(userId);
+        if (!alumniId) {
+            return res.status(404).json({ error: "Alumni profile not found" });
+        }
+
+        const { data: location, error } = await supabase
+            .from("alumni_locations")
+            .insert({
+                alumni_id: alumniId,
+                label_type: labelType,
+                city: city || null,
+                state: state || null,
+                country: country || null,
+                latitude: Number(latitude),
+                longitude: Number(longitude),
+                location_label: locationLabel || null,
+            })
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Create location error:", error);
+            return res.status(500).json({ error: "Failed to create location" });
+        }
+
+        res.status(201).json({ location: transformToCamelCase(location) });
+    } catch (error) {
+        console.error("Create location error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// Update a location
+router.patch("/locations/:id", async (req, res) => {
+    try {
+        const userId = req.headers["user-id"] as string;
+        const { id } = req.params;
+        if (!userId) {
+            return res.status(401).json({ error: "No user ID provided" });
+        }
+
+        const alumniId = await getAlumniId(userId);
+        if (!alumniId) {
+            return res.status(404).json({ error: "Alumni profile not found" });
+        }
+
+        // Verify ownership
+        const { data: existing, error: fetchError } = await supabase
+            .from("alumni_locations")
+            .select("id")
+            .eq("id", id)
+            .eq("alumni_id", alumniId)
+            .single();
+
+        if (fetchError || !existing) {
+            return res.status(404).json({ error: "Location not found" });
+        }
+
+        const { labelType, city, state, country, latitude, longitude, locationLabel } = req.body;
+
+        if (labelType && !VALID_LABEL_TYPES.includes(labelType)) {
+            return res.status(400).json({ error: `labelType must be one of: ${VALID_LABEL_TYPES.join(', ')}` });
+        }
+
+        const updateData: Record<string, unknown> = {};
+        if (labelType !== undefined) updateData.label_type = labelType;
+        if (city !== undefined) updateData.city = city;
+        if (state !== undefined) updateData.state = state;
+        if (country !== undefined) updateData.country = country;
+        if (latitude !== undefined) updateData.latitude = Number(latitude);
+        if (longitude !== undefined) updateData.longitude = Number(longitude);
+        if (locationLabel !== undefined) updateData.location_label = locationLabel;
+
+        const { data: location, error } = await supabase
+            .from("alumni_locations")
+            .update(updateData)
+            .eq("id", id)
+            .select()
+            .single();
+
+        if (error) {
+            console.error("Update location error:", error);
+            return res.status(500).json({ error: "Failed to update location" });
+        }
+
+        res.json({ location: transformToCamelCase(location) });
+    } catch (error) {
+        console.error("Update location error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
+// Delete a location
+router.delete("/locations/:id", async (req, res) => {
+    try {
+        const userId = req.headers["user-id"] as string;
+        const { id } = req.params;
+        if (!userId) {
+            return res.status(401).json({ error: "No user ID provided" });
+        }
+
+        const alumniId = await getAlumniId(userId);
+        if (!alumniId) {
+            return res.status(404).json({ error: "Alumni profile not found" });
+        }
+
+        // Verify ownership
+        const { data: existing, error: fetchError } = await supabase
+            .from("alumni_locations")
+            .select("id")
+            .eq("id", id)
+            .eq("alumni_id", alumniId)
+            .single();
+
+        if (fetchError || !existing) {
+            return res.status(404).json({ error: "Location not found" });
+        }
+
+        const { error } = await supabase
+            .from("alumni_locations")
+            .delete()
+            .eq("id", id);
+
+        if (error) {
+            console.error("Delete location error:", error);
+            return res.status(500).json({ error: "Failed to delete location" });
+        }
+
+        res.json({ success: true });
+    } catch (error) {
+        console.error("Delete location error:", error);
+        res.status(500).json({ error: "Internal server error" });
+    }
+});
+
 export default router;
+

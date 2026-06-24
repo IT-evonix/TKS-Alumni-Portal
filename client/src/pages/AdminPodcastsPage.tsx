@@ -2,7 +2,7 @@ import React, { useState, useEffect } from "react";
 import { useLocation } from "wouter";
 import {
   Mic2, Plus, Edit, Trash2, Eye, Star, StarOff, Calendar, Clock,
-  CheckCircle, X, ArrowLeft, Radio, Users
+  CheckCircle, X, ArrowLeft, Radio, Users, Bell, LogOut
 } from "lucide-react";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { Button } from "@/components/ui/button";
@@ -34,6 +34,8 @@ import {
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/contexts/AuthContext";
+import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
+import { useNotifications } from "@/contexts/NotificationContext";
 
 interface PodcastLink {
   label: string;
@@ -101,9 +103,11 @@ const EMPTY_FORM = {
 };
 
 export function AdminPodcastsPage() {
-  const { user, adminUser } = useAuth();
+  const { user, adminUser, logoutAdmin } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
+  const { unreadCount } = useNotifications();
+  const [showNotifications, setShowNotifications] = useState(false);
 
   const [episodes, setEpisodes] = useState<Podcast[]>([]);
   const [loading, setLoading] = useState(true);
@@ -310,13 +314,13 @@ export function AdminPodcastsPage() {
   const filtered = activeTab === "all" ? episodes : episodes.filter(e => e.status === activeTab);
 
   return (
-    <div className="flex min-h-screen bg-gray-50">
+    <div className="flex min-h-screen bg-white">
       <AdminSidebar currentPage="podcasts" />
 
       <div className="flex-1 flex flex-col min-w-0">
-        {/* Sticky Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-6 py-4 sticky top-0 z-40 shadow-sm">
-          <div className="flex items-center justify-between gap-4">
+        {/* Header */}
+        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-8 py-4 sticky top-0 z-40 shadow-sm transition-all duration-300">
+          <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
               <Button
                 variant="ghost"
@@ -325,26 +329,18 @@ export function AdminPodcastsPage() {
                 className="hover:bg-gray-100"
                 aria-label="Back to Dashboard"
               >
-                <ArrowLeft className="h-5 w-5 text-gray-600" />
+                <ArrowLeft className="h-5 w-5 text-gray-700" />
               </Button>
-              <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-lg bg-pink-50 flex items-center justify-center">
-                  <Mic2 className="w-4.5 h-4.5 text-pink-600" />
-                </div>
-                <div>
-                  <h1 className="text-lg font-bold text-gray-900 leading-tight">Podcast Management</h1>
-                  <p className="text-xs text-gray-500">Manage episodes, scheduling, and publishing</p>
-                </div>
-              </div>
+              <h2 className="text-xl font-semibold text-gray-900">Podcast Management</h2>
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-4">
               <Button
                 variant="outline"
                 size="sm"
                 onClick={() => setLocation("/podcast")}
-                className="hidden sm:flex gap-2 text-gray-600 border-gray-200 hover:border-[#008060] hover:text-[#008060]"
+                className="hidden sm:flex gap-2 text-gray-600"
               >
-                <Radio className="w-3.5 h-3.5" />
+                <Radio className="w-4 h-4" />
                 View Public Page
               </Button>
               <Button
@@ -355,6 +351,44 @@ export function AdminPodcastsPage() {
                 <Plus className="w-4 h-4" />
                 New Episode
               </Button>
+              <div className="relative z-[70]">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={`relative min-w-[44px] min-h-[44px] rounded-full transition-colors ${
+                    unreadCount > 0
+                      ? "text-[#008060] hover:bg-[#008060]/10 hover:text-[#006b51] ring-2 ring-[#008060]/30"
+                      : "text-gray-600 hover:text-[#008060] hover:bg-gray-100"
+                  }`}
+                  onClick={() => setShowNotifications(!showNotifications)}
+                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
+                >
+                  <Bell className="w-5 h-5" strokeWidth={2} />
+                  {unreadCount > 0 && (
+                    <span className="absolute -top-0.5 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white animate-pulse">
+                      {unreadCount > 99 ? "99+" : unreadCount > 9 ? "9+" : unreadCount}
+                    </span>
+                  )}
+                </Button>
+                {showNotifications && <NotificationDropdown onClose={() => setShowNotifications(false)} />}
+              </div>
+              <Button
+                variant="outline"
+                className="text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all"
+                onClick={() => logoutAdmin()}
+              >
+                <LogOut className="w-4 h-4 mr-2" />
+                Log Out
+              </Button>
+              <div className="hidden md:flex items-center gap-3 pl-4 border-l border-gray-200">
+                <div className="text-right">
+                  <p className="text-sm font-semibold text-gray-900">{adminUser?.username || "Admin"}</p>
+                  <p className="text-xs text-gray-500">Administrator</p>
+                </div>
+                <div className="w-10 h-10 bg-gradient-to-br from-[#008060] to-[#006b51] rounded-full flex items-center justify-center shadow-md">
+                  <span className="text-white font-semibold">{adminUser?.username?.charAt(0).toUpperCase() || "A"}</span>
+                </div>
+              </div>
             </div>
           </div>
         </header>

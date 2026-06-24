@@ -10,7 +10,7 @@ import {
   Search, Clock, X, TrendingUp, FileText, Users, Calendar, Briefcase,
   MessageSquare, Filter, MapPin, ArrowUpDown,
   XCircle, Loader2, UserPlus, Send, Save, Bookmark, LogOut, Settings, Home,
-  CheckCircle2, SquareArrowOutUpRight
+  CheckCircle2, SquareArrowOutUpRight, BookOpen, Mic, Mail, GraduationCap, Globe
 } from 'lucide-react';
 
 // Filter chip component
@@ -492,6 +492,11 @@ export const GlobalSearchModal: React.FC = () => {
         case 'MessageSquare': return <MessageSquare className="w-4 h-4" />;
         case 'Briefcase': return <Briefcase className="w-4 h-4" />;
         case 'Users': return <Users className="w-4 h-4" />;
+        case 'BookOpen': return <BookOpen className="w-4 h-4" />;
+        case 'Mic': return <Mic className="w-4 h-4" />;
+        case 'Mail': return <Mail className="w-4 h-4" />;
+        case 'MapPin': return <MapPin className="w-4 h-4" />;
+        case 'GraduationCap': return <GraduationCap className="w-4 h-4" />;
         default: return <SquareArrowOutUpRight className="w-4 h-4" />;
       }
     }
@@ -502,6 +507,12 @@ export const GlobalSearchModal: React.FC = () => {
       case 'job': return <Briefcase className="w-4 h-4" />;
       case 'message': return <MessageSquare className="w-4 h-4" />;
       case 'command': return <SquareArrowOutUpRight className="w-4 h-4" />;
+      case 'forum': return <MessageSquare className="w-4 h-4" />;
+      case 'blog': return <BookOpen className="w-4 h-4" />;
+      case 'podcast': return <Mic className="w-4 h-4" />;
+      case 'newsletter': return <Mail className="w-4 h-4" />;
+      case 'travel': return <Globe className="w-4 h-4" />;
+      case 'mentor': return <GraduationCap className="w-4 h-4" />;
       default: return <Search className="w-4 h-4" />;
     }
   };
@@ -708,9 +719,15 @@ export const GlobalSearchModal: React.FC = () => {
             {[
               { id: 'all', label: 'All', icon: <Search className="w-3.5 h-3.5" /> },
               { id: 'alumni', label: 'Alumni', icon: <Users className="w-3.5 h-3.5" /> },
+              { id: 'mentor', label: 'Mentors', icon: <GraduationCap className="w-3.5 h-3.5" /> },
               { id: 'job', label: 'Jobs', icon: <Briefcase className="w-3.5 h-3.5" /> },
               { id: 'event', label: 'Events', icon: <Calendar className="w-3.5 h-3.5" /> },
-              { id: 'post', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> }
+              { id: 'post', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
+              { id: 'forum', label: 'Forums', icon: <MessageSquare className="w-3.5 h-3.5" /> },
+              { id: 'blog', label: 'Blogs', icon: <BookOpen className="w-3.5 h-3.5" /> },
+              { id: 'podcast', label: 'Podcasts', icon: <Mic className="w-3.5 h-3.5" /> },
+              { id: 'newsletter', label: 'Newsletters', icon: <Mail className="w-3.5 h-3.5" /> },
+              { id: 'travel', label: 'Travel', icon: <Globe className="w-3.5 h-3.5" /> },
             ].map((cat) => (
               <button
                 key={cat.id}
@@ -1059,7 +1076,17 @@ export const GlobalSearchModal: React.FC = () => {
                           {getResultIcon(type)}
                         </div>
                         <h3 className="text-[11px] font-extrabold text-gray-700 uppercase tracking-widest">
-                          {type === 'alumni' ? 'Alumni' : type === 'post' ? 'Feed Posts' : type === 'job' ? 'Career Opportunities' : type === 'command' ? 'Quick Actions' : type}
+                          {type === 'alumni' ? 'Alumni' :
+                           type === 'mentor' ? 'Mentors' :
+                           type === 'post' ? 'Feed Posts' :
+                           type === 'job' ? 'Career Opportunities' :
+                           type === 'event' ? 'Events' :
+                           type === 'forum' ? 'Forum Threads' :
+                           type === 'blog' ? 'Blog Posts' :
+                           type === 'podcast' ? 'Podcasts' :
+                           type === 'newsletter' ? 'Newsletters' :
+                           type === 'travel' ? 'Travel Chapters' :
+                           type === 'command' ? 'Quick Actions' : type}
                         </h3>
                       </div>
                       <Badge variant="secondary" className="bg-white border-gray-200 text-gray-500 text-[10px] px-1.5 py-0 font-bold shadow-sm">
@@ -1090,15 +1117,20 @@ export const GlobalSearchModal: React.FC = () => {
                               : 'hover:bg-gray-50'
                               }`}
                           >
-                            {result.type === 'alumni' ? (
-                              <div className="flex-shrink-0">
+                            {(result.type === 'alumni' || result.type === 'mentor') ? (
+                              <div className="flex-shrink-0 relative">
                                 {result.image ? (
                                   <img src={result.image} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-white shadow-sm" />
                                 ) : (
-                                  <div className="w-12 h-12 bg-gradient-to-br from-[#008060] to-[#005c45] rounded-full flex items-center justify-center shadow-sm">
+                                  <div className={`w-12 h-12 rounded-full flex items-center justify-center shadow-sm ${result.type === 'mentor' ? 'bg-gradient-to-br from-purple-500 to-purple-700' : 'bg-gradient-to-br from-[#008060] to-[#005c45]'}`}>
                                     <span className="text-white font-bold text-lg">
                                       {result.title?.split(' ')?.[0]?.[0]?.toUpperCase()}
                                     </span>
+                                  </div>
+                                )}
+                                {result.type === 'mentor' && (
+                                  <div className="absolute -bottom-0.5 -right-0.5 bg-purple-500 rounded-full p-0.5 ring-1 ring-white">
+                                    <GraduationCap className="w-2.5 h-2.5 text-white" />
                                   </div>
                                 )}
                               </div>
@@ -1116,7 +1148,7 @@ export const GlobalSearchModal: React.FC = () => {
 
                             {/* Quick Actions for Results */}
                             <div className="flex items-center gap-2 flex-shrink-0" onClick={e => e.stopPropagation()}>
-                              {result.type === 'alumni' && result.connectionStatus !== 'self' && (
+                              {(result.type === 'alumni' || result.type === 'mentor') && result.connectionStatus !== 'self' && (
                                 <>
                                   {result.connectionStatus === 'none' && (
                                     <Button

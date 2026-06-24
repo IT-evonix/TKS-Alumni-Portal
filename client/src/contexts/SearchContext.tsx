@@ -3,7 +3,7 @@ import { searchCache } from '../utils/searchCache';
 
 interface SearchResult {
   id: string;
-  type: 'post' | 'alumni' | 'event' | 'job' | 'message' | 'user' | 'command';
+  type: 'post' | 'alumni' | 'event' | 'job' | 'message' | 'user' | 'command' | 'forum' | 'blog' | 'podcast' | 'newsletter' | 'travel' | 'mentor';
   title: string;
   description: string;
   image?: string;
@@ -17,7 +17,7 @@ interface SearchResult {
 }
 
 interface SearchFilters {
-  type?: 'all' | 'post' | 'alumni' | 'event' | 'job';
+  type?: 'all' | 'post' | 'alumni' | 'event' | 'job' | 'forum' | 'blog' | 'podcast' | 'newsletter' | 'travel' | 'mentor';
   dateRange?: 'all' | 'today' | 'week' | 'month' | 'year' | 'custom';
   customDateFrom?: string;
   customDateTo?: string;
@@ -187,29 +187,19 @@ export const SearchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
       const data = await response.json();
       const results = data.results || [];
 
-      // Filter out current user if logged in
-      const currentUserId = localStorage.getItem('userId');
-      const filteredResults = currentUserId
-        ? results.filter((r: any) => {
-          // If it's an alumni result, check if it's the current user
-          if (r.type === 'alumni' && r.id === currentUserId) return false;
-          return true;
-        })
-        : results;
-
-      setSearchResults(filteredResults);
+      setSearchResults(results);
       setDidYouMean(data.didYouMean || null);
       setParsedIntent(data.parsedQuery || null);
 
       // Cache the results
       searchCache.set(query, {
-        results: filteredResults,
+        results: results,
         didYouMean: data.didYouMean || null,
         parsedQuery: data.parsedQuery || null
       }, filters);
 
       // Only add to history if we got results and query is long enough
-      if (shouldAddToHistory && filteredResults.length > 0) {
+      if (shouldAddToHistory && results.length > 0) {
         addToHistory(query);
       }
 
@@ -225,9 +215,9 @@ export const SearchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         body: JSON.stringify({
           query,
           filters,
-          resultsCount: filteredResults.length,
+          resultsCount: results.length,
           searchDurationMs,
-          hadResults: filteredResults.length > 0,
+          hadResults: results.length > 0,
           cacheHit: false
         })
       }).catch(err => console.error('Analytics error:', err));

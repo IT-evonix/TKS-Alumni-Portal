@@ -11138,7 +11138,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .from("alumni")
         .select("*, alumni_skills(skill_name, proficiency_level, category, is_primary), available_days, session_type, meeting_link, mentorship_style, help_topics, linkedin_url, github_url, portfolio_url, twitter_url, total_mentees_helped")
         .eq("is_mentor", true)
-        .eq("is_active", true);
+        .eq("is_active", true)
+        .neq("user_id", userId || "");
 
       if (expertise && expertise !== "all") {
         query = query.ilike("expertise_areas", `%${expertise}%`);
@@ -11229,13 +11230,28 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .eq("id", userId)
         .single();
 
-      if (user?.user_role === "student") {
-        return res
-          .status(403)
-          .json({ error: "Student accounts are not eligible for Mentorship roles." });
-      }
-
       const { isMentor } = req.body;
+
+      // When disabling mentor status, block if active relationships or upcoming sessions exist
+      if (isMentor === false) {
+        const { count: activeRequests } = await supabase
+          .from("mentorship_requests")
+          .select("id", { count: "exact", head: true })
+          .eq("mentor_id", userId)
+          .in("status", ["pending", "accepted"]);
+
+        const { count: upcomingSessions } = await supabase
+          .from("mentorship_sessions")
+          .select("id", { count: "exact", head: true })
+          .eq("mentor_id", userId)
+          .in("status", ["scheduled", "upcoming"]);
+
+        if ((activeRequests ?? 0) > 0 || (upcomingSessions ?? 0) > 0) {
+          return res.status(400).json({
+            error: "You have active mentees or upcoming sessions. Please end all mentorship relationships before disabling your mentor status.",
+          });
+        }
+      }
 
       const { error } = await supabase
         .from("alumni")
@@ -11265,11 +11281,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.headers["user-id"] as string;
       if (!userId) {
         return res.status(401).json({ error: "No user ID provided" });
-      }
-
-      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
-      if (reqUser?.user_role === "student") {
-        return res.status(403).json({ error: "Students are not eligible for mentee features." });
       }
 
       const { mentorId, message, goalText, matchScore } = req.body;
@@ -11350,9 +11361,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.headers["user-id"] as string;
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
-
-      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
-      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
 
       const { data: requests, error } = await supabase
         .from("mentorship_requests")
@@ -11541,9 +11549,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.headers["user-id"] as string;
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
 
-      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
-      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
-
       const { id } = req.params;
 
       const { data: mentorshipReq } = await supabase
@@ -11681,9 +11686,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const userId = req.headers["user-id"] as string;
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
 
-      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
-      if (reqUser?.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
-
       const { mentorId } = req.body;
       if (!mentorId) return res.status(400).json({ error: "mentorId required" });
 
@@ -11712,9 +11714,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const userId = req.headers["user-id"] as string;
       if (!userId) return res.status(401).json({ error: "No user ID provided" });
-
-      const { data: reqUser } = await supabase.from("users").select("user_role").eq("id", userId).single();
-      if (!reqUser || reqUser.user_role === "student") return res.status(403).json({ error: "Students are not eligible for mentee features." });
 
       const { data } = await supabase
         .from("mentorship_bookmarks")

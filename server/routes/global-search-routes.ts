@@ -257,9 +257,15 @@ router.get("/", async (req, res) => {
                 { id: 'logout', title: 'Logout', url: '/logout', icon: 'LogOut' },
                 { id: 'feed', title: 'Feed', url: '/feed', icon: 'Home' },
                 { id: 'events', title: 'Events', url: '/events', icon: 'Calendar' },
-                { id: 'forum', title: 'Forum', url: '/forum', icon: 'MessageSquare' },
+                { id: 'forums', title: 'Forums', url: '/forums', icon: 'MessageSquare' },
                 { id: 'jobs', title: 'Job Portal', url: '/job-portal', icon: 'Briefcase' },
                 { id: 'alumni', title: 'Alumni Directory', url: '/alumni', icon: 'Users' },
+                { id: 'blogs', title: 'Blogs', url: '/blogs', icon: 'BookOpen' },
+                { id: 'podcasts', title: 'Podcasts', url: '/podcast', icon: 'Mic' },
+                { id: 'newsletters', title: 'Newsletters', url: '/newsletters', icon: 'Mail' },
+                { id: 'travel', title: 'Travel Chapters', url: '/travel-chapters', icon: 'MapPin' },
+                { id: 'mentorship', title: 'Mentorship', url: '/mentorship', icon: 'GraduationCap' },
+                { id: 'connections', title: 'Connections', url: '/connections', icon: 'Users' },
             ];
 
             const filteredCommands = command
@@ -348,7 +354,7 @@ router.get("/", async (req, res) => {
                             .select(`
                                 id, user_id, first_name, last_name, bio, skills,
                                 current_company, current_role, current_city,
-                                profile_picture, industry, batch
+                                profile_picture, industry, batch, created_at
                             `)
                             .in("user_id", missingEmailUserIds)
                             .eq("is_active", true)
@@ -372,22 +378,30 @@ router.get("/", async (req, res) => {
                     .select(`
                         id, user_id, first_name, last_name, bio, skills,
                         current_company, current_role, current_city,
-                        profile_picture, industry, batch
+                        profile_picture, industry, batch, created_at
                     `)
                     .eq("is_active", true);
 
-                // Build search condition
+                // Build search condition (all OR clauses merged into one .or() call to avoid Supabase AND-of-ORs bug)
                 let searchCondition = `first_name.ilike.%${sanitizedSearch}%,last_name.ilike.%${sanitizedSearch}%,bio.ilike.%${sanitizedSearch}%,skills.ilike.%${sanitizedSearch}%,current_company.ilike.%${sanitizedSearch}%,current_role.ilike.%${sanitizedSearch}%,current_city.ilike.%${sanitizedSearch}%,industry.ilike.%${sanitizedSearch}%`;
-                
+
                 // Add email-matched user_ids to the search
                 if (emailMatchedUserIds.length > 0) {
                     const emailIdList = emailMatchedUserIds.join(',');
                     searchCondition += `,user_id.in.(${emailIdList})`;
                 }
 
+                // Merge skills filter conditions into the same OR string (avoids double .or() conflict)
+                if (skills) {
+                    const skillsList = (skills as string).split(',').map((s: string) => s.trim()).filter(Boolean);
+                    skillsList.forEach((skill: string) => {
+                        searchCondition += `,skills.ilike.%${skill}%`;
+                    });
+                }
+
                 fallbackQuery = fallbackQuery.or(searchCondition);
 
-                // Apply filters
+                // Apply non-OR filters as AND conditions
                 if (searchLocation) {
                     fallbackQuery = fallbackQuery.ilike("current_city", `%${searchLocation}%`);
                 }
@@ -406,13 +420,6 @@ router.get("/", async (req, res) => {
                 }
                 if (searchCompany) {
                     fallbackQuery = fallbackQuery.ilike("current_company", `%${searchCompany}%`);
-                }
-                if (skills) {
-                    const skillsList = (skills as string).split(',').map(s => s.trim()).filter(Boolean);
-                    if (skillsList.length > 0) {
-                        const skillConditions = skillsList.map(skill => `skills.ilike.%${skill}%`).join(',');
-                        fallbackQuery = fallbackQuery.or(skillConditions);
-                    }
                 }
 
                 const fallbackResult = await fallbackQuery.limit(Math.ceil(searchLimit * 0.5));
@@ -437,11 +444,13 @@ router.get("/", async (req, res) => {
                             item.current_role,
                             item.current_company,
                             item.current_city,
-                            item.industry
+                            item.industry,
+                            item.batch ? `Batch ${item.batch}` : null
                         ].filter(Boolean).join(' • ') || item.bio || 'Alumni Member',
                         image: item.profile_picture,
                         url: `/profile/${item.user_id || item.id}`,
-                        relevance: calculateRelevance(searchTerm, searchableText, 'exact')
+                        relevance: calculateRelevance(searchTerm, searchableText, 'exact'),
+                        createdAt: item.created_at || null
                     });
                 });
             }
@@ -481,11 +490,13 @@ router.get("/", async (req, res) => {
                                 currentUserAlumni.current_role,
                                 currentUserAlumni.current_company,
                                 currentUserAlumni.current_city,
-                                currentUserAlumni.industry
+                                currentUserAlumni.industry,
+                                currentUserAlumni.batch ? `Batch ${currentUserAlumni.batch}` : null
                             ].filter(Boolean).join(' • ') || currentUserAlumni.bio || 'Alumni Member',
                             image: currentUserAlumni.profile_picture,
                             url: `/profile/${currentUserAlumni.user_id}`,
-                            relevance: calculateRelevance(searchTerm, searchableText, 'exact') + 10 // Boost relevance for own profile
+                            relevance: calculateRelevance(searchTerm, searchableText, 'exact') + 10,
+                            createdAt: (currentUserAlumni as any).created_at || null
                         });
                     }
                 }
@@ -685,14 +696,24 @@ router.get("/", async (req, res) => {
                         ? `${alumniData.first_name} ${alumniData.last_name || ''}`.trim()
                         : (postedByUser?.username ?? null);
                     
+                    const jobDescParts = [
+                        item.company,
+                        item.location || 'Remote',
+                        item.job_type || null,
+                        item.salary_range || null,
+                        item.application_deadline ? `Due ${new Date(item.application_deadline).toLocaleDateString()}` : null,
+                        postedByFull ? `by ${postedByFull}` : null
+                    ].filter(Boolean).join(' • ');
+
                     results.push({
                         id: item.id,
                         type: 'job',
                         title: item.title,
-                        description: `${item.company} • ${item.location || 'Remote'}${item.job_type ? ` • ${item.job_type}` : ''}${postedByFull ? ` • Posted by ${postedByFull}` : ''}`,
+                        description: jobDescParts,
                         image: item.company_logo,
-                        url: `/job-portal#job-${item.id}`, // Direct link to job
-                        relevance: calculateRelevance(searchTerm, searchableText)
+                        url: `/job-portal#job-${item.id}`,
+                        relevance: calculateRelevance(searchTerm, searchableText),
+                        createdAt: item.created_at || null
                     });
                 });
             }
@@ -730,14 +751,16 @@ router.get("/", async (req, res) => {
                 eventData.forEach(item => {
                     const eventDate = item.event_date ? new Date(item.event_date).toLocaleDateString() : '';
                     const searchableText = `${item.title} ${item.description || ''} ${item.location || ''} ${item.venue || ''}`;
+                    const locationLabel = item.is_virtual ? 'Virtual' : (item.location || null);
                     results.push({
                         id: item.id,
                         type: 'event',
                         title: item.title,
-                        description: `${eventDate}${item.location ? ` • ${item.location}` : ''}`,
+                        description: [eventDate, locationLabel].filter(Boolean).join(' • '),
                         image: item.image_url || item.cover_image,
-                        url: `/events#event-${item.id}`, // Direct link to event
-                        relevance: calculateRelevance(searchTerm, searchableText)
+                        url: `/events#event-${item.id}`,
+                        relevance: calculateRelevance(searchTerm, searchableText),
+                        createdAt: item.event_date || item.created_at || null
                     });
                 });
             }
@@ -785,8 +808,211 @@ router.get("/", async (req, res) => {
                         title: `Post by ${authorName}`,
                         description: contentPreview,
                         image: item.image_url,
-                        url: `/post/${item.id}`, // Direct link to specific post
-                        relevance: calculateRelevance(searchTerm, item.content)
+                        url: `/post/${item.id}`,
+                        relevance: calculateRelevance(searchTerm, item.content),
+                        createdAt: item.created_at || null
+                    });
+                });
+            }
+        }
+
+        // 5. Search Forum Threads (if type is 'all' or 'forum')
+        if (searchType === 'all' || searchType === 'forum') {
+            const { data: forumData } = await supabase
+                .from("forum_threads")
+                .select(`
+                    id, title, content, slug, created_at,
+                    category:forum_categories!inner(name),
+                    author:users!forum_threads_author_id_fkey(username)
+                `)
+                .eq("is_deleted", false)
+                .or(`title.ilike.%${sanitizedSearch}%,content.ilike.%${sanitizedSearch}%`)
+                .order("last_activity_at", { ascending: false })
+                .limit(Math.ceil(searchLimit * 0.1));
+
+            if (forumData) {
+                forumData.forEach((item: any) => {
+                    const category = Array.isArray(item.category) ? item.category[0] : item.category;
+                    const contentPreview = (item.content || '').substring(0, 120) + ((item.content || '').length > 120 ? '...' : '');
+                    const searchableText = `${item.title} ${item.content || ''}`;
+                    results.push({
+                        id: item.id,
+                        type: 'forum',
+                        title: item.title,
+                        description: [contentPreview, category?.name ? `in ${category.name}` : null].filter(Boolean).join(' — '),
+                        image: null,
+                        url: `/forums/thread/${item.slug || item.id}`,
+                        relevance: calculateRelevance(searchTerm, searchableText),
+                        createdAt: item.created_at || null
+                    });
+                });
+            }
+        }
+
+        // 6. Search Blog Posts (if type is 'all' or 'blog')
+        if (searchType === 'all' || searchType === 'blog') {
+            const { data: blogData } = await supabase
+                .from("blog_posts")
+                .select(`
+                    id, title, slug, excerpt, cover_image, created_at,
+                    category:blog_categories(name),
+                    author:users!author_id(username, alumni(first_name, last_name))
+                `)
+                .eq("status", "published")
+                .or(`title.ilike.%${sanitizedSearch}%,excerpt.ilike.%${sanitizedSearch}%,content.ilike.%${sanitizedSearch}%`)
+                .order("published_at", { ascending: false })
+                .limit(Math.ceil(searchLimit * 0.1));
+
+            if (blogData) {
+                blogData.forEach((item: any) => {
+                    const category = Array.isArray(item.category) ? item.category[0] : item.category;
+                    const author = Array.isArray(item.author) ? item.author[0] : item.author;
+                    const alumni = Array.isArray(author?.alumni) ? author.alumni[0] : author?.alumni;
+                    const authorName = alumni?.first_name
+                        ? `${alumni.first_name} ${alumni.last_name || ''}`.trim()
+                        : (author?.username || null);
+                    const descParts = [
+                        item.excerpt || null,
+                        category?.name ? `in ${category.name}` : null,
+                        authorName ? `by ${authorName}` : null
+                    ].filter(Boolean);
+                    results.push({
+                        id: item.id,
+                        type: 'blog',
+                        title: item.title,
+                        description: descParts.join(' • ') || '',
+                        image: item.cover_image || null,
+                        url: `/blogs/${item.slug}`,
+                        relevance: calculateRelevance(searchTerm, `${item.title} ${item.excerpt || ''}`),
+                        createdAt: item.created_at || null
+                    });
+                });
+            }
+        }
+
+        // 7. Search Podcasts (if type is 'all' or 'podcast')
+        if (searchType === 'all' || searchType === 'podcast') {
+            const { data: podcastData } = await supabase
+                .from("podcasts")
+                .select("id, title, slug, description, created_at")
+                .eq("status", "published")
+                .or(`title.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%,show_notes.ilike.%${sanitizedSearch}%`)
+                .order("published_at", { ascending: false })
+                .limit(Math.ceil(searchLimit * 0.05));
+
+            if (podcastData) {
+                podcastData.forEach((item: any) => {
+                    const descPreview = (item.description || '').substring(0, 120) + ((item.description || '').length > 120 ? '...' : '');
+                    results.push({
+                        id: item.id,
+                        type: 'podcast',
+                        title: item.title,
+                        description: descPreview,
+                        image: null,
+                        url: `/podcasts/${item.slug}`,
+                        relevance: calculateRelevance(searchTerm, `${item.title} ${item.description || ''}`),
+                        createdAt: item.created_at || null
+                    });
+                });
+            }
+        }
+
+        // 8. Search Newsletters (if type is 'all' or 'newsletter')
+        if (searchType === 'all' || searchType === 'newsletter') {
+            const { data: newsletterData } = await supabase
+                .from("newsletters")
+                .select("id, title, slug, excerpt, cover_image, sent_at, created_at")
+                .eq("status", "sent")
+                .or(`title.ilike.%${sanitizedSearch}%,excerpt.ilike.%${sanitizedSearch}%`)
+                .order("sent_at", { ascending: false })
+                .limit(Math.ceil(searchLimit * 0.05));
+
+            if (newsletterData) {
+                newsletterData.forEach((item: any) => {
+                    const sentDate = item.sent_at ? new Date(item.sent_at).toLocaleDateString() : '';
+                    results.push({
+                        id: item.id,
+                        type: 'newsletter',
+                        title: item.title,
+                        description: [item.excerpt || null, sentDate ? `Sent ${sentDate}` : null].filter(Boolean).join(' • '),
+                        image: item.cover_image || null,
+                        url: `/newsletters/${item.slug}`,
+                        relevance: calculateRelevance(searchTerm, `${item.title} ${item.excerpt || ''}`),
+                        createdAt: item.sent_at || item.created_at || null
+                    });
+                });
+            }
+        }
+
+        // 9. Search Travel Chapters (if type is 'all' or 'travel')
+        if (searchType === 'all' || searchType === 'travel') {
+            const { data: travelData } = await supabase
+                .from("travel_chapters")
+                .select("id, name, description, city, country, cover_image, created_at")
+                .eq("status", "approved")
+                .or(`name.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,country.ilike.%${sanitizedSearch}%`)
+                .order("created_at", { ascending: false })
+                .limit(Math.ceil(searchLimit * 0.05));
+
+            if (travelData) {
+                travelData.forEach((item: any) => {
+                    const location = [item.city, item.country].filter(Boolean).join(', ');
+                    results.push({
+                        id: item.id,
+                        type: 'travel',
+                        title: item.name,
+                        description: [location || null, item.description ? item.description.substring(0, 100) : null].filter(Boolean).join(' • '),
+                        image: item.cover_image || null,
+                        url: `/travel-chapters/${item.id}`,
+                        relevance: calculateRelevance(searchTerm, `${item.name} ${item.description || ''} ${item.city || ''} ${item.country || ''}`),
+                        createdAt: item.created_at || null
+                    });
+                });
+            }
+        }
+
+        // 10. Search Mentors (if type is 'all' or 'mentor')
+        if (searchType === 'all' || searchType === 'mentor') {
+            const { data: mentorData } = await supabase
+                .from("alumni")
+                .select(`
+                    id, user_id, first_name, last_name, bio, profile_picture,
+                    current_role, current_company, current_city, industry, batch,
+                    expertise_areas, help_topics, created_at
+                `)
+                .eq("is_mentor", true)
+                .eq("is_active", true)
+                .or(`first_name.ilike.%${sanitizedSearch}%,last_name.ilike.%${sanitizedSearch}%,expertise_areas.ilike.%${sanitizedSearch}%,help_topics.ilike.%${sanitizedSearch}%,bio.ilike.%${sanitizedSearch}%,current_role.ilike.%${sanitizedSearch}%,current_company.ilike.%${sanitizedSearch}%`)
+                .limit(Math.ceil(searchLimit * 0.1));
+
+            if (mentorData) {
+                mentorData.forEach((item: any) => {
+                    // Skip if already in results as alumni (dedup handles it, but set type correctly)
+                    const existing = results.find(r => r.type === 'alumni' && r.id === (item.user_id || item.id));
+                    if (existing) {
+                        // Upgrade existing alumni result to show mentor context
+                        existing.type = 'mentor';
+                        existing.description = [
+                            item.current_role,
+                            item.current_company,
+                            item.expertise_areas ? `Expert in ${item.expertise_areas}` : null
+                        ].filter(Boolean).join(' • ') || item.bio || 'Mentor';
+                        return;
+                    }
+                    const searchableText = `${item.first_name} ${item.last_name} ${item.expertise_areas || ''} ${item.help_topics || ''} ${item.bio || ''} ${item.current_role || ''} ${item.current_company || ''}`;
+                    results.push({
+                        id: item.user_id || item.id,
+                        type: 'mentor',
+                        title: `${item.first_name || ''} ${item.last_name || ''}`.trim(),
+                        description: [
+                            item.current_role,
+                            item.current_company,
+                            item.expertise_areas ? `Expert in ${item.expertise_areas}` : null
+                        ].filter(Boolean).join(' • ') || item.bio || 'Mentor',
+                        image: item.profile_picture,
+                        url: `/profile/${item.user_id || item.id}`,
+                        relevance: calculateRelevance(searchTerm, searchableText),
+                        createdAt: item.created_at || null
                     });
                 });
             }
@@ -806,8 +1032,9 @@ router.get("/", async (req, res) => {
         // Apply sorting
         if (sortBy === 'date') {
             uniqueResults = uniqueResults.sort((a, b) => {
-                // Extract date from description or use relevance as fallback
-                return (b.relevance || 0) - (a.relevance || 0);
+                const dateA = a.createdAt ? new Date(a.createdAt).getTime() : 0;
+                const dateB = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+                return dateB - dateA;
             });
         } else if (sortBy === 'popularity') {
             // Sort by relevance for now (can be enhanced with actual popularity metrics)
@@ -823,7 +1050,7 @@ router.get("/", async (req, res) => {
         const currentUserId = req.headers['user-id'] as string;
 
         if (currentUserId && uniqueResults.length > 0) {
-            const alumniIds = uniqueResults.filter(r => r.type === 'alumni').map(r => r.id);
+            const alumniIds = uniqueResults.filter(r => r.type === 'alumni' || r.type === 'mentor').map(r => r.id);
             const jobIds = uniqueResults.filter(r => r.type === 'job').map(r => r.id);
 
             // 1. Get Connection Statuses
@@ -877,7 +1104,7 @@ router.get("/", async (req, res) => {
 
             // Apply enrichment to results
             uniqueResults = uniqueResults.map(result => {
-                if (result.type === 'alumni') {
+                if (result.type === 'alumni' || result.type === 'mentor') {
                     if (result.id === currentUserId) {
                         return { ...result, connectionStatus: 'self' };
                     }
@@ -897,6 +1124,10 @@ router.get("/", async (req, res) => {
                 }
                 return result;
             });
+        // Remove self from alumni/mentor results — no actionable card to show
+        uniqueResults = uniqueResults.filter(r =>
+            (r.type !== 'alumni' && r.type !== 'mentor') || (r as any).connectionStatus !== 'self'
+        );
         }
 
         // --- DID YOU MEAN? (Spell Check / Fuzzy Suggestion) ---
@@ -958,7 +1189,10 @@ router.get("/suggestions", async (req, res) => {
 
         if (alumniRes.data) {
             alumniRes.data.forEach(a => {
-                suggestions.push(`${a.first_name} ${a.last_name}`);
+                const fullName = `${a.first_name} ${a.last_name}`;
+                if (fullName.toLowerCase().includes(query.toLowerCase())) {
+                    suggestions.push(fullName);
+                }
                 if (a.current_company && a.current_company.toLowerCase().includes(query.toLowerCase())) {
                     suggestions.push(a.current_company);
                 }

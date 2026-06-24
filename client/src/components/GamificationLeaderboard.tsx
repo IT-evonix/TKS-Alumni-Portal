@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Trophy, Flame, Medal, Star, ChevronRight } from "lucide-react";
+import { Trophy, Flame, Medal, Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -289,26 +289,11 @@ export function GamificationLeaderboard() {
 
         <div className="p-2">
           <TabsContent value="points" className="m-0 border-0 outline-none space-y-0.5">
-            {pointsLeaderboard.slice(0, 4).map((user, idx) => renderUser(user, idx, "points"))}
+            {pointsLeaderboard.slice(0, 3).map((user, idx) => renderUser(user, idx, "points"))}
           </TabsContent>
           <TabsContent value="badges" className="m-0 border-0 outline-none space-y-0.5">
-            {badgesLeaderboard.slice(0, 4).map((user, idx) => renderUser(user, idx, "badges"))}
+            {badgesLeaderboard.slice(0, 3).map((user, idx) => renderUser(user, idx, "badges"))}
           </TabsContent>
-        </div>
-
-        {/* View full rankings CTA */}
-        <div
-          className="px-4 py-2.5 flex items-center justify-center"
-          style={{ borderTop: '1px solid var(--border-subtle)' }}
-        >
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('open-gamification-drawer'))}
-            className="flex items-center gap-1 text-[11px] font-semibold text-[#008060] hover:text-[#006b51] transition-colors group"
-          >
-            <span>View full rankings</span>
-            <ChevronRight className="w-3 h-3 transition-transform group-hover:translate-x-0.5" />
-          </button>
         </div>
       </Tabs>
     </div>

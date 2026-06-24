@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import * as XLSX from "xlsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -302,6 +303,7 @@ export default function AdminImportPage() {
 
   return (
     <div className="flex min-h-screen bg-white">
+      <AdminSidebar currentPage="import" />
       <div className="flex-1 flex flex-col">
         {/* Header */}
         <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-8 py-4 sticky top-0 z-40 shadow-sm transition-all duration-300">

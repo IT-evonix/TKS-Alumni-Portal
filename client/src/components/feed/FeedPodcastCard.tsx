@@ -35,6 +35,17 @@ function formatDate(date: string) {
   return new Date(date).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
 }
 
+function getThumbnailUrl(videoUrl: string, embedUrl: string | null): string | null {
+  const sources = [videoUrl, embedUrl].filter(Boolean) as string[];
+  for (const url of sources) {
+    const ytMatch = url.match(/(?:youtube\.com\/(?:watch\?v=|embed\/|shorts\/)|youtu\.be\/)([A-Za-z0-9_-]{11})/);
+    if (ytMatch) return `https://img.youtube.com/vi/${ytMatch[1]}/hqdefault.jpg`;
+    const vimeoMatch = url.match(/vimeo\.com\/(?:video\/)?(\d+)/);
+    if (vimeoMatch) return `https://vumbnail.com/${vimeoMatch[1]}.jpg`;
+  }
+  return null;
+}
+
 export function FeedPodcastCard({
   podcast,
   isLiked = false,
@@ -72,7 +83,7 @@ export function FeedPodcastCard({
   return (
     <Card
       className="group hover:shadow-md transition-all duration-200"
-      style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)" }}
+      style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)", borderLeft: "3px solid #9333EA" }}
     >
       <CardContent className="p-4 relative">
         {/* Badge top-right of card */}
@@ -89,10 +100,24 @@ export function FeedPodcastCard({
           className="flex gap-4 items-start cursor-pointer"
           onClick={navigate}
         >
-          {/* Icon block */}
-          <div className="flex-shrink-0 w-[72px] h-[72px] rounded-2xl bg-purple-100 flex items-center justify-center">
-            <Mic2 className="w-8 h-8 text-purple-500" />
-          </div>
+          {/* Icon / thumbnail block */}
+          {(() => {
+            const thumb = getThumbnailUrl(podcast.video_url ?? "", podcast.embed_url ?? null);
+            return thumb ? (
+              <div className="relative flex-shrink-0 w-[72px] h-[72px] rounded-2xl overflow-hidden">
+                <img src={thumb} alt={podcast.title} className="w-full h-full object-cover" />
+                <div className="absolute inset-0 flex items-center justify-center bg-black/20 rounded-2xl">
+                  <div className="w-6 h-6 rounded-full bg-purple-600/90 flex items-center justify-center">
+                    <Mic2 className="w-3 h-3 text-white" />
+                  </div>
+                </div>
+              </div>
+            ) : (
+              <div className="flex-shrink-0 w-[72px] h-[72px] rounded-2xl bg-purple-100 flex items-center justify-center">
+                <Mic2 className="w-8 h-8 text-purple-500" />
+              </div>
+            );
+          })()}
 
           {/* Content */}
           <div className="flex-1 min-w-0 space-y-2 pr-16">
