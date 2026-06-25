@@ -179,12 +179,12 @@ function Router() {
           <ProtectedRoute path="/forums/category/:slug" component={ForumCategoryPage} />
           <ProtectedRoute path="/blogs" component={BlogsPage} />
           <ProtectedRoute path="/blogs/:slug" component={BlogDetailPage} />
-          <ProtectedRoute path="/travel-chapters" component={TravelChaptersDirectoryPage} />
+          <ProtectedRoute path="/travel-journal" component={TravelChaptersDirectoryPage} />
           <ProtectedRoute path="/podcast" component={PodcastPage} />
           <ProtectedRoute path="/podcasts/:slug" component={PodcastPage} />
           <ProtectedRoute path="/newsletters" component={NewslettersPage} />
           <ProtectedRoute path="/newsletters/:slug" component={NewslettersPage} />
-          <ProtectedRoute path="/travel-chapters/:id" component={TravelChapterPage} />
+          <ProtectedRoute path="/travel-journal/:id" component={TravelChapterPage} />
 
           {/* Protected Admin Routes */}
           <ProtectedRoute path="/admin/dashboard" component={AdminDashboard} adminOnly />

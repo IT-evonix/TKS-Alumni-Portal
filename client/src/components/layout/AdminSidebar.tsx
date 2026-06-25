@@ -139,7 +139,7 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     },
     {
       icon: Globe,
-      label: "Travel Chapters",
+      label: "Travel Journal",
       path: "/admin/travel-chapters",
       key: "travel-chapters",
       color: "text-emerald-600",

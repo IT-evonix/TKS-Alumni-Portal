@@ -22,6 +22,7 @@ import { SkeletonPostCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
 import { FeedBlogCard } from "@/components/feed/FeedBlogCard";
 import { FeedPodcastCard } from "@/components/feed/FeedPodcastCard";
+import { TravelPostCard } from "@/components/travel/TravelPostCard";
 import type { FeedItem } from "@/types/feed";
 
 export const FeedPage = (): JSX.Element => {
@@ -84,7 +85,8 @@ export const FeedPage = (): JSX.Element => {
   const [posts, setPosts] = useState<any[]>([]);
   const [blogs, setBlogs] = useState<any[]>([]);
   const [podcasts, setPodcasts] = useState<any[]>([]);
-  const [feedFilter, setFeedFilter] = useState<"all" | "post" | "blog" | "podcast">("all");
+  const [travelPosts, setTravelPosts] = useState<any[]>([]);
+  const [feedFilter, setFeedFilter] = useState<"all" | "post" | "blog" | "podcast" | "travel_post">("all");
   const [feedLimit, setFeedLimit] = useState(30);
 
   // Merged, chronologically sorted feed items
@@ -92,9 +94,10 @@ export const FeedPage = (): JSX.Element => {
     const taggedPosts = posts.map((p: any) => ({ ...p, _type: "post" as const, _sortDate: p.created_at }));
     const taggedBlogs = blogs.map((b: any) => ({ ...b, _type: "blog" as const, _sortDate: b.published_at }));
     const taggedPodcasts = podcasts.map((p: any) => ({ ...p, _type: "podcast" as const, _sortDate: p.published_at ?? p.created_at }));
-    return [...taggedPosts, ...taggedBlogs, ...taggedPodcasts]
+    const taggedTravel = travelPosts.map((p: any) => ({ ...p, _type: "travel_post" as const, _sortDate: p.created_at }));
+    return [...taggedPosts, ...taggedBlogs, ...taggedPodcasts, ...taggedTravel]
       .sort((a, b) => new Date(b._sortDate).getTime() - new Date(a._sortDate).getTime());
-  }, [posts, blogs, podcasts]);
+  }, [posts, blogs, podcasts, travelPosts]);
 
   const feedItems = useMemo<FeedItem[]>(() => {
     const filtered = feedFilter === "all" ? allFeedItems : allFeedItems.filter(i => i._type === feedFilter);
@@ -106,6 +109,7 @@ export const FeedPage = (): JSX.Element => {
     post: allFeedItems.filter(i => i._type === "post").length,
     blog: allFeedItems.filter(i => i._type === "blog").length,
     podcast: allFeedItems.filter(i => i._type === "podcast").length,
+    travel_post: allFeedItems.filter(i => i._type === "travel_post").length,
   }), [allFeedItems]);
 
   useEffect(() => { setFeedLimit(30); }, [feedFilter]);
@@ -276,10 +280,11 @@ export const FeedPage = (): JSX.Element => {
 
       const headers = getAuthHeaders();
 
-      const [postsRes, blogsRes, podcastsRes] = await Promise.allSettled([
+      const [postsRes, blogsRes, podcastsRes, travelRes] = await Promise.allSettled([
         optimizedFetch('/api/posts?limit=20&offset=0', { method: 'GET', headers, ttl: 20000, dedupe: true }),
         optimizedFetch('/api/blogs?limit=20&page=1',   { method: 'GET', headers, ttl: 30000, dedupe: true }),
         optimizedFetch('/api/podcasts?limit=20&page=1', { method: 'GET', headers, ttl: 30000, dedupe: true }),
+        optimizedFetch('/api/travel-posts?limit=20&page=1', { method: 'GET', headers, ttl: 20000, dedupe: true }),
       ]);
 
       if (postsRes.status === 'fulfilled') {
@@ -298,6 +303,10 @@ export const FeedPage = (): JSX.Element => {
 
       if (podcastsRes.status === 'fulfilled') {
         setPodcasts(podcastsRes.value.episodes || []);
+      }
+
+      if (travelRes.status === 'fulfilled') {
+        setTravelPosts(travelRes.value.posts || []);
       }
 
       if (isRefresh) {
@@ -1195,18 +1204,7 @@ export const FeedPage = (): JSX.Element => {
           className="flex-1 w-full overflow-y-auto relative"
         >
           <div className="min-h-full xl:pr-[316px] transition-all duration-300 overflow-x-hidden">
-            <div className="max-w-[680px] xl:max-w-[820px] 2xl:max-w-[900px] mx-auto px-3 sm:px-4 md:px-5 pt-0 pb-4 sm:pb-5 md:pb-6 w-full">
-
-              {/* Create Post */}
-              <div className="mb-4 flex items-center justify-end">
-                <Button
-                  onClick={() => setShowPostModal(true)}
-                  className="bg-[#008060] hover:bg-[#006b51] text-white font-semibold px-5 py-2 rounded-full shadow-sm transition-all flex items-center gap-2 text-sm"
-                >
-                  <PenSquare className="w-4 h-4" />
-                  Create Post
-                </Button>
-              </div>
+            <div className="w-full max-w-[680px] md:max-w-[760px] xl:max-w-none 2xl:max-w-[960px] mx-auto px-4 sm:px-6 md:px-8 pt-0 pb-6 sm:pb-8 md:pb-10">
 
               <CreatePostModal
                 open={showPostModal}
@@ -1221,7 +1219,7 @@ export const FeedPage = (): JSX.Element => {
               />
 
               {/* Post loading/error states */}
-              <div className="mb-4" data-post-creator>
+              <div className="mb-0" data-post-creator>
 
                 {/* Loading & Error States */}
                 {isLoadingPosts && (
@@ -1303,31 +1301,40 @@ export const FeedPage = (): JSX.Element => {
                   </Card>
                 )}
 
-                {/* Content-type filter tabs */}
-                {!isLoadingPosts && !error && allFeedItems.length > 0 && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    {(["all", "post", "blog", "podcast"] as const).map((type) => {
-                      const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts" };
-                      const isActive = feedFilter === type;
-                      return (
-                        <button
-                          key={type}
-                          onClick={() => setFeedFilter(type)}
-                          className={`px-4 py-1.5 rounded-full text-sm font-medium border transition-colors ${
-                            isActive
-                              ? "bg-[#008060] text-white border-[#008060]"
-                              : "bg-white text-gray-600 border-gray-200 hover:border-[#008060]/40 hover:text-[#008060]"
-                          }`}
-                        >
-                          {labels[type]} ({tabCounts[type]})
-                        </button>
-                      );
-                    })}
+                {/* Filter tabs + Create Post on same row */}
+                {!isLoadingPosts && !error && (
+                  <div className="flex items-center justify-between gap-3 flex-wrap py-4 mb-2">
+                    <div className="flex items-center gap-3 flex-wrap">
+                      {allFeedItems.length > 0 && (["all", "post", "blog", "podcast", "travel_post"] as const).map((type) => {
+                        const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts", travel_post: "Travel" };
+                        const isActive = feedFilter === type;
+                        return (
+                          <button
+                            key={type}
+                            onClick={() => setFeedFilter(type)}
+                            className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
+                              isActive
+                                ? "bg-[#008060] text-white border-[#008060]"
+                                : "bg-white text-gray-600 border-gray-200 hover:border-[#008060]/40 hover:text-[#008060]"
+                            }`}
+                          >
+                            {labels[type]} ({tabCounts[type]})
+                          </button>
+                        );
+                      })}
+                    </div>
+                    <Button
+                      onClick={() => setShowPostModal(true)}
+                      className="bg-[#008060] hover:bg-[#006b51] text-white font-semibold px-5 py-2 rounded-full shadow-sm transition-all flex items-center gap-2 text-sm shrink-0"
+                    >
+                      <PenSquare className="w-4 h-4" />
+                      Create Post
+                    </Button>
                   </div>
                 )}
 
                 {/* Feed — posts, blogs, and podcasts interleaved by date */}
-                <div className="space-y-8">
+                <div className="space-y-6 mt-2">
                   {feedItems.map((item) => {
                     if (item._type === "blog") {
                       return <FeedBlogCard key={`blog-${item.id}`} blog={item} onBookmark={handleBlogBookmark} />;
@@ -1344,6 +1351,16 @@ export const FeedPage = (): JSX.Element => {
                           onComment={() => handlePodcastComment(item.id)}
                           onPostComment={() => handlePostPodcastComment(item.id)}
                           onCommentTextChange={(text) => setPodcastCommentTexts(prev => ({ ...prev, [item.id]: text }))}
+                        />
+                      );
+                    }
+                    if (item._type === "travel_post") {
+                      return (
+                        <TravelPostCard
+                          key={`travel-${item.id}`}
+                          post={item}
+                          isOwnPost={item.author_id === user?.id}
+                          onClick={() => setLocation(`/travel-journal/${item.id}`)}
                         />
                       );
                     }

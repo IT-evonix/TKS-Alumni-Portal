@@ -266,10 +266,14 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
       case 'post_like':
       case 'post_comment':
       case 'comment_reply':
-      case 'post_approved':
-      case 'post_rejected':
       case 'post_deleted':
         return '/blogs';
+      case 'post_approved':
+        return '/travel-journal';
+      case 'post_rejected':
+        return '/travel-journal?tab=mine';
+      case 'post_pending_approval':
+        return '/admin/travel-chapters';
       case 'new_blog':
         return '/admin/blogs';
       case 'event_rsvp':
@@ -282,8 +286,6 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
         return '/profile';
       case 'signup_request':
         return '/admin/users';
-      case 'post_pending_approval':
-        return '/admin/feed';
       default:
         return '/feed';
     }

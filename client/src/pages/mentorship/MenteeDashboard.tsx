@@ -700,14 +700,18 @@ export const MenteeDashboard = (): JSX.Element => {
         {myRequests.map(req => (
           <Card key={req.id} className="border shadow-sm">
             <CardContent className="p-4 flex items-start gap-4">
-              <Avatar className="w-10 h-10 flex-shrink-0">
-                <AvatarImage src={req.mentor?.profile_picture} />
-                <AvatarFallback className="bg-[#008060] text-white text-xs">
-                  {req.mentor?.first_name?.[0]}{req.mentor?.last_name?.[0]}
-                </AvatarFallback>
-              </Avatar>
+              <button type="button" className="flex-shrink-0" onClick={() => setProfileModalMentor({ id: req.mentor_id, user_id: req.mentor_id, first_name: req.mentor?.first_name || '', last_name: req.mentor?.last_name || '', profile_picture: req.mentor?.profile_picture, current_role: req.mentor?.current_role, current_company: req.mentor?.current_company })}>
+                <Avatar className="w-10 h-10">
+                  <AvatarImage src={req.mentor?.profile_picture} />
+                  <AvatarFallback className="bg-[#008060] text-white text-xs">
+                    {req.mentor?.first_name?.[0]}{req.mentor?.last_name?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
               <div className="flex-1 min-w-0">
-                <p className="font-semibold text-sm">{req.mentor?.first_name} {req.mentor?.last_name}</p>
+                <button type="button" className="text-left hover:underline" onClick={() => setProfileModalMentor({ id: req.mentor_id, user_id: req.mentor_id, first_name: req.mentor?.first_name || '', last_name: req.mentor?.last_name || '', profile_picture: req.mentor?.profile_picture, current_role: req.mentor?.current_role, current_company: req.mentor?.current_company })}>
+                  <p className="font-semibold text-sm">{req.mentor?.first_name} {req.mentor?.last_name}</p>
+                </button>
                 <p className="text-xs text-gray-500 truncate">{req.mentor?.current_role} @ {req.mentor?.current_company}</p>
                 {req.goal_text && <p className="text-xs text-gray-600 mt-1 italic">"{req.goal_text.slice(0, 100)}{req.goal_text.length > 100 ? '…' : ''}"</p>}
               </div>
@@ -752,14 +756,18 @@ export const MenteeDashboard = (): JSX.Element => {
         <CardContent className="p-4 space-y-2">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-3">
-              <Avatar className="w-9 h-9 flex-shrink-0">
-                <AvatarImage src={s.other?.profile_picture} />
-                <AvatarFallback className="bg-[#008060] text-white text-xs">
-                  {s.other?.first_name?.[0]}{s.other?.last_name?.[0]}
-                </AvatarFallback>
-              </Avatar>
+              <button type="button" className="flex-shrink-0" onClick={() => setProfileModalMentor({ id: s.mentor_id, user_id: s.mentor_id, first_name: s.other?.first_name || '', last_name: s.other?.last_name || '', profile_picture: s.other?.profile_picture, current_role: s.other?.current_role, current_company: s.other?.current_company })}>
+                <Avatar className="w-9 h-9">
+                  <AvatarImage src={s.other?.profile_picture} />
+                  <AvatarFallback className="bg-[#008060] text-white text-xs">
+                    {s.other?.first_name?.[0]}{s.other?.last_name?.[0]}
+                  </AvatarFallback>
+                </Avatar>
+              </button>
               <div>
-                <p className="font-semibold text-sm">{s.other?.first_name} {s.other?.last_name}</p>
+                <button type="button" className="text-left hover:underline" onClick={() => setProfileModalMentor({ id: s.mentor_id, user_id: s.mentor_id, first_name: s.other?.first_name || '', last_name: s.other?.last_name || '', profile_picture: s.other?.profile_picture, current_role: s.other?.current_role, current_company: s.other?.current_company })}>
+                  <p className="font-semibold text-sm">{s.other?.first_name} {s.other?.last_name}</p>
+                </button>
                 <p className="text-xs text-gray-500">Mentor</p>
               </div>
             </div>

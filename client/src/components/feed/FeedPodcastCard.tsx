@@ -82,20 +82,22 @@ export function FeedPodcastCard({
 
   return (
     <Card
-      className="group hover:shadow-md transition-all duration-200"
+      className="group hover:shadow-md transition-all duration-200 relative"
       style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)", borderLeft: "3px solid #9333EA" }}
     >
-      <CardContent className="p-4 relative">
-        {/* Badge top-right of card */}
-        <div className="absolute top-3 right-3 flex items-center gap-1.5 z-10">
-          <Badge className="bg-purple-50 text-purple-700 border border-purple-200 text-xs font-semibold hover:bg-purple-50">
-            Podcast
-          </Badge>
-          {podcast.episode_number != null && (
-            <span className="text-xs text-gray-400 font-medium bg-white/80 px-1.5 py-0.5 rounded">Ep. {podcast.episode_number}</span>
-          )}
-        </div>
+      {/* Type badge — top-right */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1">
+        <Badge className="bg-purple-600 text-white border-0 text-[10px] font-semibold px-1.5 py-0 h-5 shadow-sm">
+          Podcast
+        </Badge>
+        {podcast.episode_number != null && (
+          <span className="text-[10px] text-gray-500 font-medium bg-gray-100 px-1.5 py-0 h-5 inline-flex items-center rounded-full">
+            Ep. {podcast.episode_number}
+          </span>
+        )}
+      </div>
 
+      <CardContent className="p-4">
         <div
           className="flex gap-4 items-start cursor-pointer"
           onClick={navigate}
@@ -120,7 +122,7 @@ export function FeedPodcastCard({
           })()}
 
           {/* Content */}
-          <div className="flex-1 min-w-0 space-y-2 pr-16">
+          <div className="flex-1 min-w-0 space-y-2 pr-20">
 
             {/* Title */}
             <h3 className="font-semibold text-gray-900 text-base leading-snug line-clamp-2 group-hover:text-purple-700 transition-colors">

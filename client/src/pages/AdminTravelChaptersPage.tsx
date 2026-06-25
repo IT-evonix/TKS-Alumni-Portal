@@ -1,18 +1,25 @@
-import React, { useState } from 'react';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { useLocation } from 'wouter';
-import { AdminSidebar } from '@/components/layout/AdminSidebar';
-import { useToast } from '@/hooks/use-toast';
-import { CheckCircle, XCircle, Trash2, ExternalLink, Globe, AlertCircle, Bell, LogOut, ArrowLeft } from 'lucide-react';
-import { Button } from '@/components/ui/button';
+import React, { useState } from "react";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
+import { AdminSidebar } from "@/components/layout/AdminSidebar";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Trash2, Eye, EyeOff, Globe, Bell, LogOut, Loader2, MapPin,
+  Heart, MessageCircle, Bookmark, CheckCircle, XCircle, Clock,
+} from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle,
+} from "@/components/ui/dialog";
 import { NotificationDropdown } from "@/components/layout/NotificationDropdown";
 import { useNotifications } from "@/contexts/NotificationContext";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { useAuth } from '@/contexts/AuthContext';
-import { clientConfig } from '@/lib/config';
+import { useAuth } from "@/contexts/AuthContext";
+import { clientConfig } from "@/lib/config";
+import { format } from "date-fns";
+
+type StatusTab = "pending" | "approved" | "rejected" | "all";
 
 export default function AdminTravelChaptersPage() {
   const { toast } = useToast();
@@ -21,11 +28,14 @@ export default function AdminTravelChaptersPage() {
   const { user, adminUser, logoutAdmin } = useAuth();
   const { unreadCount } = useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
-  const [activeTab, setActiveTab] = useState("pending");
+  const [page, setPage] = useState(1);
+  const [activeTab, setActiveTab] = useState<StatusTab>("pending");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [rejectDialogPost, setRejectDialogPost] = useState<any>(null);
+  const [rejectionReason, setRejectionReason] = useState("");
 
-  React.useEffect(() => { document.title = "Travel Chapters Management - Admin"; }, []);
+  React.useEffect(() => { document.title = "Travel Journal - Admin"; }, []);
 
-  // Same getHeaders pattern as AdminBlogsPage — ensures correct admin token is sent
   const getHeaders = () => {
     const token = localStorage.getItem("auth_token") || "";
     const userId = adminUser?.id || user?.id || localStorage.getItem("userId") || "";
@@ -36,285 +46,345 @@ export default function AdminTravelChaptersPage() {
     };
   };
 
-  const { data: chapters = [], isLoading } = useQuery({
-    queryKey: ['admin-travel-chapters'],
+  const { data, isLoading, isError } = useQuery({
+    queryKey: ["admin-travel-posts", page, activeTab],
     queryFn: async () => {
-      const res = await fetch(`${clientConfig.apiUrl}/api/travel-chapters/admin`, {
-        headers: getHeaders(),
-      });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(`Failed to fetch chapters: ${res.status} ${text}`);
-      }
-      return res.json();
-    }
+      const params = new URLSearchParams({ page: String(page), limit: "20" });
+      if (activeTab !== "all") params.set("status", activeTab);
+      const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts/admin/all?${params}`, { headers: getHeaders() });
+      if (!res.ok) throw new Error("Failed to fetch posts");
+      return res.json() as Promise<{ posts: any[]; total: number; page: number; limit: number }>;
+    },
+    staleTime: 30_000,
   });
 
-  const updateStatusMutation = useMutation({
-    mutationFn: async ({ id, status }: { id: string, status: string }) => {
-      const res = await fetch(`${clientConfig.apiUrl}/api/travel-chapters/${id}/status`, {
-        method: 'PUT',
+  const posts: any[] = data?.posts ?? [];
+  const total: number = data?.total ?? 0;
+  const totalPages = Math.ceil(total / 20);
+
+  const hideMutation = useMutation({
+    mutationFn: async ({ id, hidden }: { id: string; hidden: boolean }) => {
+      const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts/admin/${id}/hide`, {
+        method: "PATCH",
         headers: getHeaders(),
-        body: JSON.stringify({ status }),
+        body: JSON.stringify({ hidden }),
       });
-      if (!res.ok) throw new Error("Failed to update status");
+      if (!res.ok) throw new Error("Failed to update post");
       return res.json();
     },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['admin-travel-chapters'] });
-      toast({ title: "Success", description: data.message });
+    onSuccess: (_data, { hidden }) => {
+      queryClient.invalidateQueries({ queryKey: ["admin-travel-posts"] });
+      toast({ title: hidden ? "Post hidden from feed" : "Post made visible" });
     },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
+    onError: () => toast({ title: "Failed to update post", variant: "destructive" }),
   });
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const res = await fetch(`${clientConfig.apiUrl}/api/travel-chapters/${id}`, {
-        method: 'DELETE',
+      const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts/${id}`, {
+        method: "DELETE",
         headers: getHeaders(),
       });
-      if (!res.ok) throw new Error("Failed to delete chapter");
+      if (!res.ok) throw new Error("Failed to delete post");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-travel-posts"] });
+      setConfirmDeleteId(null);
+      toast({ title: "Post deleted" });
+    },
+    onError: () => toast({ title: "Failed to delete post", variant: "destructive" }),
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts/admin/${id}/approve`, {
+        method: "PATCH",
+        headers: getHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to approve");
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['admin-travel-chapters'] });
-      toast({ title: "Success", description: "Chapter deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["admin-travel-posts"] });
+      toast({ title: "Post approved and published" });
     },
-    onError: (err: any) => {
-      toast({ title: "Error", description: err.message, variant: "destructive" });
-    }
+    onError: () => toast({ title: "Failed to approve post", variant: "destructive" }),
   });
 
-  const filteredChapters = chapters.filter((c: any) => {
-    if (activeTab === "all") return true;
-    return c.status === activeTab;
+  const rejectMutation = useMutation({
+    mutationFn: async ({ id, reason }: { id: string; reason: string }) => {
+      const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts/admin/${id}/reject`, {
+        method: "PATCH",
+        headers: getHeaders(),
+        body: JSON.stringify({ rejection_reason: reason }),
+      });
+      if (!res.ok) throw new Error("Failed to reject");
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["admin-travel-posts"] });
+      setRejectDialogPost(null);
+      setRejectionReason("");
+      toast({ title: "Post rejected" });
+    },
+    onError: () => toast({ title: "Failed to reject post", variant: "destructive" }),
   });
 
-  const statusBadge = (status: string) => {
-    const map: Record<string, { label: string; className: string }> = {
-      pending: { label: "In Review", className: "bg-yellow-100 text-yellow-800" },
-      approved: { label: "Approved", className: "bg-green-100 text-green-800" },
-      rejected: { label: "Rejected", className: "bg-red-100 text-red-800" },
-    };
-    const s = map[status] || { label: status, className: "bg-gray-100 text-gray-600" };
-    return <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${s.className}`}>{s.label}</span>;
-  };
+  const tabs: { value: StatusTab; label: string; icon: React.ReactNode }[] = [
+    { value: "pending", label: "Pending", icon: <Clock className="w-3.5 h-3.5" /> },
+    { value: "approved", label: "Approved", icon: <CheckCircle className="w-3.5 h-3.5" /> },
+    { value: "rejected", label: "Rejected", icon: <XCircle className="w-3.5 h-3.5" /> },
+    { value: "all", label: "All", icon: <Globe className="w-3.5 h-3.5" /> },
+  ];
 
   return (
-    <div className="flex min-h-screen bg-white">
+    <div className="flex h-screen bg-gray-50">
       <AdminSidebar currentPage="travel-chapters" />
-      <div className="flex-1 flex flex-col">
-        {/* Header */}
-        <header className="bg-white/80 backdrop-blur-md border-b border-gray-200 px-8 py-4 sticky top-0 z-40 shadow-sm transition-all duration-300">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setLocation("/admin/dashboard")}
-                className="hover:bg-gray-100"
-                aria-label="Back to Dashboard"
+
+      <div className="flex-1 overflow-auto">
+        {/* Top bar */}
+        <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Globe className="w-5 h-5 text-blue-500" />
+            <h1 className="text-lg font-semibold text-gray-900">Travel Journal</h1>
+            <Badge variant="outline" className="ml-1">{total} posts</Badge>
+          </div>
+          <div className="flex items-center gap-3">
+            <div className="relative">
+              <button
+                onClick={() => setShowNotifications((v) => !v)}
+                className="relative p-2 text-gray-600 hover:text-gray-800 hover:bg-gray-100 rounded-full transition-colors"
               >
-                <ArrowLeft className="h-5 w-5 text-gray-700" />
-              </Button>
-              <h2 className="text-xl font-semibold text-gray-900">Travel Chapters Management</h2>
-            </div>
-            <div className="flex items-center gap-4">
-              <Button variant="outline" size="sm" onClick={() => setLocation("/travel-chapters")} className="hidden sm:flex gap-2 text-gray-600">
-                <ExternalLink className="h-4 w-4" />
-                View Public Directory
-              </Button>
-              <div className="relative z-[70]">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className={`relative min-w-[44px] min-h-[44px] rounded-full transition-colors ${
-                    unreadCount > 0
-                      ? "text-[#008060] hover:bg-[#008060]/10 hover:text-[#006b51] ring-2 ring-[#008060]/30"
-                      : "text-gray-600 hover:text-[#008060] hover:bg-gray-100"
-                  }`}
-                  onClick={() => setShowNotifications(!showNotifications)}
-                  aria-label={`Notifications${unreadCount > 0 ? ` (${unreadCount} unread)` : ""}`}
-                >
-                  <Bell className="w-5 h-5" strokeWidth={2} />
-                  {unreadCount > 0 && (
-                    <span className="absolute -top-0.5 right-0 min-w-[18px] h-[18px] px-1 bg-red-500 rounded-full border-2 border-white flex items-center justify-center text-[10px] font-bold text-white animate-pulse">
-                      {unreadCount > 99 ? "99+" : unreadCount > 9 ? "9+" : unreadCount}
-                    </span>
-                  )}
-                </Button>
-                {showNotifications && <NotificationDropdown onClose={() => setShowNotifications(false)} />}
-              </div>
-              <Button
-                variant="outline"
-                className="text-gray-600 hover:bg-red-50 hover:text-red-600 hover:border-red-200 transition-all"
-                onClick={() => logoutAdmin()}
-              >
-                <LogOut className="w-4 h-4 mr-2" />
-                Log Out
-              </Button>
-              <div className="hidden md:flex items-center gap-3 pl-4 border-l border-gray-200">
-                <div className="text-right">
-                  <p className="text-sm font-semibold text-gray-900">{adminUser?.username || "Admin"}</p>
-                  <p className="text-xs text-gray-500">Administrator</p>
+                <Bell className="w-5 h-5" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-1 -right-1 bg-red-500 text-white text-xs rounded-full w-4 h-4 flex items-center justify-center">
+                    {unreadCount > 9 ? "9+" : unreadCount}
+                  </span>
+                )}
+              </button>
+              {showNotifications && (
+                <div className="absolute right-0 top-10 z-50">
+                  <NotificationDropdown onClose={() => setShowNotifications(false)} />
                 </div>
-                <div className="w-10 h-10 bg-gradient-to-br from-[#008060] to-[#006b51] rounded-full flex items-center justify-center shadow-md">
-                  <span className="text-white font-semibold">{adminUser?.username?.charAt(0).toUpperCase() || "A"}</span>
-                </div>
-              </div>
+              )}
             </div>
+            <button
+              onClick={() => { logoutAdmin?.(); setLocation("/admin/login"); }}
+              className="flex items-center gap-1.5 text-sm text-gray-600 hover:text-red-600 px-3 py-1.5 rounded-lg hover:bg-red-50 transition-colors"
+            >
+              <LogOut className="w-4 h-4" /> Sign out
+            </button>
           </div>
         </header>
-        <div className="max-w-6xl mx-auto w-full px-4 py-6 space-y-6">
 
-          <Tabs value={activeTab} onValueChange={setActiveTab}>
-            <TabsList className="bg-gray-100">
-              <TabsTrigger value="pending" className="flex items-center gap-1.5">
-                <AlertCircle className="h-3.5 w-3.5" />
-                Pending Review
-              </TabsTrigger>
-              <TabsTrigger value="approved">Approved</TabsTrigger>
-              <TabsTrigger value="rejected">Rejected</TabsTrigger>
-              <TabsTrigger value="all">All Chapters</TabsTrigger>
-            </TabsList>
-
-            {["pending", "approved", "rejected", "all"].map((tab) => (
-              <TabsContent key={tab} value={tab} className="mt-4">
-                {isLoading ? (
-                  <div className="space-y-3">
-                    {[...Array(3)].map((_, i) => (
-                      <div key={i} className="h-16 bg-gray-100 rounded-lg animate-pulse" />
-                    ))}
-                  </div>
-                ) : filteredChapters.length === 0 ? (
-                  <div className="text-center py-12 text-gray-400">
-                    <Globe className="h-10 w-10 mx-auto mb-3 opacity-30" />
-                    <p>No chapters in this category</p>
-                  </div>
-                ) : (
-                  <div className="border rounded-xl overflow-hidden">
-                    <Table>
-                      <TableHeader>
-                        <TableRow className="bg-gray-50">
-                          <TableHead>Chapter</TableHead>
-                          <TableHead>Author</TableHead>
-                          <TableHead>Location</TableHead>
-                          <TableHead>Status</TableHead>
-                          <TableHead>Date</TableHead>
-                          <TableHead className="text-right">Actions</TableHead>
-                        </TableRow>
-                      </TableHeader>
-                      <TableBody>
-                        {filteredChapters.map((chapter: any) => {
-                          const authorName = chapter.creator?.username || "Unknown";
-                          const initials = authorName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2);
-
-                          return (
-                            <TableRow key={chapter.id} className="hover:bg-gray-50">
-                              <TableCell className="max-w-[280px]">
-                                <p className="font-medium text-sm text-gray-900 line-clamp-1">{chapter.name}</p>
-                                {chapter.description && (
-                                  <p className="text-xs text-gray-400 line-clamp-1 mt-0.5">{chapter.description}</p>
-                                )}
-                              </TableCell>
-                              
-                              <TableCell>
-                                <div className="flex items-center gap-2">
-                                  <Avatar className="h-6 w-6">
-                                    <AvatarFallback className="text-xs bg-[#008060]/10 text-[#008060]">{initials}</AvatarFallback>
-                                  </Avatar>
-                                  <span className="text-sm text-gray-700 whitespace-nowrap">{authorName}</span>
-                                </div>
-                              </TableCell>
-
-                              <TableCell>
-                                <Badge
-                                  className="text-xs bg-[#008060]/10 text-[#008060] border-[#008060]/20 hover:bg-[#008060]/10"
-                                >
-                                  {chapter.city}, {chapter.country}
-                                </Badge>
-                              </TableCell>
-
-                              <TableCell>{statusBadge(chapter.status)}</TableCell>
-                              
-                              <TableCell className="text-xs text-gray-500 whitespace-nowrap">
-                                {new Date(chapter.created_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                              </TableCell>
-                              
-                              <TableCell>
-                                <div className="flex items-center justify-end gap-1">
-                                  <Button
-                                    variant="ghost"
-                                    size="sm"
-                                    className="h-7 px-2 text-xs text-gray-500"
-                                    onClick={() => setLocation(`/travel-chapters`)}
-                                  >
-                                    <ExternalLink className="h-3 w-3" />
-                                  </Button>
-                                  
-                                  {chapter.status === "pending" && (
-                                    <>
-                                      <Button
-                                        size="sm"
-                                        className="h-7 px-2 bg-green-600 hover:bg-green-700 text-xs"
-                                        onClick={() => updateStatusMutation.mutate({ id: chapter.id, status: 'approved' })}
-                                        disabled={updateStatusMutation.isPending}
-                                      >
-                                        <CheckCircle className="h-3 w-3" />
-                                      </Button>
-                                      <Button
-                                        size="sm"
-                                        variant="outline"
-                                        className="h-7 px-2 border-red-300 text-red-600 hover:bg-red-50 text-xs"
-                                        onClick={() => updateStatusMutation.mutate({ id: chapter.id, status: 'rejected' })}
-                                        disabled={updateStatusMutation.isPending}
-                                      >
-                                        <XCircle className="h-3 w-3" />
-                                      </Button>
-                                    </>
-                                  )}
-                                  
-                                  {chapter.status === "approved" && (
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      className="h-7 px-2 border-red-300 text-red-600 hover:bg-red-50 text-xs"
-                                      onClick={() => updateStatusMutation.mutate({ id: chapter.id, status: 'rejected' })}
-                                      disabled={updateStatusMutation.isPending}
-                                    >
-                                      <XCircle className="h-3 w-3" />
-                                    </Button>
-                                  )}
-                                  
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    className="h-7 px-2 text-red-400 hover:text-red-600 hover:bg-red-50 text-xs"
-                                    onClick={() => {
-                                      if (confirm('Are you sure you want to delete this chapter? This cannot be undone.')) {
-                                        deleteMutation.mutate(chapter.id);
-                                      }
-                                    }}
-                                    disabled={deleteMutation.isPending}
-                                  >
-                                    <Trash2 className="h-3 w-3" />
-                                  </Button>
-                                </div>
-                              </TableCell>
-                            </TableRow>
-                          );
-                        })}
-                      </TableBody>
-                    </Table>
-                  </div>
-                )}
-              </TabsContent>
+        <div className="p-6">
+          {/* Status tabs */}
+          <div className="flex items-center gap-2 mb-5">
+            {tabs.map((tab) => (
+              <button
+                key={tab.value}
+                onClick={() => { setActiveTab(tab.value); setPage(1); }}
+                className={`flex items-center gap-1.5 px-4 py-1.5 text-sm rounded-lg font-medium transition-all ${
+                  activeTab === tab.value
+                    ? tab.value === "pending"
+                      ? "bg-yellow-500 text-white"
+                      : tab.value === "approved"
+                      ? "bg-green-600 text-white"
+                      : tab.value === "rejected"
+                      ? "bg-red-500 text-white"
+                      : "bg-blue-600 text-white"
+                    : "bg-gray-100 text-gray-600 hover:bg-gray-200"
+                }`}
+              >
+                {tab.icon}
+                {tab.label}
+              </button>
             ))}
-          </Tabs>
+          </div>
+
+          {isLoading ? (
+            <div className="flex justify-center py-16">
+              <Loader2 className="w-6 h-6 animate-spin text-gray-400" />
+            </div>
+          ) : isError ? (
+            <p className="text-center text-red-500 py-8">Failed to load posts.</p>
+          ) : posts.length === 0 ? (
+            <div className="text-center py-16 text-gray-400">
+              <Globe className="w-12 h-12 mx-auto mb-3 opacity-50" />
+              <p>No {activeTab !== "all" ? activeTab : ""} posts found.</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {posts.map((post: any) => {
+                const authorName = [post.author?.first_name, post.author?.last_name].filter(Boolean).join(" ") || "Alumni";
+                const coverMedia = post.media?.[0];
+                return (
+                  <div
+                    key={post.id}
+                    className={`bg-white rounded-xl border shadow-sm flex gap-4 p-4 ${
+                      post.is_hidden ? "border-orange-200 bg-orange-50/30" :
+                      post.status === "pending" ? "border-yellow-200 bg-yellow-50/20" :
+                      post.status === "rejected" ? "border-red-200 bg-red-50/10" :
+                      "border-gray-200"
+                    }`}
+                  >
+                    {/* Cover thumbnail */}
+                    <div className="w-20 h-20 rounded-lg overflow-hidden flex-shrink-0 bg-gradient-to-br from-blue-400 to-indigo-600 flex items-center justify-center">
+                      {coverMedia ? (
+                        <img src={coverMedia.url} alt="cover" className="w-full h-full object-cover" />
+                      ) : (
+                        <MapPin className="w-6 h-6 text-white opacity-80" />
+                      )}
+                    </div>
+
+                    {/* Content */}
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-0.5 flex-wrap">
+                            <span className="font-medium text-gray-900 text-sm">{authorName}</span>
+                            {post.status === "pending" && (
+                              <Badge className="bg-yellow-100 text-yellow-700 border-yellow-300 text-xs">Pending Review</Badge>
+                            )}
+                            {post.status === "rejected" && (
+                              <Badge className="bg-red-100 text-red-700 border-red-300 text-xs">Rejected</Badge>
+                            )}
+                            {post.is_hidden && (
+                              <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs">Hidden</Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-1 text-xs text-blue-600 mb-1">
+                            <MapPin className="w-3 h-3" /> {post.city}, {post.country}
+                          </div>
+                          {post.status === "rejected" && post.rejection_reason && (
+                            <p className="text-xs text-red-600 mb-1 italic">Reason: {post.rejection_reason}</p>
+                          )}
+                          {post.caption && (
+                            <p className="text-xs text-gray-600 line-clamp-2">{post.caption}</p>
+                          )}
+                          <div className="flex items-center gap-3 text-xs text-gray-400 mt-1.5">
+                            <span className="flex items-center gap-0.5"><Heart className="w-3 h-3" /> {post.likes_count}</span>
+                            <span className="flex items-center gap-0.5"><MessageCircle className="w-3 h-3" /> {post.comments_count}</span>
+                            <span className="flex items-center gap-0.5"><Bookmark className="w-3 h-3" /> {post.bookmarks_count}</span>
+                            <span>{post.media?.length ?? 0} media</span>
+                            <span className="ml-auto">
+                              {(() => { try { return format(new Date(post.created_at), "MMM d, yyyy"); } catch { return ""; } })()}
+                            </span>
+                          </div>
+                        </div>
+
+                        {/* Actions */}
+                        <div className="flex items-center gap-1 flex-shrink-0">
+                          {/* Approve / Reject — only for pending posts */}
+                          {post.status === "pending" && (
+                            <>
+                              <button
+                                onClick={() => approveMutation.mutate(post.id)}
+                                disabled={approveMutation.isPending}
+                                title="Approve post"
+                                className="p-1.5 rounded-lg text-green-600 hover:bg-green-100 transition-colors"
+                              >
+                                {approveMutation.isPending && approveMutation.variables === post.id
+                                  ? <Loader2 className="w-4 h-4 animate-spin" />
+                                  : <CheckCircle className="w-4 h-4" />
+                                }
+                              </button>
+                              <button
+                                onClick={() => { setRejectDialogPost(post); setRejectionReason(""); }}
+                                title="Reject post"
+                                className="p-1.5 rounded-lg text-red-500 hover:bg-red-100 transition-colors"
+                              >
+                                <XCircle className="w-4 h-4" />
+                              </button>
+                            </>
+                          )}
+
+                          {/* Hide/show toggle */}
+                          <button
+                            onClick={() => hideMutation.mutate({ id: post.id, hidden: !post.is_hidden })}
+                            disabled={hideMutation.isPending}
+                            title={post.is_hidden ? "Make visible" : "Hide post"}
+                            className={`p-1.5 rounded-lg transition-colors ${post.is_hidden ? "text-blue-600 hover:bg-blue-100" : "text-orange-500 hover:bg-orange-100"}`}
+                          >
+                            {post.is_hidden ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                          </button>
+
+                          {/* Delete */}
+                          <button
+                            onClick={() => setConfirmDeleteId(confirmDeleteId === post.id ? null : post.id)}
+                            disabled={deleteMutation.isPending && deleteMutation.variables === post.id}
+                            title="Delete post"
+                            className={`p-1.5 rounded-lg transition-colors ${confirmDeleteId === post.id ? "text-red-700 bg-red-100" : "text-gray-400 hover:text-red-600 hover:bg-red-50"}`}
+                          >
+                            {deleteMutation.isPending && (deleteMutation.variables as string) === post.id
+                              ? <Loader2 className="w-4 h-4 animate-spin" />
+                              : <Trash2 className="w-4 h-4" />
+                            }
+                          </button>
+                          {confirmDeleteId === post.id && (
+                            <Button
+                              variant="destructive"
+                              size="sm"
+                              onClick={() => deleteMutation.mutate(post.id)}
+                              className="text-xs h-7 px-2"
+                            >
+                              Confirm Delete
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => p - 1)}>Previous</Button>
+              <span className="text-sm text-gray-500">Page {page} of {totalPages}</span>
+              <Button variant="outline" size="sm" disabled={page >= totalPages} onClick={() => setPage((p) => p + 1)}>Next</Button>
+            </div>
+          )}
         </div>
       </div>
+
+      {/* Rejection reason dialog */}
+      {rejectDialogPost && (
+        <Dialog open onOpenChange={() => { setRejectDialogPost(null); setRejectionReason(""); }}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Reject Travel Post</DialogTitle>
+            </DialogHeader>
+            <p className="text-sm text-gray-600 mb-3">
+              Post from <strong>{rejectDialogPost.city}, {rejectDialogPost.country}</strong> by{" "}
+              <strong>{[rejectDialogPost.author?.first_name, rejectDialogPost.author?.last_name].filter(Boolean).join(" ") || "Alumni"}</strong>
+            </p>
+            <Textarea
+              placeholder="Reason for rejection (will be shown to the author)..."
+              value={rejectionReason}
+              onChange={(e) => setRejectionReason(e.target.value)}
+              rows={4}
+              className="mb-4"
+            />
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => { setRejectDialogPost(null); setRejectionReason(""); }}>
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                disabled={!rejectionReason.trim() || rejectMutation.isPending}
+                onClick={() => rejectMutation.mutate({ id: rejectDialogPost.id, reason: rejectionReason })}
+              >
+                {rejectMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin mr-1" /> : null}
+                Reject Post
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </div>
   );
 }

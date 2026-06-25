@@ -66,4 +66,35 @@ export interface FeedPodcast {
   created_at: string;
 }
 
-export type FeedItem = FeedPost | FeedBlog | FeedPodcast;
+export interface FeedTravelPost {
+  _type: "travel_post";
+  _sortDate: string;
+  id: string;
+  author_id: string;
+  city: string;
+  country: string;
+  caption?: string | null;
+  status: "pending" | "approved" | "rejected";
+  rejection_reason?: string | null;
+  is_hidden: boolean;
+  likes_count: number;
+  comments_count: number;
+  bookmarks_count: number;
+  views_count: number;
+  created_at: string;
+  updated_at: string;
+  author: {
+    id: string;
+    username?: string;
+    first_name?: string;
+    last_name?: string;
+    profile_picture?: string;
+    current_role?: string;
+  };
+  media: Array<{ id: string; type: "image" | "video"; url: string; storage_path?: string; order_index: number }>;
+  links: Array<{ id: string; post_id: string; url: string; title?: string; description?: string; order_index: number }>;
+  viewer_has_liked: boolean;
+  viewer_has_bookmarked: boolean;
+}
+
+export type FeedItem = FeedPost | FeedBlog | FeedPodcast | FeedTravelPost;

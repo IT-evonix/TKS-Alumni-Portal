@@ -107,20 +107,26 @@ function calculateRelevance(query: string, text: string, matchType: 'exact' | 'f
  * Simple Levenshtein-like similarity calculation for client-side fallback
  */
 function calculateSimilarity(str1: string, str2: string): number {
-    const longer = str1.length > str2.length ? str1 : str2;
-    const shorter = str1.length > str2.length ? str2 : str1;
+    const a = str1.toLowerCase();
+    const b = str2.toLowerCase();
+    if (a === b) return 1.0;
+    if (a.length === 0 || b.length === 0) return 0.0;
 
-    if (longer.length === 0) return 1.0;
+    // Levenshtein edit distance normalized to [0, 1]
+    const matrix: number[][] = Array.from({ length: b.length + 1 }, (_, i) =>
+        Array.from({ length: a.length + 1 }, (_, j) => (i === 0 ? j : j === 0 ? i : 0))
+    );
 
-    // Count matching characters
-    let matches = 0;
-    for (let i = 0; i < shorter.length; i++) {
-        if (longer.includes(shorter[i])) {
-            matches++;
+    for (let i = 1; i <= b.length; i++) {
+        for (let j = 1; j <= a.length; j++) {
+            matrix[i][j] = b[i - 1] === a[j - 1]
+                ? matrix[i - 1][j - 1]
+                : 1 + Math.min(matrix[i - 1][j], matrix[i][j - 1], matrix[i - 1][j - 1]);
         }
     }
 
-    return matches / longer.length;
+    const maxLen = Math.max(a.length, b.length);
+    return 1 - matrix[b.length][a.length] / maxLen;
 }
 
 router.get("/", async (req, res) => {
@@ -263,7 +269,7 @@ router.get("/", async (req, res) => {
                 { id: 'blogs', title: 'Blogs', url: '/blogs', icon: 'BookOpen' },
                 { id: 'podcasts', title: 'Podcasts', url: '/podcast', icon: 'Mic' },
                 { id: 'newsletters', title: 'Newsletters', url: '/newsletters', icon: 'Mail' },
-                { id: 'travel', title: 'Travel Chapters', url: '/travel-chapters', icon: 'MapPin' },
+                { id: 'travel', title: 'Travel Journal', url: '/travel-journal', icon: 'MapPin' },
                 { id: 'mentorship', title: 'Mentorship', url: '/mentorship', icon: 'GraduationCap' },
                 { id: 'connections', title: 'Connections', url: '/connections', icon: 'Users' },
             ];
@@ -944,13 +950,13 @@ router.get("/", async (req, res) => {
             }
         }
 
-        // 9. Search Travel Chapters (if type is 'all' or 'travel')
+        // 9. Search Travel Journal posts (if type is 'all' or 'travel')
         if (searchType === 'all' || searchType === 'travel') {
             const { data: travelData } = await supabase
-                .from("travel_chapters")
-                .select("id, name, description, city, country, cover_image, created_at")
-                .eq("status", "approved")
-                .or(`name.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,country.ilike.%${sanitizedSearch}%`)
+                .from("travel_posts")
+                .select("id, caption, city, country, created_at")
+                .eq("is_hidden", false)
+                .or(`caption.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,country.ilike.%${sanitizedSearch}%`)
                 .order("created_at", { ascending: false })
                 .limit(Math.ceil(searchLimit * 0.05));
 
@@ -960,11 +966,11 @@ router.get("/", async (req, res) => {
                     results.push({
                         id: item.id,
                         type: 'travel',
-                        title: item.name,
-                        description: [location || null, item.description ? item.description.substring(0, 100) : null].filter(Boolean).join(' • '),
-                        image: item.cover_image || null,
-                        url: `/travel-chapters/${item.id}`,
-                        relevance: calculateRelevance(searchTerm, `${item.name} ${item.description || ''} ${item.city || ''} ${item.country || ''}`),
+                        title: location || 'Travel Post',
+                        description: item.caption ? item.caption.substring(0, 100) : location,
+                        image: null,
+                        url: `/travel-journal/${item.id}`,
+                        relevance: calculateRelevance(searchTerm, `${item.city || ''} ${item.country || ''} ${item.caption || ''}`),
                         createdAt: item.created_at || null
                     });
                 });

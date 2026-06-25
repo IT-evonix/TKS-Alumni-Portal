@@ -29,6 +29,7 @@ import gamificationRoutes from "./routes/gamification-routes";
 import blogRoutes from "./routes/blog-routes";
 import podcastRoutes from "./routes/podcast-routes";
 import travelChaptersRoutes from "./routes/travel-chapters";
+import travelPostsRoutes from "./routes/travel-posts";
 import { ensureDefaultPointRulesExist, ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
 import {
   createAndEmitNotification,
@@ -196,6 +197,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.use("/api/blogs", blogRoutes);
   app.use("/api/podcasts", podcastRoutes);
   app.use("/api/travel-chapters", travelChaptersRoutes);
+  app.use("/api/travel-posts", travelPostsRoutes);
   ensureDefaultPointRulesExist().catch(err =>
     console.error("[Gamification] Point rules auto-seed failed:", err)
   );

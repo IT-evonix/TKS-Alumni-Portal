@@ -29,10 +29,25 @@ export function FeedBlogCard({ blog, onBookmark }: FeedBlogCardProps) {
 
   return (
     <Card
-      className="group overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200"
+      className="group overflow-hidden cursor-pointer hover:shadow-md transition-all duration-200 relative"
       style={{ border: "1px solid var(--border-subtle)", boxShadow: "var(--shadow-card)", borderLeft: "3px solid #008060" }}
       onClick={navigate}
     >
+      {/* Type + category badges — top-right */}
+      <div className="absolute top-2 right-2 z-10 flex items-center gap-1 flex-wrap justify-end">
+        <Badge className="bg-[#008060]/90 text-white border-0 text-[10px] font-semibold px-1.5 py-0 h-5 shadow-sm">
+          Blog Post
+        </Badge>
+        {blog.category && (
+          <Badge
+            className="text-[10px] font-medium px-1.5 py-0 h-5 border-0 shadow-sm"
+            style={{ backgroundColor: blog.category.color, color: "#fff" }}
+          >
+            {blog.category.name}
+          </Badge>
+        )}
+      </div>
+
       {/* Cover image */}
       {blog.cover_image && !coverError ? (
         <div className="relative w-full bg-gray-100 overflow-hidden aspect-video">
@@ -42,47 +57,10 @@ export function FeedBlogCard({ blog, onBookmark }: FeedBlogCardProps) {
             className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             onError={() => setCoverError(true)}
           />
-          {/* Badges overlaid top-right */}
-          <div className="absolute top-2 right-2 flex items-center gap-1.5 flex-wrap justify-end">
-            <Badge className="bg-[#008060]/90 text-white border-0 text-xs font-semibold shadow-sm">
-              Blog Post
-            </Badge>
-            {blog.category && (
-              <Badge
-                className="text-xs font-medium px-2 py-0.5 shadow-sm border-0"
-                style={{
-                  backgroundColor: blog.category.color,
-                  color: "#fff",
-                }}
-              >
-                {blog.category.name}
-              </Badge>
-            )}
-          </div>
         </div>
       ) : (
-        <div
-          className="relative w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center aspect-video"
-        >
+        <div className="w-full bg-gradient-to-br from-[#008060]/10 to-[#008060]/5 flex items-center justify-center aspect-video">
           <BookOpen className="w-10 h-10 text-[#008060]/25" />
-          {/* Badges overlaid top-right */}
-          <div className="absolute top-2 right-2 flex items-center gap-1.5 flex-wrap justify-end">
-            <Badge className="bg-[#008060]/10 text-[#008060] border border-[#008060]/20 text-xs font-semibold hover:bg-[#008060]/10">
-              Blog Post
-            </Badge>
-            {blog.category && (
-              <Badge
-                className="text-xs font-medium px-2 py-0.5"
-                style={{
-                  backgroundColor: `${blog.category.color}20`,
-                  color: blog.category.color,
-                  border: `1px solid ${blog.category.color}40`,
-                }}
-              >
-                {blog.category.name}
-              </Badge>
-            )}
-          </div>
         </div>
       )}
 

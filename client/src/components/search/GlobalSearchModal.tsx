@@ -349,14 +349,13 @@ export const GlobalSearchModal: React.FC = () => {
       return;
     }
 
-    handleClose();
-
     const targetUrl = result.url;
-    if (!targetUrl) return;
+    if (!targetUrl) { handleClose(); return; }
 
     if (targetUrl.includes('#')) {
       const [path, hash] = targetUrl.split('#');
       setLocation(path);
+      handleClose();
       setTimeout(() => {
         const element = document.querySelector(`#${hash}`);
         if (element) {
@@ -367,6 +366,7 @@ export const GlobalSearchModal: React.FC = () => {
       }, 300);
     } else {
       setLocation(targetUrl);
+      handleClose();
     }
   };
 
@@ -715,38 +715,49 @@ export const GlobalSearchModal: React.FC = () => {
           </div>
 
           {/* Quick Category Tabs */}
-          <div className="flex items-center gap-1 mt-4 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
+          <div className="flex items-center gap-1.5 mt-4 overflow-x-auto pb-1 scrollbar-hide no-scrollbar">
             {[
-              { id: 'all', label: 'All', icon: <Search className="w-3.5 h-3.5" /> },
-              { id: 'alumni', label: 'Alumni', icon: <Users className="w-3.5 h-3.5" /> },
-              { id: 'mentor', label: 'Mentors', icon: <GraduationCap className="w-3.5 h-3.5" /> },
-              { id: 'job', label: 'Jobs', icon: <Briefcase className="w-3.5 h-3.5" /> },
-              { id: 'event', label: 'Events', icon: <Calendar className="w-3.5 h-3.5" /> },
-              { id: 'post', label: 'Posts', icon: <FileText className="w-3.5 h-3.5" /> },
-              { id: 'forum', label: 'Forums', icon: <MessageSquare className="w-3.5 h-3.5" /> },
-              { id: 'blog', label: 'Blogs', icon: <BookOpen className="w-3.5 h-3.5" /> },
-              { id: 'podcast', label: 'Podcasts', icon: <Mic className="w-3.5 h-3.5" /> },
-              { id: 'newsletter', label: 'Newsletters', icon: <Mail className="w-3.5 h-3.5" /> },
-              { id: 'travel', label: 'Travel', icon: <Globe className="w-3.5 h-3.5" /> },
-            ].map((cat) => (
-              <button
-                key={cat.id}
-                onClick={() => {
-                  const newFilters = { ...searchFilters, type: cat.id as any };
-                  setSearchFilters(newFilters);
-                  if (searchQuery.trim().length >= 2) {
-                    performGlobalSearch(searchQuery, newFilters);
-                  }
-                }}
-                className={`flex items-center gap-1.5 px-4 py-2 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 border ${(searchFilters.type || 'all') === cat.id
-                  ? 'bg-[#008060] text-white border-[#008060] shadow-md shadow-[#008060]/20'
-                  : 'bg-white text-gray-600 border-gray-200 hover:border-[#008060] hover:text-[#008060]'
+              { id: 'all', label: 'All', icon: <Search className="w-3 h-3" /> },
+              { id: 'alumni', label: 'Alumni', icon: <Users className="w-3 h-3" /> },
+              { id: 'mentor', label: 'Mentors', icon: <GraduationCap className="w-3 h-3" /> },
+              { id: 'job', label: 'Jobs', icon: <Briefcase className="w-3 h-3" /> },
+              { id: 'event', label: 'Events', icon: <Calendar className="w-3 h-3" /> },
+              { id: 'post', label: 'Posts', icon: <FileText className="w-3 h-3" /> },
+              { id: 'forum', label: 'Forums', icon: <MessageSquare className="w-3 h-3" /> },
+              { id: 'blog', label: 'Blogs', icon: <BookOpen className="w-3 h-3" /> },
+              { id: 'podcast', label: 'Podcasts', icon: <Mic className="w-3 h-3" /> },
+              { id: 'newsletter', label: 'Newsletters', icon: <Mail className="w-3 h-3" /> },
+              { id: 'travel', label: 'Travel', icon: <Globe className="w-3 h-3" /> },
+            ].map((cat) => {
+              const isActive = (searchFilters.type || 'all') === cat.id;
+              const count = cat.id === 'all'
+                ? searchResults.length
+                : (groupedResults[cat.id]?.length ?? 0);
+              return (
+                <button
+                  key={cat.id}
+                  onClick={() => {
+                    const newFilters = { ...searchFilters, type: cat.id as any };
+                    setSearchFilters(newFilters);
+                    if (searchQuery.trim().length >= 2) {
+                      performGlobalSearch(searchQuery, newFilters);
+                    }
+                  }}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-semibold whitespace-nowrap transition-all duration-200 border ${isActive
+                    ? 'bg-[#008060] text-white border-[#008060] shadow-sm'
+                    : 'bg-white text-gray-600 border-gray-200 hover:border-[#008060] hover:text-[#008060]'
                   }`}
-              >
-                {cat.icon}
-                {cat.label}
-              </button>
-            ))}
+                >
+                  {cat.icon}
+                  <span>{cat.label}</span>
+                  {count > 0 && (
+                    <span className={`text-[10px] font-bold px-1.5 py-0.5 rounded-full leading-none ${isActive ? 'bg-white/25 text-white' : 'bg-gray-100 text-gray-500'}`}>
+                      {count}
+                    </span>
+                  )}
+                </button>
+              );
+            })}
           </div>
 
           {/* Filters & Sort Row */}

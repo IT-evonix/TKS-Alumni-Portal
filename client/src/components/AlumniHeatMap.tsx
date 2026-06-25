@@ -583,7 +583,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
           Array.from(uniqueCountries).map(c => CONTINENT_MAP[c as keyof typeof CONTINENT_MAP] || null).filter(Boolean)
         );
         onDataLoad({
-          totalAlumni: loadedAlumni.length,
+          totalAlumni: new Set(loadedAlumni.map((a: AlumniData) => a.user_id)).size,
           countries: uniqueCountries.size,
           continents: uniqueContinents.size,
         });
@@ -642,7 +642,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
         lng >= mapBounds.sw.lng && lng <= mapBounds.ne.lng;
     });
 
-    const groups = new Map<string, { label: string, count: number, lat: number, lng: number }>();
+    const groups = new Map<string, { label: string, count: number, lat: number, lng: number, seen: Set<string> }>();
 
     // Determine grouping level
     const z = mapBounds.zoom;
@@ -668,12 +668,18 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
       if (!label) label = 'Unknown Area';
 
       if (!groups.has(label)) {
-        groups.set(label, { label, count: 0, lat: a.latitude, lng: a.longitude });
+        groups.set(label, { label, count: 0, lat: a.latitude, lng: a.longitude, seen: new Set() });
       }
-      groups.get(label)!.count++;
+      const group = groups.get(label)!;
+      if (!group.seen.has(a.user_id)) {
+        group.seen.add(a.user_id);
+        group.count++;
+      }
     });
 
-    return Array.from(groups.values()).sort((a, b) => b.count - a.count);
+    return Array.from(groups.values())
+      .map(({ seen: _seen, ...rest }) => rest)
+      .sort((a, b) => b.count - a.count);
   }, [alumniData, mapBounds]);
 
   if (loading) return (
