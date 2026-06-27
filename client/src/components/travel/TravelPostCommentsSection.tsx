@@ -26,6 +26,7 @@ interface Comment {
 
 interface Props {
   postId: string;
+  postStatus?: "pending" | "approved" | "rejected";
 }
 
 function getHeaders(userId: string) {
@@ -223,7 +224,7 @@ function CommentItem({
   );
 }
 
-export function TravelPostCommentsSection({ postId }: Props) {
+export function TravelPostCommentsSection({ postId, postStatus }: Props) {
   const { user } = useAuth();
   const { toast } = useToast();
   const queryClient = useQueryClient();
@@ -274,32 +275,40 @@ export function TravelPostCommentsSection({ postId }: Props) {
         Comments {comments.length > 0 && <span className="text-gray-400 font-normal">({comments.length})</span>}
       </h3>
 
-      {/* New comment input */}
-      <div className="flex gap-3">
-        <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
-          <span className="text-white text-xs font-semibold">
-            {((user as any)?.alumni?.first_name || (user as any)?.first_name || "Y").charAt(0).toUpperCase()}
-          </span>
+      {/* New comment input — only when post is published */}
+      {postStatus === "approved" ? (
+        <div className="flex gap-3">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-indigo-400 to-purple-500 flex items-center justify-center flex-shrink-0">
+            <span className="text-white text-xs font-semibold">
+              {((user as any)?.alumni?.first_name || (user as any)?.first_name || "Y").charAt(0).toUpperCase()}
+            </span>
+          </div>
+          <div className="flex-1 flex gap-2">
+            <textarea
+              value={newComment}
+              onChange={(e) => setNewComment(e.target.value)}
+              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
+              placeholder="Write a comment…"
+              rows={1}
+              maxLength={2000}
+              className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
+            />
+            <button
+              onClick={handleAddComment}
+              disabled={submitting || !newComment.trim()}
+              className="text-blue-600 hover:text-blue-700 disabled:opacity-40 transition-colors self-end mb-2"
+            >
+              {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+            </button>
+          </div>
         </div>
-        <div className="flex-1 flex gap-2">
-          <textarea
-            value={newComment}
-            onChange={(e) => setNewComment(e.target.value)}
-            onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleAddComment(); } }}
-            placeholder="Write a comment…"
-            rows={1}
-            maxLength={2000}
-            className="flex-1 text-sm border border-gray-200 rounded-xl px-3 py-2 resize-none focus:outline-none focus:ring-2 focus:ring-blue-300"
-          />
-          <button
-            onClick={handleAddComment}
-            disabled={submitting || !newComment.trim()}
-            className="text-blue-600 hover:text-blue-700 disabled:opacity-40 transition-colors self-end mb-2"
-          >
-            {submitting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
-          </button>
-        </div>
-      </div>
+      ) : (
+        <p className="text-sm text-gray-400 italic">
+          {postStatus === "pending"
+            ? "Comments are disabled until this post is approved by an admin."
+            : "Comments are not available on this post."}
+        </p>
+      )}
 
       {/* Comments list */}
       {isLoading ? (

@@ -44,6 +44,7 @@ interface SearchContextType {
   searchHistory: string[];
   addToHistory: (query: string) => void;
   clearHistory: () => void;
+  removeFromHistory: (query: string) => void;
   performGlobalSearch: (query: string, filters?: SearchFilters) => Promise<void>;
   showSearchModal: boolean;
   setShowSearchModal: (show: boolean) => void;
@@ -89,6 +90,14 @@ export const SearchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
     const emptyHistory: string[] = [];
     setSearchHistory(emptyHistory);
     localStorage.removeItem('searchHistory');
+  }, []);
+
+  const removeFromHistory = useCallback((query: string) => {
+    setSearchHistory(prev => {
+      const updated = prev.filter(q => q !== query);
+      localStorage.setItem('searchHistory', JSON.stringify(updated));
+      return updated;
+    });
   }, []);
 
   const performGlobalSearch = useCallback(async (query: string, filters: SearchFilters = { type: 'all', dateRange: 'all', sortBy: 'relevance' }) => {
@@ -269,6 +278,7 @@ export const SearchProvider: React.FC<{ children: React.ReactNode }> = ({ childr
         searchHistory,
         addToHistory,
         clearHistory,
+        removeFromHistory,
         performGlobalSearch,
         showSearchModal,
         setShowSearchModal,

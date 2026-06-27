@@ -8,7 +8,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  MapPin, Upload, Link, FileText, Eye, X, Plus, Play, Loader2, ChevronLeft, ChevronRight, Image as ImageIcon,
+  MapPin, Upload, Link, FileText, Eye, X, Plus, Play, Loader2, ChevronLeft, ChevronRight, Image as ImageIcon, AlertCircle, GripVertical,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
@@ -18,8 +18,12 @@ import { clientConfig } from "@/lib/config";
 
 interface MediaFile {
   id: string;
-  file: File;
-  dataUri: string;
+  // For newly selected local files
+  file?: File;
+  dataUri?: string;
+  // For already-uploaded files (edit mode)
+  url?: string;
+  storage_path?: string;
   type: "image" | "video";
   order_index: number;
 }
@@ -31,10 +35,22 @@ interface LinkItem {
   description: string;
 }
 
+interface EditPost {
+  id: string;
+  city: string;
+  country: string;
+  coordinates?: string;
+  caption?: string;
+  status: "pending" | "approved" | "rejected";
+  media: { url: string; storage_path: string; type: "image" | "video"; order_index: number }[];
+  links: { url: string; title?: string; description?: string; order_index: number }[];
+}
+
 interface Props {
   open: boolean;
   onClose: () => void;
   onCreated?: () => void;
+  editPost?: EditPost | null;
 }
 
 const STEPS = ["Location", "Media", "Links", "Caption", "Preview"] as const;
@@ -54,6 +70,11 @@ function getHeaders() {
 }
 
 function uid() { return Math.random().toString(36).slice(2); }
+
+// Returns the display src for a MediaFile (prefers dataUri for new files, url for existing)
+function mediaDisplaySrc(m: MediaFile): string {
+  return m.dataUri ?? m.url ?? "";
+}
 
 // ---- Preview Step with carousel ----
 
@@ -116,9 +137,9 @@ function PreviewStep({ mediaFiles, city, country, caption, links }: {
                   style={{ scrollSnapAlign: 'center' }}
                 >
                   {m.type === "video" ? (
-                    <video src={m.dataUri} className="w-full h-full object-cover" controls />
+                    <video src={mediaDisplaySrc(m)} className="w-full h-full object-cover" controls />
                   ) : (
-                    <img src={m.dataUri} alt={`media-${i}`} className="w-full h-full object-cover" />
+                    <img src={mediaDisplaySrc(m)} alt={`media-${i}`} className="w-full h-full object-cover" />
                   )}
                 </div>
               ))}
@@ -214,12 +235,148 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
   );
 }
 
+// ---- Media step with drag-to-reorder ----
+
+function MediaStep({
+  mediaFiles,
+  setMediaFiles,
+  fileInputRef,
+  addFiles,
+  removeMedia,
+  onDrop,
+}: {
+  mediaFiles: MediaFile[];
+  setMediaFiles: React.Dispatch<React.SetStateAction<MediaFile[]>>;
+  fileInputRef: React.RefObject<HTMLInputElement>;
+  addFiles: (files: FileList | File[]) => Promise<void>;
+  removeMedia: (id: string) => void;
+  onDrop: (e: React.DragEvent) => void;
+}) {
+  const dragItem = useRef<number | null>(null);
+  const dragOverItem = useRef<number | null>(null);
+  const [draggingId, setDraggingId] = useState<string | null>(null);
+  const [dragOverId, setDragOverId] = useState<string | null>(null);
+
+  function handleDragStart(e: React.DragEvent, index: number, id: string) {
+    dragItem.current = index;
+    setDraggingId(id);
+    e.dataTransfer.effectAllowed = "move";
+  }
+
+  function handleDragEnter(index: number, id: string) {
+    dragOverItem.current = index;
+    setDragOverId(id);
+  }
+
+  function handleDragEnd() {
+    const from = dragItem.current;
+    const to = dragOverItem.current;
+    if (from !== null && to !== null && from !== to) {
+      setMediaFiles((prev) => {
+        const updated = [...prev];
+        const [moved] = updated.splice(from, 1);
+        updated.splice(to, 0, moved);
+        return updated.map((m, i) => ({ ...m, order_index: i }));
+      });
+    }
+    dragItem.current = null;
+    dragOverItem.current = null;
+    setDraggingId(null);
+    setDragOverId(null);
+  }
+
+  return (
+    <div className="space-y-4">
+      <p className="text-sm text-gray-500">
+        Add photos and videos from your trip. ({mediaFiles.length}/{MAX_MEDIA})
+      </p>
+      {mediaFiles.length > 0 && (
+        <p className="text-xs text-gray-400 flex items-center gap-1">
+          <GripVertical className="w-3 h-3" />
+          Drag thumbnails to reorder
+        </p>
+      )}
+
+      {/* Drop zone */}
+      {mediaFiles.length < MAX_MEDIA && (
+        <div
+          className="border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer transition-colors"
+          onClick={() => fileInputRef.current?.click()}
+          onDrop={onDrop}
+          onDragOver={(e) => e.preventDefault()}
+        >
+          <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
+          <p className="text-sm text-gray-600 font-medium">Drop files here or click to browse</p>
+          <p className="text-xs text-gray-400 mt-1">Images up to 5MB · Videos up to 50MB</p>
+          <input
+            ref={fileInputRef}
+            type="file"
+            accept={ACCEPTED_TYPES}
+            multiple
+            className="hidden"
+            onChange={(e) => e.target.files && addFiles(e.target.files)}
+          />
+        </div>
+      )}
+
+      {/* Reorderable thumbnails */}
+      {mediaFiles.length > 0 && (
+        <div className="grid grid-cols-3 gap-2">
+          {mediaFiles.map((m, index) => (
+            <div
+              key={m.id}
+              draggable
+              onDragStart={(e) => handleDragStart(e, index, m.id)}
+              onDragEnter={() => handleDragEnter(index, m.id)}
+              onDragOver={(e) => e.preventDefault()}
+              onDragEnd={handleDragEnd}
+              className={`relative aspect-square rounded-lg overflow-hidden bg-gray-100 cursor-grab active:cursor-grabbing select-none transition-all duration-150 ${
+                draggingId === m.id ? "opacity-40 scale-95 ring-2 ring-blue-400" : ""
+              } ${dragOverId === m.id && draggingId !== m.id ? "ring-2 ring-blue-500 scale-[1.03]" : ""}`}
+            >
+              {m.type === "video" ? (
+                <div className="w-full h-full flex items-center justify-center bg-gray-800">
+                  <Play className="w-8 h-8 text-white fill-white" />
+                  <span className="absolute bottom-1 left-1 text-white text-xs bg-black/50 px-1 rounded">video</span>
+                </div>
+              ) : (
+                <img src={mediaDisplaySrc(m)} alt="preview" className="w-full h-full object-cover pointer-events-none" />
+              )}
+
+              {/* Drag handle hint */}
+              <div className="absolute top-1 left-1 bg-black/40 text-white rounded p-0.5 opacity-70">
+                <GripVertical className="w-3 h-3" />
+              </div>
+
+              {/* Remove button */}
+              <button
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); removeMedia(m.id); }}
+                className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition-colors z-10"
+              >
+                <X className="w-3 h-3" />
+              </button>
+
+              {/* Order badge */}
+              <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1.5 py-0.5 rounded font-semibold">
+                {index + 1}
+              </span>
+            </div>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ---- Main component ----
 
-export function TravelPostCreateModal({ open, onClose, onCreated }: Props) {
+export function TravelPostCreateModal({ open, onClose, onCreated, editPost }: Props) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const isEditMode = !!editPost;
 
   const [step, setStep] = useState(0);
   const [submitting, setSubmitting] = useState(false);
@@ -231,6 +388,43 @@ export function TravelPostCreateModal({ open, onClose, onCreated }: Props) {
   const [mediaFiles, setMediaFiles] = useState<MediaFile[]>([]);
   const [links, setLinks] = useState<LinkItem[]>([]);
   const [caption, setCaption] = useState("");
+
+  // Populate form when editPost changes or modal opens
+  useEffect(() => {
+    if (open && editPost) {
+      setCity(editPost.city ?? "");
+      setCountry(editPost.country ?? "");
+      setCoordinates(editPost.coordinates ?? "");
+      setCaption(editPost.caption ?? "");
+      setMediaFiles(
+        (editPost.media ?? [])
+          .sort((a, b) => a.order_index - b.order_index)
+          .map((m) => ({
+            id: uid(),
+            url: m.url,
+            storage_path: m.storage_path,
+            type: m.type,
+            order_index: m.order_index,
+          }))
+      );
+      setLinks(
+        (editPost.links ?? [])
+          .sort((a, b) => (a.order_index ?? 0) - (b.order_index ?? 0))
+          .map((l) => ({
+            id: uid(),
+            url: l.url ?? "",
+            title: l.title ?? "",
+            description: l.description ?? "",
+          }))
+      );
+      setStep(0);
+    } else if (open && !editPost) {
+      // Fresh create mode — reset
+      setStep(0);
+      setCity(""); setCountry(""); setCoordinates("");
+      setMediaFiles([]); setLinks([]); setCaption("");
+    }
+  }, [open, editPost]);
 
   function resetForm() {
     setStep(0);
@@ -314,40 +508,95 @@ export function TravelPostCreateModal({ open, onClose, onCreated }: Props) {
     return true;
   }
 
+  // ---- Submit button label ----
+
+  function submitLabel() {
+    if (submitting) return <><Loader2 className="w-4 h-4 animate-spin" /> {isEditMode ? "Saving…" : "Publishing…"}</>;
+    if (!isEditMode) return "Publish Post";
+    if (editPost?.status === "pending") return "Save Changes";
+    if (editPost?.status === "rejected") return "Edit & Resubmit for Review";
+    return "Save & Resubmit for Review"; // approved
+  }
+
   // ---- Submit ----
 
   async function handleSubmit() {
     setSubmitting(true);
     try {
       const validLinks = links.filter((l) => l.url.trim() && l.title.trim());
-      const body = {
-        city: city.trim(),
-        country: country.trim(),
-        coordinates: coordinates || undefined,
-        caption: caption.trim() || undefined,
-        media: mediaFiles.map((m, i) => ({ data: m.dataUri, order_index: i })),
-        links: validLinks.map((l, i) => ({ url: l.url.trim(), title: l.title.trim(), description: l.description.trim() || undefined, order_index: i })),
-      };
 
-      const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts`, {
-        method: "POST",
-        headers: getHeaders(),
-        body: JSON.stringify(body),
-      });
+      if (isEditMode && editPost) {
+        // Edit mode: PATCH existing post
+        const isResubmit = editPost.status !== "pending";
+        const body: Record<string, any> = {
+          city: city.trim(),
+          country: country.trim(),
+          coordinates: coordinates || undefined,
+          caption: caption.trim() || undefined,
+          media: mediaFiles.map((m, i) => {
+            if (m.dataUri) {
+              // New file added by user
+              return { data: m.dataUri, order_index: i };
+            }
+            // Existing uploaded file — pass back URL for server to keep as-is
+            return { url: m.url, storage_path: m.storage_path, type: m.type, order_index: i };
+          }),
+          links: validLinks.map((l, i) => ({ url: l.url.trim(), title: l.title.trim(), description: l.description.trim() || undefined, order_index: i })),
+          resubmit: isResubmit,
+        };
 
-      if (!res.ok) {
-        const err = await res.json().catch(() => ({}));
-        throw new Error(err.error ?? "Failed to create post");
+        const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts/${editPost.id}`, {
+          method: "PATCH",
+          headers: getHeaders(),
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to update post");
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["travel-posts"] });
+        queryClient.invalidateQueries({ queryKey: ["travel-my-posts"] });
+        queryClient.invalidateQueries({ queryKey: ["travel-post", editPost.id] });
+
+        if (isResubmit) {
+          toast({ title: "Post resubmitted for review!", description: "Your updated travel story will be visible once an admin approves it." });
+        } else {
+          toast({ title: "Post updated!", description: "Your changes have been saved." });
+        }
+      } else {
+        // Create mode
+        const body = {
+          city: city.trim(),
+          country: country.trim(),
+          coordinates: coordinates || undefined,
+          caption: caption.trim() || undefined,
+          media: mediaFiles.map((m, i) => ({ data: m.dataUri, order_index: i })),
+          links: validLinks.map((l, i) => ({ url: l.url.trim(), title: l.title.trim(), description: l.description.trim() || undefined, order_index: i })),
+        };
+
+        const res = await fetch(`${clientConfig.apiUrl}/api/travel-posts`, {
+          method: "POST",
+          headers: getHeaders(),
+          body: JSON.stringify(body),
+        });
+
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          throw new Error(err.error ?? "Failed to create post");
+        }
+
+        queryClient.invalidateQueries({ queryKey: ["travel-posts"] });
+        queryClient.invalidateQueries({ queryKey: ["travel-my-posts"] });
+        toast({ title: "Story submitted for review!", description: `Your travel post from ${city} will be visible once an admin approves it.` });
       }
 
-      queryClient.invalidateQueries({ queryKey: ["travel-posts"] });
-      queryClient.invalidateQueries({ queryKey: ["travel-my-posts"] });
-      toast({ title: "Story submitted for review!", description: `Your travel post from ${city} will be visible once an admin approves it.` });
       resetForm();
       onClose();
       onCreated?.();
     } catch (err: any) {
-      toast({ title: err.message || "Failed to publish post", variant: "destructive" });
+      toast({ title: err.message || "Failed to save post", variant: "destructive" });
     } finally {
       setSubmitting(false);
     }
@@ -382,60 +631,14 @@ export function TravelPostCreateModal({ open, onClose, onCreated }: Props) {
 
       case 1: // Media
         return (
-          <div className="space-y-4">
-            <p className="text-sm text-gray-500">
-              Add photos and videos from your trip. ({mediaFiles.length}/{MAX_MEDIA})
-            </p>
-
-            {/* Drop zone */}
-            {mediaFiles.length < MAX_MEDIA && (
-              <div
-                className="border-2 border-dashed border-gray-300 hover:border-blue-400 rounded-xl p-6 text-center cursor-pointer transition-colors"
-                onClick={() => fileInputRef.current?.click()}
-                onDrop={onDrop}
-                onDragOver={(e) => e.preventDefault()}
-              >
-                <Upload className="w-8 h-8 mx-auto mb-2 text-gray-400" />
-                <p className="text-sm text-gray-600 font-medium">Drop files here or click to browse</p>
-                <p className="text-xs text-gray-400 mt-1">Images up to 5MB · Videos up to 50MB</p>
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept={ACCEPTED_TYPES}
-                  multiple
-                  className="hidden"
-                  onChange={(e) => e.target.files && addFiles(e.target.files)}
-                />
-              </div>
-            )}
-
-            {/* Thumbnails */}
-            {mediaFiles.length > 0 && (
-              <div className="grid grid-cols-3 gap-2">
-                {mediaFiles.map((m) => (
-                  <div key={m.id} className="relative aspect-square rounded-lg overflow-hidden bg-gray-100">
-                    {m.type === "video" ? (
-                      <div className="w-full h-full flex items-center justify-center bg-gray-800">
-                        <Play className="w-8 h-8 text-white fill-white" />
-                        <span className="absolute bottom-1 left-1 text-white text-xs bg-black/50 px-1 rounded">video</span>
-                      </div>
-                    ) : (
-                      <img src={m.dataUri} alt="preview" className="w-full h-full object-cover" />
-                    )}
-                    <button
-                      onClick={() => removeMedia(m.id)}
-                      className="absolute top-1 right-1 bg-black/60 hover:bg-red-600 text-white rounded-full w-5 h-5 flex items-center justify-center transition-colors"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                    <span className="absolute bottom-1 left-1 bg-black/50 text-white text-xs px-1 rounded">
-                      {m.order_index + 1}
-                    </span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <MediaStep
+            mediaFiles={mediaFiles}
+            setMediaFiles={setMediaFiles}
+            fileInputRef={fileInputRef}
+            addFiles={addFiles}
+            removeMedia={removeMedia}
+            onDrop={onDrop}
+          />
         );
 
       case 2: // Links
@@ -518,9 +721,18 @@ export function TravelPostCreateModal({ open, onClose, onCreated }: Props) {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <MapPin className="w-5 h-5 text-blue-500" />
-              Share Your Travel Story
+              {isEditMode ? "Edit Travel Story" : "Share Your Travel Story"}
             </DialogTitle>
           </DialogHeader>
+
+          {/* Warning banner for editing a pending post */}
+          {isEditMode && editPost?.status === "pending" && (
+            <div className="mt-3 flex items-start gap-2 text-xs text-yellow-700 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+              <AlertCircle className="w-3.5 h-3.5 flex-shrink-0 mt-0.5" />
+              <span>This post is currently under review. Saving changes will update your submission but won't send a new notification to admins.</span>
+            </div>
+          )}
+
           <div className="mt-4">
             <StepIndicator current={step} total={STEPS.length} />
           </div>
@@ -557,7 +769,7 @@ export function TravelPostCreateModal({ open, onClose, onCreated }: Props) {
               disabled={submitting || !city || !country}
               className="gap-1 bg-teal-600 hover:bg-teal-700"
             >
-              {submitting ? <><Loader2 className="w-4 h-4 animate-spin" /> Publishing…</> : "Publish Post"}
+              {submitLabel()}
             </Button>
           )}
         </div>

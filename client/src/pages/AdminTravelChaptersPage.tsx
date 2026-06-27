@@ -5,7 +5,7 @@ import { AdminSidebar } from "@/components/layout/AdminSidebar";
 import { useToast } from "@/hooks/use-toast";
 import {
   Trash2, Eye, EyeOff, Globe, Bell, LogOut, Loader2, MapPin,
-  Heart, MessageCircle, Bookmark, CheckCircle, XCircle, Clock,
+  Heart, MessageCircle, Bookmark, CheckCircle, XCircle, Clock, ChevronDown, ChevronUp, RefreshCw,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,15 +24,25 @@ type StatusTab = "pending" | "approved" | "rejected" | "all";
 export default function AdminTravelChaptersPage() {
   const { toast } = useToast();
   const queryClient = useQueryClient();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const { user, adminUser, logoutAdmin } = useAuth();
   const { unreadCount } = useNotifications();
   const [showNotifications, setShowNotifications] = useState(false);
   const [page, setPage] = useState(1);
-  const [activeTab, setActiveTab] = useState<StatusTab>("pending");
+  const initialTab = (new URLSearchParams(window.location.search).get("tab") as StatusTab) || "pending";
+  const [activeTab, setActiveTab] = useState<StatusTab>(initialTab);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [rejectDialogPost, setRejectDialogPost] = useState<any>(null);
   const [rejectionReason, setRejectionReason] = useState("");
+  const [expandedDiffs, setExpandedDiffs] = useState<Set<string>>(new Set());
+
+  function toggleDiff(postId: string) {
+    setExpandedDiffs((prev) => {
+      const next = new Set(prev);
+      if (next.has(postId)) next.delete(postId); else next.add(postId);
+      return next;
+    });
+  }
 
   React.useEffect(() => { document.title = "Travel Journal - Admin"; }, []);
 
@@ -238,7 +248,7 @@ export default function AdminTravelChaptersPage() {
                     </div>
 
                     {/* Content */}
-                    <div className="flex-1 min-w-0">
+                    <div className="flex-1 min-w-0 flex flex-col gap-0">
                       <div className="flex items-start justify-between gap-2">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-0.5 flex-wrap">
@@ -251,6 +261,13 @@ export default function AdminTravelChaptersPage() {
                             )}
                             {post.is_hidden && (
                               <Badge variant="outline" className="text-orange-600 border-orange-300 text-xs">Hidden</Badge>
+                            )}
+                            {/* Resubmission badge */}
+                            {post.status === "pending" && (post.resubmit_count ?? 0) > 0 && (
+                              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-xs flex items-center gap-1">
+                                <RefreshCw className="w-2.5 h-2.5" />
+                                Resubmission #{post.resubmit_count}
+                              </Badge>
                             )}
                           </div>
                           <div className="flex items-center gap-1 text-xs text-blue-600 mb-1">
@@ -271,6 +288,20 @@ export default function AdminTravelChaptersPage() {
                               {(() => { try { return format(new Date(post.created_at), "MMM d, yyyy"); } catch { return ""; } })()}
                             </span>
                           </div>
+
+                          {/* View Changes toggle — only for resubmissions */}
+                          {post.status === "pending" && (post.resubmit_count ?? 0) > 0 && (
+                            <button
+                              onClick={() => toggleDiff(post.id)}
+                              className="mt-2 flex items-center gap-1 text-xs text-indigo-600 hover:text-indigo-800 font-medium transition-colors"
+                            >
+                              {expandedDiffs.has(post.id) ? (
+                                <><ChevronUp className="w-3.5 h-3.5" /> Hide Changes</>
+                              ) : (
+                                <><ChevronDown className="w-3.5 h-3.5" /> View Changes</>
+                              )}
+                            </button>
+                          )}
                         </div>
 
                         {/* Actions */}
@@ -333,6 +364,73 @@ export default function AdminTravelChaptersPage() {
                           )}
                         </div>
                       </div>
+
+                      {/* Diff panel — previous vs current version */}
+                      {post.status === "pending" && (post.resubmit_count ?? 0) > 0 && expandedDiffs.has(post.id) && (
+                        <div className="mt-3 border border-indigo-100 rounded-xl overflow-hidden">
+                          <div className="grid grid-cols-2 divide-x divide-indigo-100">
+                            {/* Previous version */}
+                            <div className="p-3 bg-red-50/40">
+                              <p className="text-xs font-semibold text-red-700 mb-2 flex items-center gap-1">
+                                <XCircle className="w-3 h-3" /> Previous Version
+                              </p>
+                              {post.previous_media_snapshot?.[0] ? (
+                                <img
+                                  src={post.previous_media_snapshot[0].url}
+                                  alt="previous cover"
+                                  className="w-full aspect-video object-cover rounded-lg mb-2 bg-gray-200"
+                                  onError={(e) => {
+                                    (e.target as HTMLImageElement).style.display = "none";
+                                    (e.target as HTMLImageElement).nextElementSibling?.classList.remove("hidden");
+                                  }}
+                                />
+                              ) : null}
+                              {!post.previous_media_snapshot?.[0] && (
+                                <div className="w-full aspect-video rounded-lg mb-2 bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                                  No media
+                                </div>
+                              )}
+                              <div className="hidden w-full aspect-video rounded-lg mb-2 bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                                Previous media unavailable
+                              </div>
+                              <p className="text-xs font-medium text-gray-700">
+                                {post.previous_city && post.previous_country
+                                  ? `${post.previous_city}, ${post.previous_country}`
+                                  : <span className="text-gray-400 italic">No location snapshot</span>}
+                              </p>
+                              {post.previous_caption ? (
+                                <p className="text-xs text-gray-600 mt-1 line-clamp-3">{post.previous_caption}</p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic mt-1">No caption</p>
+                              )}
+                            </div>
+
+                            {/* Current (submitted) version */}
+                            <div className="p-3 bg-green-50/40">
+                              <p className="text-xs font-semibold text-green-700 mb-2 flex items-center gap-1">
+                                <CheckCircle className="w-3 h-3" /> Current Submission
+                              </p>
+                              {post.media?.[0] ? (
+                                <img
+                                  src={post.media[0].url}
+                                  alt="current cover"
+                                  className="w-full aspect-video object-cover rounded-lg mb-2 bg-gray-200"
+                                />
+                              ) : (
+                                <div className="w-full aspect-video rounded-lg mb-2 bg-gray-100 flex items-center justify-center text-xs text-gray-400">
+                                  No media
+                                </div>
+                              )}
+                              <p className="text-xs font-medium text-gray-700">{post.city}, {post.country}</p>
+                              {post.caption ? (
+                                <p className="text-xs text-gray-600 mt-1 line-clamp-3">{post.caption}</p>
+                              ) : (
+                                <p className="text-xs text-gray-400 italic mt-1">No caption</p>
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );

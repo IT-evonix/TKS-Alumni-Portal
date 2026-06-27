@@ -33,6 +33,7 @@ export default function TravelChapterPage() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [showEdit, setShowEdit] = useState(false);
 
   const postId = params?.id ?? "";
 
@@ -112,54 +113,6 @@ export default function TravelChapterPage() {
           </div>
         ) : (
           <div className="space-y-6">
-            {/* Sticky action bar */}
-            <div className="sticky top-0 z-10 bg-white/90 backdrop-blur border-b border-gray-100 -mx-4 px-4 py-2 flex items-center justify-between">
-              <div className="flex items-center gap-1 text-sm text-gray-600">
-                <MapPin className="w-4 h-4 text-blue-500" />
-                <span className="font-medium">{post.city}, {post.country}</span>
-              </div>
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={() => likeMutation.mutate()}
-                  className={`flex items-center gap-1 px-3 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                    post.viewer_has_liked ? "bg-red-50 text-red-600" : "bg-gray-100 text-gray-600 hover:bg-red-50 hover:text-red-600"
-                  }`}
-                  disabled={likeMutation.isPending}
-                >
-                  <Heart className={`w-4 h-4 ${post.viewer_has_liked ? "fill-red-500" : ""}`} />
-                  {post.likes_count}
-                </button>
-                <button
-                  onClick={() => bookmarkMutation.mutate()}
-                  className={`p-1.5 rounded-full text-sm transition-colors ${
-                    post.viewer_has_bookmarked ? "text-blue-600" : "text-gray-500 hover:text-blue-500"
-                  }`}
-                  disabled={bookmarkMutation.isPending}
-                >
-                  <Bookmark className={`w-4 h-4 ${post.viewer_has_bookmarked ? "fill-blue-500" : ""}`} />
-                </button>
-                <button
-                  onClick={handleShare}
-                  className="p-1.5 rounded-full text-gray-500 hover:text-green-600 transition-colors"
-                >
-                  <Share2 className="w-4 h-4" />
-                </button>
-                {(isAuthor || isAdmin) && (
-                  <button
-                    onClick={() => {
-                      if (!confirmDelete) { setConfirmDelete(true); return; }
-                      deleteMutation.mutate();
-                    }}
-                    className={`p-1.5 rounded-full transition-colors ${confirmDelete ? "text-red-600 bg-red-50" : "text-gray-400 hover:text-red-500"}`}
-                    title={confirmDelete ? "Click again to confirm delete" : "Delete post"}
-                    disabled={deleteMutation.isPending}
-                  >
-                    {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
-                  </button>
-                )}
-              </div>
-            </div>
-
             {/* Author + date */}
             <div className="flex items-center gap-3">
               {post.author?.profile_picture ? (
@@ -171,7 +124,7 @@ export default function TravelChapterPage() {
                   </span>
                 </div>
               )}
-              <div>
+              <div className="flex-1">
                 <p className="font-medium text-gray-900 text-sm">
                   {[post.author?.first_name, post.author?.last_name].filter(Boolean).join(" ") || "Alumni"}
                 </p>
@@ -180,6 +133,34 @@ export default function TravelChapterPage() {
                   {(() => { try { return formatDistanceToNow(new Date(post.created_at), { addSuffix: true }); } catch { return ""; } })()}
                 </p>
               </div>
+              {isAuthor && (
+                <button
+                  onClick={() => setShowEdit(true)}
+                  className="p-1.5 rounded-full text-gray-400 hover:text-indigo-600 hover:bg-indigo-50 transition-colors"
+                  title="Edit post"
+                >
+                  <Edit2 className="w-4 h-4" />
+                </button>
+              )}
+              {(isAuthor || isAdmin) && (
+                <button
+                  onClick={() => {
+                    if (!confirmDelete) { setConfirmDelete(true); return; }
+                    deleteMutation.mutate();
+                  }}
+                  className={`p-1.5 rounded-full transition-colors ${confirmDelete ? "text-red-600 bg-red-50" : "text-gray-400 hover:text-red-500"}`}
+                  title={confirmDelete ? "Click again to confirm delete" : "Delete post"}
+                  disabled={deleteMutation.isPending}
+                >
+                  {deleteMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+                </button>
+              )}
+            </div>
+
+            {/* Location */}
+            <div className="flex items-center gap-1.5 text-sm text-gray-600">
+              <MapPin className="w-4 h-4 text-blue-500 flex-shrink-0" />
+              <span className="font-medium">{post.city}, {post.country}</span>
             </div>
 
             {/* Media gallery */}
@@ -204,12 +185,38 @@ export default function TravelChapterPage() {
               </div>
             )}
 
-            {/* Stats row */}
-            <div className="flex items-center gap-4 text-sm text-gray-500 py-2 border-t border-b border-gray-100">
-              <span className="flex items-center gap-1"><Heart className="w-3.5 h-3.5" /> {post.likes_count} likes</span>
-              <span className="flex items-center gap-1"><MessageCircle className="w-3.5 h-3.5" /> {post.comments_count} comments</span>
-              <span className="flex items-center gap-1"><Bookmark className="w-3.5 h-3.5" /> {post.bookmarks_count} saves</span>
-              <span className="ml-auto text-xs">{post.views_count} views</span>
+            {/* Action row */}
+            <div className="flex items-center gap-4 text-sm py-2 border-t border-b border-gray-100">
+              <button
+                onClick={() => likeMutation.mutate()}
+                className={`flex items-center gap-1.5 transition-colors ${post.viewer_has_liked ? "text-red-500" : "text-gray-500 hover:text-red-400"}`}
+                disabled={likeMutation.isPending}
+              >
+                <Heart className={`w-4 h-4 ${post.viewer_has_liked ? "fill-red-500" : ""}`} />
+                <span>{post.likes_count} likes</span>
+              </button>
+              <button
+                onClick={() => document.getElementById("comments-section")?.scrollIntoView({ behavior: "smooth" })}
+                className="flex items-center gap-1.5 text-gray-500 hover:text-blue-500 transition-colors"
+              >
+                <MessageCircle className="w-4 h-4" />
+                <span>{post.comments_count} comments</span>
+              </button>
+              <button
+                onClick={() => bookmarkMutation.mutate()}
+                className={`flex items-center gap-1.5 transition-colors ${post.viewer_has_bookmarked ? "text-blue-500" : "text-gray-500 hover:text-blue-400"}`}
+                disabled={bookmarkMutation.isPending}
+              >
+                <Bookmark className={`w-4 h-4 ${post.viewer_has_bookmarked ? "fill-blue-500" : ""}`} />
+                <span>{post.bookmarks_count} saves</span>
+              </button>
+              <button
+                onClick={handleShare}
+                className="flex items-center gap-1.5 text-gray-500 hover:text-green-500 transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+              </button>
+              <span className="ml-auto text-xs text-gray-400">{post.views_count} views</span>
             </div>
 
             {/* Links section */}
@@ -240,8 +247,8 @@ export default function TravelChapterPage() {
             )}
 
             {/* Comments */}
-            <div className="pt-2">
-              <TravelPostCommentsSection postId={postId} />
+            <div id="comments-section" className="pt-2">
+              <TravelPostCommentsSection postId={postId} postStatus={post?.status} />
             </div>
 
             {/* Confirm delete note */}
@@ -259,6 +266,30 @@ export default function TravelChapterPage() {
           </div>
         )}
       </div>
+
+      {/* Edit modal — only rendered when author clicks Edit */}
+      {post && showEdit && (
+        <TravelPostCreateModal
+          open={showEdit}
+          editPost={{
+            id: post.id,
+            city: post.city,
+            country: post.country,
+            coordinates: post.coordinates,
+            caption: post.caption,
+            status: post.status ?? "approved",
+            media: post.media ?? [],
+            links: post.links ?? [],
+          }}
+          onClose={() => setShowEdit(false)}
+          onCreated={() => {
+            setShowEdit(false);
+            queryClient.invalidateQueries({ queryKey: ["travel-post", postId] });
+            queryClient.invalidateQueries({ queryKey: ["travel-posts"] });
+            queryClient.invalidateQueries({ queryKey: ["travel-my-posts"] });
+          }}
+        />
+      )}
     </AppLayout>
   );
 }

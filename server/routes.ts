@@ -6492,7 +6492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all messages with sender and receiver information
-      const { data: messages, error } = await supabase
+      let { data: messages, error } = await supabase
         .from("messages")
         .select(
           `
@@ -6520,14 +6520,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .order("created_at", { ascending: false });
 
       if (error) {
-        console.error("Get all messages error:", error);
-        if (error.code === "PGRST204" || error.message.includes("table")) {
-          return res.json({
-            messages: [],
-            warning: "Messages table not initialized",
-          });
+        console.error("Get all messages error (full query):", error);
+        // Fall back to a simpler query without reactions/replies if those tables don't exist
+        const fallback = await supabase
+          .from("messages")
+          .select(
+            `
+            *,
+            sender:users!sender_id (id, username, email),
+            receiver:users!receiver_id (id, username, email)
+          `,
+          )
+          .order("created_at", { ascending: false });
+
+        if (fallback.error) {
+          console.error("Get all messages fallback error:", fallback.error);
+          if (fallback.error.code === "PGRST204" || fallback.error.message.includes("table")) {
+            return res.json({ messages: [], warning: "Messages table not initialized" });
+          }
+          return res.status(500).json({ error: "Failed to fetch messages" });
         }
-        return res.status(500).json({ error: "Failed to fetch messages" });
+        messages = fallback.data;
       }
 
       res.json({ messages: messages || [] });
@@ -6642,13 +6655,37 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Valid email is required" });
       }
 
-      const { data: recipient, error: recipientError } = await supabase
+      let { data: recipient, error: recipientError } = await supabase
         .from("users")
         .select("id, username, email, account_blocked")
         .eq("email", email)
         .maybeSingle();
 
+      // Fallback: if the configured admin email isn't found, use any admin account
       if (recipientError || !recipient) {
+        const { data: adminFallback } = await supabase
+          .from("users")
+          .select("id, username, email, account_blocked")
+          .eq("is_admin", true)
+          .neq("id", userId)
+          .limit(1)
+          .maybeSingle();
+
+        if (!adminFallback) {
+          const { data: adminByRole } = await supabase
+            .from("users")
+            .select("id, username, email, account_blocked")
+            .eq("user_role", "administrator")
+            .neq("id", userId)
+            .limit(1)
+            .maybeSingle();
+          recipient = adminByRole;
+        } else {
+          recipient = adminFallback;
+        }
+      }
+
+      if (!recipient) {
         return res.status(404).json({ error: "Recipient not found" });
       }
 
@@ -8651,15 +8688,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
     try {
       const { userId } = req.params;
 
-      const { data: alumni, error } = await supabase
-        .from("alumni")
-        .select("*")
-        .eq("user_id", userId)
-        .maybeSingle();
+      let alumni: any = null;
 
-      if (error) {
-        console.error("Supabase fetch error:", error);
-        return res.status(500).json({ error: "Database error" });
+      const isNumericId = /^\d+$/.test(userId);
+
+      if (isNumericId) {
+        const { data, error } = await supabase
+          .from("alumni")
+          .select("*")
+          .eq("id", parseInt(userId))
+          .maybeSingle();
+        if (error) {
+          console.error("Supabase fetch error:", error);
+          return res.status(500).json({ error: "Database error" });
+        }
+        alumni = data;
+      } else {
+        const { data, error } = await supabase
+          .from("alumni")
+          .select("*")
+          .eq("user_id", userId)
+          .maybeSingle();
+        if (error) {
+          console.error("Supabase fetch error:", error);
+          return res.status(500).json({ error: "Database error" });
+        }
+        alumni = data;
       }
 
       if (!alumni) {
@@ -11654,24 +11708,51 @@ export async function registerRoutes(app: Express): Promise<Server> {
       const { available_days, session_type, meeting_link, max_mentees,
               mentorship_style, help_topics, github_url, portfolio_url, twitter_url } = req.body;
 
-      const { error } = await supabase
+      const { data: existing } = await supabase
         .from("alumni")
-        .update({
-          available_days: available_days ?? null,
-          session_type: session_type ?? null,
-          meeting_link: meeting_link ?? null,
-          ...(max_mentees !== undefined ? { max_mentees } : {}),
-          mentorship_style: mentorship_style ?? null,
-          help_topics: help_topics ?? null,
-          github_url: github_url ?? null,
-          portfolio_url: portfolio_url ?? null,
-          twitter_url: twitter_url ?? null,
-          updated_at: new Date().toISOString(),
-        })
-        .eq("user_id", userId);
+        .select("user_id")
+        .eq("user_id", userId)
+        .maybeSingle();
 
-      if (error) {
-        console.error("Update availability error:", error);
+      let dbError;
+      if (existing) {
+        const { error } = await supabase
+          .from("alumni")
+          .update({
+            available_days: available_days ?? null,
+            session_type: session_type ?? null,
+            meeting_link: meeting_link ?? null,
+            ...(max_mentees !== undefined ? { max_mentees } : {}),
+            mentorship_style: mentorship_style ?? null,
+            help_topics: help_topics ?? null,
+            github_url: github_url ?? null,
+            portfolio_url: portfolio_url ?? null,
+            twitter_url: twitter_url ?? null,
+            updated_at: new Date().toISOString(),
+          })
+          .eq("user_id", userId);
+        dbError = error;
+      } else {
+        const { error } = await supabase
+          .from("alumni")
+          .insert({
+            user_id: userId,
+            available_days: available_days ?? null,
+            session_type: session_type ?? null,
+            meeting_link: meeting_link ?? null,
+            max_mentees: max_mentees ?? 3,
+            mentorship_style: mentorship_style ?? null,
+            help_topics: help_topics ?? null,
+            github_url: github_url ?? null,
+            portfolio_url: portfolio_url ?? null,
+            twitter_url: twitter_url ?? null,
+            updated_at: new Date().toISOString(),
+          });
+        dbError = error;
+      }
+
+      if (dbError) {
+        console.error("Update availability error:", dbError);
         return res.status(500).json({ error: "Failed to update availability" });
       }
 
@@ -11730,6 +11811,95 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
   // Session endpoints
+  app.post("/api/mentorship/sessions/bulk", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+      if (!userId) return res.status(401).json({ error: "No user ID provided" });
+
+      const { requestIds, scheduledAt, durationMinutes, agenda, meetLink } = req.body;
+
+      if (!Array.isArray(requestIds) || requestIds.length === 0)
+        return res.status(400).json({ error: "requestIds must be a non-empty array" });
+      if (requestIds.length > 20)
+        return res.status(400).json({ error: "Cannot schedule more than 20 sessions at once" });
+      if (!scheduledAt)
+        return res.status(400).json({ error: "scheduledAt is required" });
+      if (new Date(scheduledAt) <= new Date())
+        return res.status(400).json({ error: "scheduledAt must be in the future" });
+
+      const MEET_LINK_RE = /^https?:\/\/(meet\.google\.com|zoom\.us|us\d*\.zoom\.us|teams\.microsoft\.com|teams\.live\.com|meet\.jit\.si|whereby\.com|webex\.com|[\w-]+\.webex\.com|bluejeans\.com|gotomeeting\.com|join\.me|gather\.town|meet\.around\.co|8x8\.vc)\//i;
+      if (meetLink && !MEET_LINK_RE.test(meetLink))
+        return res.status(400).json({ error: "Invalid or unsupported meeting link URL." });
+
+      const { data: creator } = await supabase
+        .from("alumni")
+        .select("first_name, last_name, meeting_link")
+        .eq("user_id", userId)
+        .single();
+      const creatorName = creator ? `${creator.first_name} ${creator.last_name}` : "Your mentor";
+      const resolvedMeetLink = meetLink || creator?.meeting_link || null;
+
+      const io = (global as any).io;
+
+      const results = await Promise.allSettled(
+        requestIds.map(async (requestId: string) => {
+          const { data: mentorshipReq } = await supabase
+            .from("mentorship_requests")
+            .select("mentor_id, mentee_id, status")
+            .eq("id", requestId)
+            .single();
+
+          if (!mentorshipReq || mentorshipReq.status !== "accepted")
+            throw new Error("Session requires an accepted mentorship relationship.");
+          if (mentorshipReq.mentor_id !== userId)
+            throw new Error("Only the mentor of this relationship can schedule sessions.");
+
+          const { data: session, error } = await supabase
+            .from("mentorship_sessions")
+            .insert({
+              mentor_id: mentorshipReq.mentor_id,
+              mentee_id: mentorshipReq.mentee_id,
+              request_id: requestId,
+              scheduled_at: scheduledAt,
+              duration_minutes: durationMinutes || 60,
+              agenda: agenda || null,
+              meet_link: resolvedMeetLink,
+              status: "upcoming",
+            })
+            .select()
+            .single();
+
+          if (error) throw new Error("Failed to create session.");
+
+          if (io) {
+            io.to(`user:${mentorshipReq.mentee_id}`).emit("notification", {
+              type: "session_scheduled",
+              title: "Session Scheduled",
+              content: `${creatorName} scheduled a mentorship session.`,
+            });
+          }
+
+          return { requestId, session };
+        })
+      );
+
+      const succeeded: any[] = [];
+      const failed: any[] = [];
+      results.forEach((result, i) => {
+        if (result.status === "fulfilled") succeeded.push(result.value);
+        else failed.push({ requestId: requestIds[i], error: (result.reason as Error)?.message || "Unknown error" });
+      });
+
+      if (succeeded.length === 0)
+        return res.status(422).json({ succeeded, failed });
+
+      return res.status(207).json({ succeeded, failed });
+    } catch (error) {
+      console.error("Bulk create session error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/mentorship/sessions", async (req, res) => {
     try {
       const userId = req.headers["user-id"] as string;

@@ -133,6 +133,12 @@ function formatPost(row: any, author: any, viewerHasLiked: boolean, viewerHasBoo
     links: row.links ?? [],
     viewer_has_liked: viewerHasLiked,
     viewer_has_bookmarked: viewerHasBookmarked,
+    // Resubmit diff fields
+    previous_caption: row.previous_caption ?? null,
+    previous_city: row.previous_city ?? null,
+    previous_country: row.previous_country ?? null,
+    previous_media_snapshot: row.previous_media_snapshot ?? null,
+    resubmit_count: row.resubmit_count ?? 0,
   };
 }
 
@@ -173,7 +179,8 @@ router.get("/", requireAuth, async (req: any, res: any) => {
     let query = supabase
       .from("travel_posts")
       .select("*", { count: "exact" })
-      .or(`and(status.eq.approved,is_hidden.eq.false),author_id.eq.${userId}`)
+      .eq("status", "approved")
+      .eq("is_hidden", false)
       .order("created_at", { ascending: false })
       .range(offset, offset + limit - 1);
 
@@ -461,51 +468,88 @@ router.post("/", requireAuth, async (req: any, res: any) => {
   }
 });
 
-// PATCH /api/travel-posts/:id — edit post (owner only)
+// PATCH /api/travel-posts/:id — edit post (owner only, or admin without resubmit)
 router.patch("/:id", requireAuth, async (req: any, res: any) => {
   try {
     const userId = req.headers["user-id"] as string;
     const { id } = req.params;
 
-    const { data: post } = await supabase.from("travel_posts").select("id, author_id").eq("id", id).maybeSingle();
+    const { data: post } = await supabase
+      .from("travel_posts")
+      .select("id, author_id, status, caption, city, country, resubmit_count")
+      .eq("id", id)
+      .maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
-    if (post.author_id !== userId && !(await isAdminUser(userId))) {
+    const isAuthor = post.author_id === userId;
+    if (!isAuthor && !(await isAdminUser(userId))) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
-    const { city, country, coordinates, caption, media, links } = req.body;
+    const { city, country, coordinates, caption, media, links, resubmit } = req.body;
+    const isResubmit = resubmit === true && isAuthor; // admins never trigger resubmit flow
+
     const updates: Record<string, any> = { updated_at: new Date().toISOString() };
     if (city !== undefined) updates.city = city;
     if (country !== undefined) updates.country = country;
     if (coordinates !== undefined) updates.coordinates = coordinates;
     if (caption !== undefined) updates.caption = caption;
 
-    await supabase.from("travel_posts").update(updates).eq("id", id);
+    // Capture old media snapshot BEFORE deletion (needed for resubmit diff)
+    let previousMediaSnapshot: { url: string; type: string; order_index: number }[] | null = null;
+    if (isResubmit && Array.isArray(media)) {
+      const { data: currentMedia } = await supabase
+        .from("travel_post_media")
+        .select("url, type, order_index")
+        .eq("post_id", id)
+        .order("order_index");
+      previousMediaSnapshot = currentMedia ?? [];
+    }
 
-    // Full replacement for media
+    // Build resubmit updates (only when author is explicitly resubmitting)
+    if (isResubmit) {
+      // Only snapshot if the post was approved or rejected (has a "published" state to compare against)
+      // If still pending, keep existing snapshot (holds last approved version or null for brand-new)
+      if (post.status === "approved" || post.status === "rejected") {
+        updates.previous_caption = post.caption ?? null;
+        updates.previous_city = post.city ?? null;
+        updates.previous_country = post.country ?? null;
+        updates.previous_media_snapshot = previousMediaSnapshot ?? null;
+      }
+      updates.status = "pending";
+      updates.rejection_reason = null;
+      updates.resubmit_count = (post.resubmit_count ?? 0) + 1;
+    }
+
+    // Full replacement for media — upload new files first, then write DB atomically
+    let uploadedMedia: any[] | null = null;
     if (Array.isArray(media)) {
+      // Upload any new base64 items before touching the DB
+      const results = await Promise.allSettled(
+        media.map((m: any) => {
+          if (m.data?.startsWith("data:")) {
+            return uploadMediaItem(m.data, id).then((r) => ({ ...r, order_index: m.order_index ?? 0 }));
+          }
+          // Already-uploaded URL passed back (no re-upload needed)
+          return Promise.resolve({ url: m.url, storage_path: m.storage_path ?? null, type: m.type, order_index: m.order_index ?? 0 });
+        })
+      );
+      for (const r of results) {
+        if (r.status === "rejected") return res.status(400).json({ error: r.reason?.message ?? "Media upload failed" });
+      }
+      uploadedMedia = results.map((r) => (r as PromiseFulfilledResult<any>).value);
+
+      // All uploads succeeded — now delete old storage files and DB rows
       await deleteMediaFiles(id);
       await supabase.from("travel_post_media").delete().eq("post_id", id);
-      if (media.length > 0) {
-        const uploadedMedia: any[] = [];
-        const results = await Promise.allSettled(
-          media.map((m: any) => {
-            if (m.data?.startsWith("data:")) {
-              return uploadMediaItem(m.data, id).then((r) => ({ ...r, order_index: m.order_index ?? 0 }));
-            }
-            // Already-uploaded URL passed back (no re-upload needed)
-            return Promise.resolve({ url: m.url, storage_path: m.storage_path, type: m.type, order_index: m.order_index ?? 0 });
-          })
-        );
-        for (const r of results) {
-          if (r.status === "rejected") return res.status(400).json({ error: r.reason?.message ?? "Media upload failed" });
-          uploadedMedia.push(r.value);
-        }
+      if (uploadedMedia.length > 0) {
         await supabase.from("travel_post_media").insert(
           uploadedMedia.map((m) => ({ post_id: id, type: m.type, url: m.url, storage_path: m.storage_path, order_index: m.order_index }))
         );
       }
     }
+
+    // Write post-level updates (status, snapshot, city, caption, etc.) AFTER media succeeds
+    await supabase.from("travel_posts").update(updates).eq("id", id);
 
     // Full replacement for links
     if (Array.isArray(links)) {
@@ -528,9 +572,36 @@ router.patch("/:id", requireAuth, async (req: any, res: any) => {
       supabase.from("travel_post_bookmarks").select("id").eq("post_id", id).eq("user_id", userId).maybeSingle(),
     ]);
 
-    return res.json(
-      formatPost({ ...updated, media: newMediaRes.data ?? [], links: newLinksRes.data ?? [] }, author, !!likeRes.data, !!bookmarkRes.data)
-    );
+    const response = formatPost({ ...updated, media: newMediaRes.data ?? [], links: newLinksRes.data ?? [] }, author, !!likeRes.data, !!bookmarkRes.data);
+
+    // Notify all admins of resubmission (fire-and-forget)
+    if (isResubmit) {
+      const newResubmitCount = (post.resubmit_count ?? 0) + 1;
+      const effectiveCity = city ?? post.city;
+      const effectiveCountry = country ?? post.country;
+      (async () => {
+        try {
+          const { data: admins } = await supabase.from("users").select("id").eq("is_admin", true);
+          const authorInfo = await fetchAuthor(userId);
+          const authorName = [authorInfo.first_name, authorInfo.last_name].filter(Boolean).join(" ") || "An alumni";
+          if (admins) {
+            for (const admin of admins) {
+              await createAndEmitNotification({
+                userId: admin.id,
+                type: NotificationType.POST_PENDING_APPROVAL,
+                title: "Travel Post Resubmitted for Review",
+                content: `${authorName} resubmitted their travel post from ${effectiveCity}, ${effectiveCountry} (edit #${newResubmitCount}).`,
+                relatedId: id,
+                redirectUrl: "/admin/travel-chapters",
+                actorId: userId,
+              }).catch(() => {});
+            }
+          }
+        } catch {}
+      })();
+    }
+
+    return res.json(response);
   } catch (error) {
     console.error("Edit travel post error:", error);
     res.status(500).json({ error: "Failed to update post" });
@@ -543,15 +614,27 @@ router.delete("/:id", requireAuth, async (req: any, res: any) => {
     const userId = req.headers["user-id"] as string;
     const { id } = req.params;
 
-    const { data: post } = await supabase.from("travel_posts").select("id, author_id").eq("id", id).maybeSingle();
+    const { data: post } = await supabase.from("travel_posts").select("id, author_id, city, country").eq("id", id).maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
-    if (post.author_id !== userId && !(await isAdminUser(userId))) {
+    const isAdmin = await isAdminUser(userId);
+    if (post.author_id !== userId && !isAdmin) {
       return res.status(403).json({ error: "Forbidden" });
     }
 
     await deleteMediaFiles(id);
     const { error } = await supabase.from("travel_posts").delete().eq("id", id);
     if (error) throw error;
+
+    // Notify the author when an admin deletes their post
+    if (isAdmin && post.author_id !== userId) {
+      createAndEmitNotification({
+        userId: post.author_id,
+        type: NotificationType.POST_DELETED,
+        title: "Travel Post Removed",
+        content: `Your travel post from ${post.city}, ${post.country} has been removed by an admin.`,
+        link: "/travel-journal",
+      }).catch((err) => console.error("Travel post delete notification error:", err));
+    }
 
     return res.json({ success: true });
   } catch (error) {
@@ -710,8 +793,9 @@ router.post("/:id/comments", requireAuth, async (req: any, res: any) => {
     if (!content?.trim()) return res.status(400).json({ error: "Comment content is required" });
     if (content.trim().length > 2000) return res.status(400).json({ error: "Comment too long (max 2000 chars)" });
 
-    const { data: post } = await supabase.from("travel_posts").select("id, author_id, city").eq("id", id).maybeSingle();
+    const { data: post } = await supabase.from("travel_posts").select("id, author_id, city, status").eq("id", id).maybeSingle();
     if (!post) return res.status(404).json({ error: "Post not found" });
+    if (post.status !== "approved") return res.status(403).json({ error: "Comments are only allowed on approved posts" });
 
     if (parent_id) {
       const { data: parentComment } = await supabase
@@ -912,7 +996,15 @@ router.patch("/admin/:id/approve", requireAdmin, async (req: any, res: any) => {
 
     const { error } = await supabase
       .from("travel_posts")
-      .update({ status: "approved", rejection_reason: null, updated_at: new Date().toISOString() })
+      .update({
+        status: "approved",
+        rejection_reason: null,
+        previous_caption: null,
+        previous_city: null,
+        previous_country: null,
+        previous_media_snapshot: null,
+        updated_at: new Date().toISOString(),
+      })
       .eq("id", id);
     if (error) throw error;
 

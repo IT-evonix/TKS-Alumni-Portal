@@ -562,8 +562,16 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
       setAlumniData(loadedAlumni);
 
       if (onDataLoad) {
+        // Deduplicate by user_id so one alumni with multiple locations counts as one person
+        const seenUsers = new Set<string>();
+        const deduped = loadedAlumni.filter((a: AlumniData) => {
+          if (!a.user_id || seenUsers.has(a.user_id)) return false;
+          seenUsers.add(a.user_id);
+          return true;
+        });
+
         const uniqueCountries = new Set(
-          loadedAlumni.map((a: AlumniData) => a.current_country || '').filter(Boolean)
+          deduped.map((a: AlumniData) => a.current_country || '').filter(Boolean)
         );
         const CONTINENT_MAP: Record<string, string> = {
           'United States':'NA','Canada':'NA','Mexico':'NA',
@@ -583,7 +591,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
           Array.from(uniqueCountries).map(c => CONTINENT_MAP[c as keyof typeof CONTINENT_MAP] || null).filter(Boolean)
         );
         onDataLoad({
-          totalAlumni: new Set(loadedAlumni.map((a: AlumniData) => a.user_id)).size,
+          totalAlumni: seenUsers.size,
           countries: uniqueCountries.size,
           continents: uniqueContinents.size,
         });

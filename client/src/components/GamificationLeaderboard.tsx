@@ -62,10 +62,13 @@ export function GamificationLeaderboard() {
   const [pointsLeaderboard, setPointsLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [badgesLeaderboard, setBadgesLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<"points" | "badges">("points");
   const [, setLocation] = useLocation();
   const { alumni } = useAuth();
-  const { scores, globalRank } = useGamification();
+  const { scores, globalRank, globalBadgeRank } = useGamification();
   const myPoints: number = scores?.total_points || 0;
+  const myBadgeEntry = badgesLeaderboard.find(u => u.user_id === alumni?.user_id);
+  const myBadgesCount: number = myBadgeEntry?.badgesCount ?? 0;
   const myFirstName = alumni?.first_name || "You";
   const myProfilePicture = (() => {
     if (alumni?.profile_picture && alumni.profile_picture.trim() !== '') return alumni.profile_picture;
@@ -247,7 +250,7 @@ export function GamificationLeaderboard() {
 
   return (
     <div className="bg-white rounded-[14px] overflow-hidden" style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-      <Tabs defaultValue="points" className="w-full">
+      <Tabs defaultValue="points" className="w-full" onValueChange={(v) => setActiveTab(v as "points" | "badges")}>
         {/* Header */}
         <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div className="flex items-center justify-between">
@@ -265,7 +268,7 @@ export function GamificationLeaderboard() {
         </div>
 
         {/* Your standing strip */}
-        {myPoints > 0 && (
+        {(activeTab === "points" ? myPoints > 0 : myBadgesCount > 0) && (
           <div
             className="mx-3 my-2 px-3 py-2 rounded-xl flex items-center gap-2.5"
             style={{ background: 'linear-gradient(90deg, #e6f5f0 0%, #f0faf6 100%)', border: '1px solid rgba(0,128,96,0.15)' }}
@@ -281,8 +284,17 @@ export function GamificationLeaderboard() {
               <p className="text-[11px] text-gray-500 truncate">{myFirstName}</p>
             </div>
             <div className="shrink-0 text-right">
-              <div className="text-[13px] font-bold" style={{ color: 'var(--brand-primary)' }}>{myPoints.toLocaleString()}</div>
-              <div className="text-[9px] text-gray-400 uppercase tracking-wide">#{globalRank > 0 ? globalRank : '—'}</div>
+              {activeTab === "points" ? (
+                <>
+                  <div className="text-[13px] font-bold" style={{ color: 'var(--brand-primary)' }}>{myPoints.toLocaleString()}</div>
+                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">#{globalRank > 0 ? globalRank : '—'}</div>
+                </>
+              ) : (
+                <>
+                  <div className="text-[13px] font-bold" style={{ color: 'var(--brand-primary)' }}>{myBadgesCount}</div>
+                  <div className="text-[9px] text-gray-400 uppercase tracking-wide">#{globalBadgeRank > 0 ? globalBadgeRank : '—'}</div>
+                </>
+              )}
             </div>
           </div>
         )}

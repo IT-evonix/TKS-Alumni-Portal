@@ -87,6 +87,50 @@ export const FeedPage = (): JSX.Element => {
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [travelPosts, setTravelPosts] = useState<any[]>([]);
   const [feedFilter, setFeedFilter] = useState<"all" | "post" | "blog" | "podcast" | "travel_post">("all");
+
+  async function handleTravelPostLike(postId: string) {
+    // Optimistic update
+    setTravelPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      const liked = !p.viewer_has_liked;
+      return { ...p, viewer_has_liked: liked, likes_count: Math.max(0, p.likes_count + (liked ? 1 : -1)) };
+    }));
+    try {
+      const res = await fetch(`/api/travel-posts/${postId}/like`, { method: "POST", headers: getAuthHeaders({ "Content-Type": "application/json" }) });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setTravelPosts(prev => prev.map(p => p.id !== postId ? p : { ...p, viewer_has_liked: data.liked, likes_count: data.likes_count }));
+    } catch {
+      // Revert optimistic update
+      setTravelPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        const liked = !p.viewer_has_liked;
+        return { ...p, viewer_has_liked: liked, likes_count: Math.max(0, p.likes_count + (liked ? 1 : -1)) };
+      }));
+    }
+  }
+
+  async function handleTravelPostBookmark(postId: string) {
+    // Optimistic update
+    setTravelPosts(prev => prev.map(p => {
+      if (p.id !== postId) return p;
+      const bookmarked = !p.viewer_has_bookmarked;
+      return { ...p, viewer_has_bookmarked: bookmarked, bookmarks_count: Math.max(0, p.bookmarks_count + (bookmarked ? 1 : -1)) };
+    }));
+    try {
+      const res = await fetch(`/api/travel-posts/${postId}/bookmark`, { method: "POST", headers: getAuthHeaders({ "Content-Type": "application/json" }) });
+      if (!res.ok) throw new Error("Failed");
+      const data = await res.json();
+      setTravelPosts(prev => prev.map(p => p.id !== postId ? p : { ...p, viewer_has_bookmarked: data.bookmarked, bookmarks_count: data.bookmarks_count }));
+    } catch {
+      // Revert optimistic update
+      setTravelPosts(prev => prev.map(p => {
+        if (p.id !== postId) return p;
+        const bookmarked = !p.viewer_has_bookmarked;
+        return { ...p, viewer_has_bookmarked: bookmarked, bookmarks_count: Math.max(0, p.bookmarks_count + (bookmarked ? 1 : -1)) };
+      }));
+    }
+  }
   const [feedLimit, setFeedLimit] = useState(30);
 
   // Merged, chronologically sorted feed items
@@ -1361,6 +1405,8 @@ export const FeedPage = (): JSX.Element => {
                           post={item}
                           isOwnPost={item.author_id === user?.id}
                           onClick={() => setLocation(`/travel-journal/${item.id}`)}
+                          onLike={() => handleTravelPostLike(item.id)}
+                          onBookmark={() => handleTravelPostBookmark(item.id)}
                         />
                       );
                     }

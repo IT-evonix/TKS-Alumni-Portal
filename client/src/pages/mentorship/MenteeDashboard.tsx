@@ -353,7 +353,6 @@ export const MenteeDashboard = (): JSX.Element => {
   // ── Derived data ─────────────────────────────────────────────────────────────
 
   const filteredMentors = mentors.filter(m => {
-    if (declinedMentorIds.has(m.user_id)) return false;
     if (connectedMentorIds.has(m.user_id)) return false;
     if (searchQuery.trim()) {
       const q = searchQuery.toLowerCase();
@@ -392,6 +391,7 @@ export const MenteeDashboard = (): JSX.Element => {
   const renderMentorCard = (mentor: Mentor) => {
     const isPending = pendingMentorIds.has(mentor.user_id);
     const isConnected = connectedMentorIds.has(mentor.user_id);
+    const isDeclined = declinedMentorIds.has(mentor.user_id);
     const slots = (mentor.max_mentees ?? 3) - (mentor.mentee_count ?? 0);
     const isFull = mentor.mentor_available === false || slots <= 0;
     const isBookmarked = bookmarkedIds.has(mentor.user_id);
@@ -669,6 +669,22 @@ export const MenteeDashboard = (): JSX.Element => {
                   </Button>
                 );
               })()
+            ) : isDeclined ? (
+              <div className="space-y-1.5">
+                <p className="text-xs text-amber-600 flex items-center gap-1">
+                  <AlertTriangle className="w-3 h-3" />
+                  This mentor previously declined your request.
+                </p>
+                <Button
+                  onClick={() => isFull ? null : setActiveRequestModal(mentor.user_id)}
+                  variant="outline"
+                  className="w-full min-h-[40px] text-sm border-amber-200 text-amber-700 hover:bg-amber-50"
+                  disabled={isFull}
+                >
+                  <MessageSquare className="w-4 h-4 mr-2" />
+                  {isFull ? 'Mentor Full' : 'Request Again'}
+                </Button>
+              </div>
             ) : (
               <Button
                 onClick={() => isFull ? null : setActiveRequestModal(mentor.user_id)}
@@ -730,6 +746,31 @@ export const MenteeDashboard = (): JSX.Element => {
                     onClick={() => setEndConfirm(req.id)}>
                     End Relationship
                   </Button>
+                )}
+                {req.status === 'rejected' && (
+                  activeRequestModal === req.mentor_id ? (
+                    <div className="space-y-2 mt-2 w-full">
+                      <Textarea
+                        placeholder="Introduce yourself and share what you hope to achieve (optional)"
+                        value={requestMessage}
+                        onChange={e => setRequestMessage(e.target.value)}
+                        className="text-sm min-h-[72px]"
+                      />
+                      <div className="flex gap-2">
+                        <Button size="sm" onClick={() => handleRequestMentorship(req.mentor_id)} variant="brand"
+                          className="flex-1 text-xs min-h-[28px]">
+                          Send Request
+                        </Button>
+                        <Button size="sm" variant="ghost" onClick={() => setActiveRequestModal(null)} className="min-h-[28px]">Cancel</Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <Button size="sm" variant="outline"
+                      className="text-xs text-amber-700 border-amber-200 hover:bg-amber-50 min-h-[28px]"
+                      onClick={() => setActiveRequestModal(req.mentor_id)}>
+                      Request Again
+                    </Button>
+                  )
                 )}
               </div>
             </CardContent>

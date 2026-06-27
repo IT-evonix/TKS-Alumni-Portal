@@ -16,7 +16,9 @@ import {
   ChevronDown, ChevronUp, Inbox, Star,
   CalendarPlus, Calendar, AlertTriangle,
   BookOpen, MessageSquare, Github, Globe, Twitter, X as XIcon,
+  CheckSquare,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import type { MentorshipRequest, MentorshipSession } from './mentorship-types';
 import { SkeletonCard, isValidMeetLink, isValidMeetingLink } from './mentorship-components';
@@ -36,7 +38,13 @@ export const MentorDashboard = (): JSX.Element => {
   const [incomingRequests, setIncomingRequests] = useState<MentorshipRequest[]>([]);
   const [sessions, setSessions] = useState<MentorshipSession[]>([]);
   const [sessionsLoading, setSessionsLoading] = useState(false);
-  const [scheduleModal, setScheduleModal] = useState<{ requestId: string; otherName: string } | null>(null);
+  type ScheduleModal =
+    | { mode: 'single'; requestId: string; otherName: string }
+    | { mode: 'bulk'; requestIds: string[]; menteeNames: string[] };
+  const [scheduleModal, setScheduleModal] = useState<ScheduleModal | null>(null);
+  const [multiSelectMode, setMultiSelectMode] = useState(false);
+  const [selectedRequestIds, setSelectedRequestIds] = useState<Set<string>>(new Set());
+  const [bulkScheduling, setBulkScheduling] = useState(false);
   const [newSession, setNewSession] = useState({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
   const [availOpen, setAvailOpen] = useState(false);
   const [availSettings, setAvailSettings] = useState({
@@ -188,6 +196,9 @@ export const MentorDashboard = (): JSX.Element => {
       if (res.ok) {
         setAvailOpen(false);
         toast({ title: 'Saved', description: 'Availability settings updated.' });
+      } else {
+        const data = await res.json().catch(() => ({}));
+        toast({ title: 'Error saving', description: data?.error || 'Failed to save availability', variant: 'destructive' });
       }
     } catch {
       toast({ title: 'Error', description: 'Failed to save availability', variant: 'destructive' });
@@ -216,6 +227,15 @@ export const MentorDashboard = (): JSX.Element => {
     }
   };
 
+  const toggleMenteeSelection = (requestId: string) => {
+    setSelectedRequestIds(prev => {
+      const next = new Set(prev);
+      if (next.has(requestId)) next.delete(requestId);
+      else if (next.size < 20) next.add(requestId);
+      return next;
+    });
+  };
+
   const createSession = async () => {
     if (!scheduleModal || !newSession.scheduledAt) return;
     if (new Date(newSession.scheduledAt) <= new Date()) {
@@ -226,32 +246,71 @@ export const MentorDashboard = (): JSX.Element => {
       toast({ title: 'Invalid meet link', description: 'Please enter a valid link from a supported platform.', variant: 'destructive' });
       return;
     }
-    setSchedulingSession(true);
-    try {
-      const res = await fetch('/api/mentorship/sessions', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
-        body: JSON.stringify({
-          requestId: scheduleModal.requestId,
-          scheduledAt: new Date(newSession.scheduledAt).toISOString(),
-          durationMinutes: newSession.durationMinutes,
-          agenda: newSession.agenda || undefined,
-          meetLink: newSession.meetLink || undefined,
-        }),
-      });
-      if (res.ok) {
-        setScheduleModal(null);
-        setNewSession({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
-        fetchSessions();
-        toast({ title: 'Session scheduled!', description: 'Your mentorship session has been scheduled.' });
-      } else {
-        const data = await res.json();
-        toast({ title: 'Error', description: data.error || 'Failed to schedule', variant: 'destructive' });
+
+    if (scheduleModal.mode === 'single') {
+      setSchedulingSession(true);
+      try {
+        const res = await fetch('/api/mentorship/sessions', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
+          body: JSON.stringify({
+            requestId: scheduleModal.requestId,
+            scheduledAt: new Date(newSession.scheduledAt).toISOString(),
+            durationMinutes: newSession.durationMinutes,
+            agenda: newSession.agenda || undefined,
+            meetLink: newSession.meetLink || undefined,
+          }),
+        });
+        if (res.ok) {
+          setScheduleModal(null);
+          setNewSession({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
+          fetchSessions();
+          toast({ title: 'Session scheduled!', description: 'Your mentorship session has been scheduled.' });
+        } else {
+          const data = await res.json();
+          toast({ title: 'Error', description: data.error || 'Failed to schedule', variant: 'destructive' });
+        }
+      } catch {
+        toast({ title: 'Error', description: 'Failed to schedule session', variant: 'destructive' });
+      } finally {
+        setSchedulingSession(false);
       }
-    } catch {
-      toast({ title: 'Error', description: 'Failed to schedule session', variant: 'destructive' });
-    } finally {
-      setSchedulingSession(false);
+    } else {
+      // bulk mode
+      setBulkScheduling(true);
+      try {
+        const res = await fetch('/api/mentorship/sessions/bulk', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'user-id': user?.id || '' },
+          body: JSON.stringify({
+            requestIds: scheduleModal.requestIds,
+            scheduledAt: new Date(newSession.scheduledAt).toISOString(),
+            durationMinutes: newSession.durationMinutes,
+            agenda: newSession.agenda || undefined,
+            meetLink: newSession.meetLink || undefined,
+          }),
+        });
+        const data = await res.json();
+        if (res.ok || res.status === 207) {
+          const { succeeded = [], failed = [] } = data;
+          setScheduleModal(null);
+          setNewSession({ scheduledAt: '', durationMinutes: 60, agenda: '', meetLink: '' });
+          setSelectedRequestIds(new Set());
+          setMultiSelectMode(false);
+          fetchSessions();
+          if (failed.length === 0) {
+            toast({ title: 'Sessions scheduled!', description: `${succeeded.length} session${succeeded.length > 1 ? 's' : ''} created.` });
+          } else {
+            toast({ title: 'Partial success', description: `${succeeded.length} scheduled, ${failed.length} failed — check Sessions tab.`, variant: 'destructive' });
+          }
+        } else {
+          toast({ title: 'Error', description: data.error || 'Failed to schedule sessions', variant: 'destructive' });
+        }
+      } catch {
+        toast({ title: 'Error', description: 'Failed to schedule sessions', variant: 'destructive' });
+      } finally {
+        setBulkScheduling(false);
+      }
     }
   };
 
@@ -421,43 +480,89 @@ export const MentorDashboard = (): JSX.Element => {
 
       {/* Active mentees */}
       <div>
-        <h3 className="text-sm font-semibold text-gray-700 mb-3 flex items-center gap-2">
-          <CheckCircle className="w-4 h-4 text-green-600" /> Active Mentees
-          {activeMentees.length > 0 && (
-            <span className="bg-green-100 text-green-700 text-xs rounded-full px-2 py-0.5">{activeMentees.length}</span>
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="text-sm font-semibold text-gray-700 flex items-center gap-2">
+            <CheckCircle className="w-4 h-4 text-green-600" /> Active Mentees
+            {activeMentees.length > 0 && (
+              <span className="bg-green-100 text-green-700 text-xs rounded-full px-2 py-0.5">{activeMentees.length}</span>
+            )}
+          </h3>
+          {activeMentees.length > 1 && (
+            <Button size="sm" variant="ghost" className="text-xs h-7 gap-1 text-gray-600"
+              onClick={() => { setMultiSelectMode(m => !m); setSelectedRequestIds(new Set()); }}>
+              {multiSelectMode ? <><XIcon className="w-3 h-3" /> Done</> : <><CheckSquare className="w-3 h-3" /> Select Multiple</>}
+            </Button>
           )}
-        </h3>
+        </div>
         {activeMentees.length === 0 ? (
           <p className="text-sm text-gray-500">No active mentees yet.</p>
         ) : (
           <div className="space-y-3">
-            {activeMentees.map(req => (
-              <Card key={req.id} className="border shadow-sm bg-green-50/30">
-                <CardContent className="p-4 flex items-start gap-4">
-                  <Avatar className="w-10 h-10 flex-shrink-0">
-                    <AvatarImage src={req.mentee?.profile_picture} />
-                    <AvatarFallback className="bg-[#008060] text-white text-xs">
-                      {req.mentee?.first_name?.[0]}{req.mentee?.last_name?.[0]}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1 min-w-0">
-                    <p className="font-semibold text-sm">{req.mentee?.first_name} {req.mentee?.last_name}</p>
-                    <p className="text-xs text-gray-500">{req.mentee?.current_role}</p>
-                  </div>
-                  <div className="flex gap-2">
-                    <Button size="sm" variant="outline" className="text-xs min-h-[32px]"
-                      onClick={() => setScheduleModal({ requestId: req.id, otherName: `${req.mentee?.first_name} ${req.mentee?.last_name}` })}>
-                      <CalendarPlus className="w-3 h-3 mr-1" /> Schedule
-                    </Button>
-                    <Button size="sm" variant="outline"
-                      className="text-xs text-red-600 border-red-100 hover:bg-red-50 min-h-[32px]"
-                      onClick={() => setEndConfirm(req.id)}>
-                      End
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            ))}
+            {activeMentees.map(req => {
+              const isSelected = selectedRequestIds.has(req.id);
+              const atMax = selectedRequestIds.size >= 20 && !isSelected;
+              return (
+                <Card key={req.id}
+                  className={`border shadow-sm bg-green-50/30 transition-colors ${multiSelectMode ? 'cursor-pointer hover:bg-green-50/60' : ''} ${isSelected ? 'ring-2 ring-[#008060]' : ''}`}
+                  onClick={multiSelectMode && !atMax ? () => toggleMenteeSelection(req.id) : undefined}>
+                  <CardContent className="p-4 flex items-center gap-4">
+                    {multiSelectMode && (
+                      <Checkbox
+                        checked={isSelected}
+                        disabled={atMax}
+                        onCheckedChange={() => !atMax && toggleMenteeSelection(req.id)}
+                        onClick={e => e.stopPropagation()}
+                        className="flex-shrink-0"
+                        title={atMax ? 'Maximum 20 mentees' : undefined}
+                      />
+                    )}
+                    <Avatar className="w-10 h-10 flex-shrink-0">
+                      <AvatarImage src={req.mentee?.profile_picture} />
+                      <AvatarFallback className="bg-[#008060] text-white text-xs">
+                        {req.mentee?.first_name?.[0]}{req.mentee?.last_name?.[0]}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="font-semibold text-sm">{req.mentee?.first_name} {req.mentee?.last_name}</p>
+                      <p className="text-xs text-gray-500">{req.mentee?.current_role}</p>
+                    </div>
+                    {!multiSelectMode && (
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="outline" className="text-xs min-h-[32px]"
+                          onClick={() => setScheduleModal({ mode: 'single', requestId: req.id, otherName: `${req.mentee?.first_name} ${req.mentee?.last_name}` })}>
+                          <CalendarPlus className="w-3 h-3 mr-1" /> Schedule
+                        </Button>
+                        <Button size="sm" variant="outline"
+                          className="text-xs text-red-600 border-red-100 hover:bg-red-50 min-h-[32px]"
+                          onClick={() => setEndConfirm(req.id)}>
+                          End
+                        </Button>
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
+        {/* Floating bulk schedule bar */}
+        {multiSelectMode && selectedRequestIds.size > 0 && (
+          <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[100] flex items-center gap-4 bg-white border shadow-xl rounded-full px-6 py-3">
+            <span className="text-sm font-medium text-gray-700">
+              {selectedRequestIds.size} mentee{selectedRequestIds.size > 1 ? 's' : ''} selected
+            </span>
+            <Button size="sm" className="bg-[#008060] hover:bg-[#006b50] text-white rounded-full gap-1"
+              onClick={() => {
+                const selected = activeMentees.filter(r => selectedRequestIds.has(r.id));
+                setScheduleModal({
+                  mode: 'bulk',
+                  requestIds: selected.map(r => r.id),
+                  menteeNames: selected.map(r => `${r.mentee?.first_name} ${r.mentee?.last_name}`),
+                });
+              }}>
+              <CalendarPlus className="w-3 h-3" /> Schedule for Selected
+            </Button>
           </div>
         )}
       </div>
@@ -770,7 +875,20 @@ export const MentorDashboard = (): JSX.Element => {
       {scheduleModal && (
         <div className="fixed inset-0 bg-black/40 z-[150] flex items-center justify-center p-4">
           <div className="bg-white rounded-xl shadow-xl w-full max-w-md p-6 space-y-4">
-            <h2 className="font-semibold text-lg">Schedule Session with {scheduleModal.otherName}</h2>
+            <div>
+              <h2 className="font-semibold text-lg">
+                {scheduleModal.mode === 'single'
+                  ? `Schedule Session with ${scheduleModal.otherName}`
+                  : `Schedule Session for ${scheduleModal.requestIds.length} Mentee${scheduleModal.requestIds.length > 1 ? 's' : ''}`}
+              </h2>
+              {scheduleModal.mode === 'bulk' && (
+                <div className="flex flex-wrap gap-1 mt-2">
+                  {scheduleModal.menteeNames.map(name => (
+                    <span key={name} className="inline-flex items-center bg-green-100 text-green-800 text-xs rounded-full px-2 py-0.5">{name}</span>
+                  ))}
+                </div>
+              )}
+            </div>
             <div className="space-y-3">
               <div>
                 <label htmlFor="mentor-session-date" className="text-xs text-gray-600 mb-1 block">Date & Time</label>
@@ -810,10 +928,11 @@ export const MentorDashboard = (): JSX.Element => {
             </div>
             <div className="flex gap-2">
               <Button onClick={createSession} variant="brand" className="flex-1"
-                disabled={schedulingSession || !newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
-                <CalendarPlus className="w-4 h-4 mr-2" /> {schedulingSession ? 'Scheduling…' : 'Schedule'}
+                disabled={schedulingSession || bulkScheduling || !newSession.scheduledAt || !newSession.meetLink || !isValidMeetLink(newSession.meetLink)}>
+                <CalendarPlus className="w-4 h-4 mr-2" />
+                {(schedulingSession || bulkScheduling) ? 'Scheduling…' : 'Schedule'}
               </Button>
-              <Button variant="ghost" onClick={() => setScheduleModal(null)}>Cancel</Button>
+              <Button variant="ghost" disabled={schedulingSession || bulkScheduling} onClick={() => setScheduleModal(null)}>Cancel</Button>
             </div>
           </div>
         </div>

@@ -286,6 +286,16 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
         return '/profile';
       case 'signup_request':
         return '/admin/users';
+      case 'mentorship_request':
+      case 'mentorship_response':
+      case 'session_scheduled':
+      case 'session_cancelled':
+        return '/mentorship';
+      case 'badge_earned':
+      case 'badge_lost':
+        return '/leaderboard';
+      case 'new_podcast':
+        return '/podcasts';
       default:
         return '/feed';
     }
@@ -485,13 +495,31 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
             break;
 
           case 'post_pending_approval':
-            // For admin - post pending approval notification
-            redirectUrl = '/admin/feed';
+            redirectUrl = '/admin/travel-chapters?tab=pending';
             break;
 
           case 'mentorship_request':
           case 'mentorship_response':
+          case 'session_scheduled':
+          case 'session_cancelled':
             redirectUrl = '/mentorship';
+            break;
+
+          case 'badge_earned':
+          case 'badge_lost':
+            redirectUrl = '/leaderboard';
+            break;
+
+          case 'new_podcast':
+            redirectUrl = '/podcasts';
+            break;
+
+          case 'signup_request':
+            redirectUrl = '/admin/users';
+            break;
+
+          case 'connection_request':
+            redirectUrl = '/connections?tab=received';
             break;
         }
       }
