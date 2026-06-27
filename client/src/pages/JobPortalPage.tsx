@@ -1221,8 +1221,11 @@ export const JobPortalPage = (): JSX.Element => {
                 appliedJobsData.map((application) => {
                   const job = application.job;
                   return (
-                    <Card key={job.id} id={`job-${job.id}`} className="hover:shadow-md transition-shadow">
+                    <Card key={job.id} id={`job-${job.id}`} className="hover:shadow-md transition-shadow relative overflow-hidden">
                       <CardContent className="p-6">
+                        <span className="absolute top-3 right-3 bg-green-600 text-white text-xs font-semibold px-3 py-1 rounded-full">
+                          Applied ✓
+                        </span>
                         <div className="flex gap-4">
                           <div className="w-12 h-12 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0">
                             <img
@@ -1233,7 +1236,7 @@ export const JobPortalPage = (): JSX.Element => {
                           </div>
                           <div className="flex-1">
                             <div className="flex items-start justify-between mb-2">
-                              <div>
+                              <div className="pr-20">
                                 <h3 className="text-lg font-semibold text-[#008060] mb-1">{job.title}</h3>
                                 <p className="text-sm text-gray-600 mb-2">
                                   Posted by {job.posted_by_user?.username || 'Unknown'}
@@ -1254,15 +1257,6 @@ export const JobPortalPage = (): JSX.Element => {
                                     Applied {new Date(application.created_at).toLocaleDateString()}
                                   </span>
                                 </div>
-                              </div>
-                              <div className="flex gap-2">
-                                <Button
-                                  size="sm"
-                                  disabled
-                                  className="bg-green-600 text-white"
-                                >
-                                  Applied ✓
-                                </Button>
                               </div>
                             </div>
                             <div className="mb-3">

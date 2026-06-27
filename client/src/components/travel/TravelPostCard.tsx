@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
-import { Heart, MessageCircle, Bookmark, Share2, MapPin, Play, Clock, XCircle, Globe, ChevronLeft, ChevronRight } from "lucide-react";
+import { Heart, MessageCircle, Bookmark, Share2, MapPin, Play, Clock, XCircle, Globe, ChevronLeft, ChevronRight, Pencil } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 import { useToast } from "@/hooks/use-toast";
 import { useTravelPostLike } from "@/hooks/useTravelPostLike";
@@ -28,15 +28,19 @@ interface TravelPost {
   viewer_has_bookmarked: boolean;
   status?: "pending" | "approved" | "rejected";
   rejection_reason?: string | null;
+  resubmit_count?: number;
 }
 
 interface Props {
   post: TravelPost;
   onClick: () => void;
   isOwnPost?: boolean;
+  onEdit?: () => void;
+  onLike?: () => void;
+  onBookmark?: () => void;
 }
 
-export function TravelPostCard({ post, onClick, isOwnPost }: Props) {
+export function TravelPostCard({ post, onClick, isOwnPost, onEdit, onLike, onBookmark }: Props) {
   const { toast } = useToast();
   const likeMutation = useTravelPostLike(post.id);
   const bookmarkMutation = useTravelPostBookmark(post.id);
@@ -70,12 +74,12 @@ export function TravelPostCard({ post, onClick, isOwnPost }: Props) {
 
   function handleLike(e: React.MouseEvent) {
     e.stopPropagation();
-    likeMutation.mutate();
+    if (onLike) { onLike(); } else { likeMutation.mutate(); }
   }
 
   function handleBookmark(e: React.MouseEvent) {
     e.stopPropagation();
-    bookmarkMutation.mutate();
+    if (onBookmark) { onBookmark(); } else { bookmarkMutation.mutate(); }
   }
 
   function handleShare(e: React.MouseEvent) {
@@ -110,16 +114,34 @@ export function TravelPostCard({ post, onClick, isOwnPost }: Props) {
       {isOwnPost && post.status === "pending" && (
         <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-100 text-xs text-yellow-700 font-medium flex items-center gap-1.5">
           <Clock className="w-3 h-3 flex-shrink-0" />
-          Under review — not yet visible to others
+          <span className="flex-1">Under review — not yet visible to others</span>
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex items-center gap-1 text-yellow-700 hover:text-yellow-900 underline underline-offset-2 font-medium flex-shrink-0"
+            >
+              <Pencil className="w-3 h-3" />
+              Edit
+            </button>
+          )}
         </div>
       )}
       {isOwnPost && post.status === "rejected" && (
         <div className="px-3 py-2 bg-red-50 border-b border-red-100 text-xs text-red-700 flex items-center gap-1.5">
           <XCircle className="w-3 h-3 flex-shrink-0" />
-          <span>
+          <span className="flex-1">
             <span className="font-medium">Not approved</span>
             {post.rejection_reason && <> — {post.rejection_reason}</>}
           </span>
+          {onEdit && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex items-center gap-1 text-red-700 hover:text-red-900 underline underline-offset-2 font-medium flex-shrink-0"
+            >
+              <Pencil className="w-3 h-3" />
+              Edit &amp; Resubmit
+            </button>
+          )}
         </div>
       )}
 
@@ -235,7 +257,7 @@ export function TravelPostCard({ post, onClick, isOwnPost }: Props) {
           <button
             onClick={handleLike}
             className={`flex items-center gap-1.5 text-sm transition-colors ${post.viewer_has_liked ? "text-red-500" : "text-gray-500 hover:text-red-400"}`}
-            disabled={likeMutation.isPending}
+            disabled={!onLike && likeMutation.isPending}
           >
             <Heart className={`w-4 h-4 ${post.viewer_has_liked ? "fill-red-500" : ""}`} />
             <span>{post.likes_count}</span>
@@ -254,7 +276,7 @@ export function TravelPostCard({ post, onClick, isOwnPost }: Props) {
           <button
             onClick={handleBookmark}
             className={`flex items-center gap-1.5 text-sm transition-colors ${post.viewer_has_bookmarked ? "text-blue-500" : "text-gray-500 hover:text-blue-400"}`}
-            disabled={bookmarkMutation.isPending}
+            disabled={!onBookmark && bookmarkMutation.isPending}
           >
             <Bookmark className={`w-4 h-4 ${post.viewer_has_bookmarked ? "fill-blue-500" : ""}`} />
           </button>
@@ -265,6 +287,17 @@ export function TravelPostCard({ post, onClick, isOwnPost }: Props) {
           >
             <Share2 className="w-4 h-4" />
           </button>
+
+          {/* Edit button — only visible for approved own posts (pending/rejected have banners above) */}
+          {isOwnPost && onEdit && post.status === "approved" && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onEdit(); }}
+              className="flex items-center gap-1 text-sm text-gray-400 hover:text-indigo-500 transition-colors"
+              title="Edit post"
+            >
+              <Pencil className="w-4 h-4" />
+            </button>
+          )}
         </div>
       </div>
     </div>

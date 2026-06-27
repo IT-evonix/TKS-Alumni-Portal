@@ -226,7 +226,81 @@ export const NotificationHistoryPage: React.FC = () => {
   };
 
   const handleNotificationClick = (notification: EnhancedNotification) => {
-    const redirectUrl = notification.redirect_url || '/feed';
+    let redirectUrl = notification.redirect_url || '/feed';
+    const relatedId = notification.related_id;
+
+    switch (notification.type) {
+      case 'connection_request':
+        redirectUrl = '/connections?tab=received';
+        break;
+      case 'connection_response':
+        if (relatedId) {
+          redirectUrl = `/connections?userId=${relatedId}`;
+          sessionStorage.setItem('highlightUserId', relatedId);
+        } else {
+          redirectUrl = '/connections';
+        }
+        break;
+      case 'post_like':
+      case 'post_comment':
+      case 'comment_reply':
+        if (relatedId) {
+          sessionStorage.setItem('scrollToPostId', relatedId);
+          redirectUrl = `/feed#post-${relatedId}`;
+        }
+        break;
+      case 'message': {
+        const actorId = notification.actor_id || relatedId;
+        if (actorId) {
+          redirectUrl = `/inbox?user=${actorId}`;
+          sessionStorage.setItem('openConversationId', actorId);
+        } else {
+          redirectUrl = '/inbox';
+        }
+        break;
+      }
+      case 'event_rsvp':
+      case 'event_reminder_24h':
+      case 'event_reminder_1h':
+        if (relatedId) {
+          redirectUrl = `/events?eventId=${relatedId}`;
+          sessionStorage.setItem('scrollToEventId', relatedId);
+        } else {
+          redirectUrl = '/events';
+        }
+        break;
+      case 'job':
+        if (relatedId) {
+          redirectUrl = `/job-portal?jobId=${relatedId}`;
+          sessionStorage.setItem('scrollToJobId', relatedId);
+        } else {
+          redirectUrl = '/job-portal';
+        }
+        break;
+      case 'post_pending_approval':
+        redirectUrl = '/admin/travel-chapters?tab=pending';
+        break;
+      case 'signup_request':
+        redirectUrl = '/admin/users';
+        break;
+      case 'signup_approved':
+        redirectUrl = '/profile';
+        break;
+      case 'mentorship_request':
+      case 'mentorship_response':
+      case 'session_scheduled':
+      case 'session_cancelled':
+        redirectUrl = '/mentorship';
+        break;
+      case 'badge_earned':
+      case 'badge_lost':
+        redirectUrl = '/leaderboard';
+        break;
+      case 'new_podcast':
+        redirectUrl = '/podcasts';
+        break;
+    }
+
     setLocation(redirectUrl);
   };
 
@@ -360,6 +434,16 @@ export const NotificationHistoryPage: React.FC = () => {
                                       case 'post_approved': return <CheckCircle className={iconClass} />;
                                       case 'post_rejected':
                                       case 'post_deleted': return <X className={iconClass} />;
+                                      case 'post_pending_approval':
+                                      case 'signup_request':
+                                      case 'new_blog': return <Bell className={iconClass} />;
+                                      case 'mentorship_request':
+                                      case 'mentorship_response':
+                                      case 'session_scheduled':
+                                      case 'session_cancelled': return <UserPlus className={iconClass} />;
+                                      case 'badge_earned':
+                                      case 'badge_lost': return <CheckCircle className={iconClass} />;
+                                      case 'new_podcast': return <MessageSquare className={iconClass} />;
                                       default: return <Bell className={iconClass} />;
                                     }
                                   })()}

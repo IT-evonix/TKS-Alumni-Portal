@@ -26,6 +26,7 @@ export default function TravelChaptersDirectoryPage() {
   const [cityFilter, setCityFilter] = useState("");
   const [debouncedCity, setDebouncedCity] = useState("");
   const [showCreate, setShowCreate] = useState(false);
+  const [editingPost, setEditingPost] = useState<any | null>(null);
   const [page, setPage] = useState(1);
   const debounceRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
@@ -159,6 +160,7 @@ export default function TravelChaptersDirectoryPage() {
                   post={post}
                   onClick={() => navigate(`/travel-journal/${post.id}`)}
                   isOwnPost={activeTab === "mine"}
+                  onEdit={activeTab === "mine" ? () => setEditingPost(post) : undefined}
                 />
               ))}
             </div>
@@ -182,6 +184,17 @@ export default function TravelChaptersDirectoryPage() {
       <TravelPostCreateModal
         open={showCreate}
         onClose={() => setShowCreate(false)}
+        onCreated={() => feedQuery.refetch()}
+      />
+
+      <TravelPostCreateModal
+        open={!!editingPost}
+        editPost={editingPost}
+        onClose={() => setEditingPost(null)}
+        onCreated={() => {
+          setEditingPost(null);
+          feedQuery.refetch();
+        }}
       />
     </AppLayout>
   );

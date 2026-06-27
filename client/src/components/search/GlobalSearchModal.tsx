@@ -63,6 +63,7 @@ export const GlobalSearchModal: React.FC = () => {
     isSearching,
     searchHistory,
     clearHistory,
+    removeFromHistory,
     performGlobalSearch,
     showSearchModal,
     setShowSearchModal,
@@ -100,6 +101,7 @@ export const GlobalSearchModal: React.FC = () => {
   const inputRef = useRef<HTMLInputElement>(null);
   const modalRef = useRef<HTMLDivElement>(null);
   const resultRefs = useRef<(HTMLButtonElement | null)[]>([]);
+  const lastGroupedResultsRef = useRef<Record<string, typeof searchResults>>({});
 
   // Fetch filter options when modal opens
   useEffect(() => {
@@ -169,6 +171,16 @@ export const GlobalSearchModal: React.FC = () => {
   useEffect(() => {
     setSelectedSuggestionIndex(-1);
   }, [suggestions]);
+
+  // Scroll the keyboard-selected result into view after state update
+  useEffect(() => {
+    if (selectedResultIndex >= 0) {
+      resultRefs.current[selectedResultIndex]?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'nearest'
+      });
+    }
+  }, [selectedResultIndex]);
 
   const handleConnect = async (e: React.MouseEvent, alumniId: string) => {
     e.stopPropagation();
@@ -253,13 +265,6 @@ export const GlobalSearchModal: React.FC = () => {
         setSelectedResultIndex(prev =>
           prev < searchResults.length - 1 ? prev + 1 : 0
         );
-        // Scroll selected result into view
-        setTimeout(() => {
-          resultRefs.current[selectedResultIndex + 1]?.scrollIntoView({
-            behavior: 'smooth',
-            block: 'nearest'
-          });
-        }, 0);
       }
     } else if (e.key === 'ArrowUp') {
       e.preventDefault();
@@ -267,15 +272,6 @@ export const GlobalSearchModal: React.FC = () => {
         setSelectedSuggestionIndex(prev => prev > 0 ? prev - 1 : -1);
       } else if (searchResults.length > 0) {
         setSelectedResultIndex(prev => prev > 0 ? prev - 1 : -1);
-        // Scroll selected result into view
-        if (selectedResultIndex > 0) {
-          setTimeout(() => {
-            resultRefs.current[selectedResultIndex - 1]?.scrollIntoView({
-              behavior: 'smooth',
-              block: 'nearest'
-            });
-          }, 0);
-        }
       }
     } else if (e.key === 'Enter') {
       e.preventDefault();
@@ -598,8 +594,14 @@ export const GlobalSearchModal: React.FC = () => {
       }
       groups[result.type].push(result);
     });
+    if (searchResults.length > 0) {
+      lastGroupedResultsRef.current = groups;
+    }
     return groups;
   }, [searchResults]);
+
+  // While searching, show stale counts from the last completed search
+  const displayedGroupedResults = isSearching ? lastGroupedResultsRef.current : groupedResults;
 
   if (!showSearchModal) return null;
 
@@ -627,7 +629,7 @@ export const GlobalSearchModal: React.FC = () => {
                 aria-controls={showSuggestions ? "search-suggestions" : searchResults.length > 0 ? "search-results" : undefined}
                 aria-expanded={showSuggestions || searchResults.length > 0}
                 aria-activedescendant={selectedResultIndex >= 0 ? `result-${selectedResultIndex}` : selectedSuggestionIndex >= 0 ? `suggestion-${selectedSuggestionIndex}` : undefined}
-                placeholder="Search posts, alumni, events, jobs..."
+                placeholder="Search alumni, jobs, events, mentors, travel..."
                 value={searchQuery}
                 onChange={(e) => handleSearch(e.target.value)}
                 onKeyDown={handleKeyDown}
@@ -731,8 +733,8 @@ export const GlobalSearchModal: React.FC = () => {
             ].map((cat) => {
               const isActive = (searchFilters.type || 'all') === cat.id;
               const count = cat.id === 'all'
-                ? searchResults.length
-                : (groupedResults[cat.id]?.length ?? 0);
+                ? Object.values(displayedGroupedResults).reduce((s, arr) => s + arr.length, 0)
+                : (displayedGroupedResults[cat.id]?.length ?? 0);
               return (
                 <button
                   key={cat.id}
@@ -793,7 +795,7 @@ export const GlobalSearchModal: React.FC = () => {
                       />
                     )
                   ))}
-                  {activeFilters.some(f => f.key !== 'type') && (
+                  {activeFilters.length > 0 && (
                     <button
                       onClick={clearAllFilters}
                       className="text-[10px] font-bold text-[#008060] hover:underline uppercase tracking-wider ml-1 whitespace-nowrap"
@@ -1072,6 +1074,10 @@ export const GlobalSearchModal: React.FC = () => {
             </div>
           ) : searchResults.length > 0 ? (
             <div className="p-4" id="search-results" role="region" aria-label="Search results" aria-live="polite">
+              {/* Result count summary */}
+              <p className="text-xs text-gray-400 font-medium mb-3 px-1">
+                {searchResults.length} result{searchResults.length !== 1 ? 's' : ''} for <span className="text-gray-600 font-semibold">"{searchQuery}"</span>
+              </p>
               {/* Grouped Results */}
               {Object.entries(groupedResults).map(([type, results], groupIndex) => {
                 // Calculate the global index for this group's results
@@ -1262,7 +1268,6 @@ export const GlobalSearchModal: React.FC = () => {
                   <button
                     onClick={() => {
                       handleSearch(didYouMean);
-                      performGlobalSearch(didYouMean, searchFilters);
                     }}
                     className="flex items-center gap-3 px-6 py-3 bg-[#008060]/5 hover:bg-[#008060]/10 text-[#008060] font-bold rounded-xl transition-all group"
                   >
@@ -1293,19 +1298,30 @@ export const GlobalSearchModal: React.FC = () => {
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {searchHistory.map((query, index) => (
-                  <button
-                    key={index}
-                    onClick={() => {
-                      handleSearch(query);
-                      performGlobalSearch(query, searchFilters);
-                    }}
-                    className="p-3 hover:bg-white hover:shadow-sm hover:border-gray-200 border border-transparent rounded-xl flex items-center gap-3 text-left transition-all group"
-                  >
-                    <div className="p-1.5 bg-gray-100 rounded-lg group-hover:bg-[#008060]/10 group-hover:text-[#008060] transition-colors">
-                      <Search className="w-3.5 h-3.5" />
-                    </div>
-                    <span className="text-sm text-gray-700 font-medium">{query}</span>
-                  </button>
+                  <div key={index} className="relative group/item">
+                    <button
+                      onClick={() => {
+                        handleSearch(query);
+                        performGlobalSearch(query, searchFilters);
+                      }}
+                      className="w-full p-3 hover:bg-white hover:shadow-sm hover:border-gray-200 border border-transparent rounded-xl flex items-center gap-3 text-left transition-all group"
+                    >
+                      <div className="p-1.5 bg-gray-100 rounded-lg group-hover:bg-[#008060]/10 group-hover:text-[#008060] transition-colors">
+                        <Search className="w-3.5 h-3.5" />
+                      </div>
+                      <span className="text-sm text-gray-700 font-medium pr-6 truncate">{query}</span>
+                    </button>
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        removeFromHistory(query);
+                      }}
+                      aria-label={`Remove "${query}" from history`}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 p-1 text-gray-300 hover:text-gray-500 rounded-full opacity-0 group-hover/item:opacity-100 transition-opacity"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
                 ))}
               </div>
             </div>
@@ -1320,15 +1336,18 @@ export const GlobalSearchModal: React.FC = () => {
                 Discover alumni, jobs, events, and posts with our new intelligent natural language search.
               </p>
               <div className="flex flex-wrap justify-center gap-4">
-                <div className="px-4 py-2 bg-gray-100 rounded-full text-xs text-gray-600 font-medium border border-gray-200">
-                  "Alumni in Mumbai"
-                </div>
-                <div className="px-4 py-2 bg-gray-100 rounded-full text-xs text-gray-600 font-medium border border-gray-200">
-                  "Software jobs in 2024"
-                </div>
-                <div className="px-4 py-2 bg-gray-100 rounded-full text-xs text-gray-600 font-medium border border-gray-200">
-                  "Events this month"
-                </div>
+                {['"Alumni in Mumbai"', '"Software jobs in 2026"', '"Events this month"'].map((example) => (
+                  <button
+                    key={example}
+                    onClick={() => {
+                      const q = example.replace(/"/g, '');
+                      handleSearch(q);
+                    }}
+                    className="px-4 py-2 bg-gray-100 hover:bg-[#008060]/10 hover:text-[#008060] hover:border-[#008060]/30 rounded-full text-xs text-gray-600 font-medium border border-gray-200 transition-colors"
+                  >
+                    {example}
+                  </button>
+                ))}
               </div>
             </div>
           )}
