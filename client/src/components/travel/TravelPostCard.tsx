@@ -103,13 +103,6 @@ export function TravelPostCard({ post, onClick, isOwnPost, onEdit, onLike, onBoo
       className="relative bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden cursor-pointer hover:shadow-md transition-shadow"
       onClick={onClick}
     >
-      {/* Type badge — top-right */}
-      <div className="absolute top-2 right-2 z-10">
-        <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-blue-500 px-1.5 py-0 h-5 rounded-full shadow-sm">
-          <Globe className="w-2.5 h-2.5" />
-          Travel Journal
-        </span>
-      </div>
       {/* Status banners for own pending/rejected posts */}
       {isOwnPost && post.status === "pending" && (
         <div className="px-3 py-2 bg-yellow-50 border-b border-yellow-100 text-xs text-yellow-700 font-medium flex items-center gap-1.5">
@@ -151,6 +144,13 @@ export function TravelPostCard({ post, onClick, isOwnPost, onEdit, onLike, onBoo
         onMouseEnter={() => { hoverRef.current = true; }}
         onMouseLeave={() => { hoverRef.current = false; }}
       >
+        {/* Type badge — top-right */}
+        <div className="absolute top-2 right-2 z-10">
+          <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-blue-500 px-1.5 py-0 h-5 rounded-full shadow-sm">
+            <Globe className="w-2.5 h-2.5" />
+            Travel Journal
+          </span>
+        </div>
         {coverMedia ? (
           coverMedia.type === "video" ? (
             <div className="relative w-full h-full">

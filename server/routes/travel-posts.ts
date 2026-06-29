@@ -445,7 +445,10 @@ router.post("/", requireAuth, async (req: any, res: any) => {
     // Notify all admins of new pending post (fire-and-forget)
     (async () => {
       try {
-        const { data: admins } = await supabase.from("users").select("id").eq("is_admin", true);
+        const { data: admins } = await supabase
+          .from("users")
+          .select("id")
+          .or("is_admin.eq.true,user_role.eq.administrator");
         const authorName = [author.first_name, author.last_name].filter(Boolean).join(" ") || "An alumni";
         if (admins) {
           for (const admin of admins) {
@@ -574,14 +577,17 @@ router.patch("/:id", requireAuth, async (req: any, res: any) => {
 
     const response = formatPost({ ...updated, media: newMediaRes.data ?? [], links: newLinksRes.data ?? [] }, author, !!likeRes.data, !!bookmarkRes.data);
 
-    // Notify all admins of resubmission (fire-and-forget)
-    if (isResubmit) {
-      const newResubmitCount = (post.resubmit_count ?? 0) + 1;
+    // Notify all admins of edit/resubmission (fire-and-forget)
+    if (isAuthor) {
       const effectiveCity = city ?? post.city;
       const effectiveCountry = country ?? post.country;
+      const newResubmitCount = (post.resubmit_count ?? 0) + (isResubmit ? 1 : 0);
       (async () => {
         try {
-          const { data: admins } = await supabase.from("users").select("id").eq("is_admin", true);
+          const { data: admins } = await supabase
+            .from("users")
+            .select("id")
+            .or("is_admin.eq.true,user_role.eq.administrator");
           const authorInfo = await fetchAuthor(userId);
           const authorName = [authorInfo.first_name, authorInfo.last_name].filter(Boolean).join(" ") || "An alumni";
           if (admins) {
@@ -589,8 +595,10 @@ router.patch("/:id", requireAuth, async (req: any, res: any) => {
               await createAndEmitNotification({
                 userId: admin.id,
                 type: NotificationType.POST_PENDING_APPROVAL,
-                title: "Travel Post Resubmitted for Review",
-                content: `${authorName} resubmitted their travel post from ${effectiveCity}, ${effectiveCountry} (edit #${newResubmitCount}).`,
+                title: isResubmit ? "Travel Post Resubmitted for Review" : "Travel Post Edited",
+                content: isResubmit
+                  ? `${authorName} resubmitted their travel post from ${effectiveCity}, ${effectiveCountry} (edit #${newResubmitCount}).`
+                  : `${authorName} edited their travel post from ${effectiveCity}, ${effectiveCountry}.`,
                 relatedId: id,
                 redirectUrl: "/admin/travel-chapters",
                 actorId: userId,

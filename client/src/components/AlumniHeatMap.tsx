@@ -571,7 +571,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
         });
 
         const uniqueCountries = new Set(
-          deduped.map((a: AlumniData) => a.current_country || '').filter(Boolean)
+          loadedAlumni.map((a: AlumniData) => a.current_country || '').filter(Boolean)
         );
         const CONTINENT_MAP: Record<string, string> = {
           'United States':'NA','Canada':'NA','Mexico':'NA',
@@ -751,7 +751,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
                 <h3 className="font-bold text-base leading-none">Global Directory</h3>
                 {alumniData.length > 0 && (
                   <span className="inline-flex items-center bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full leading-none whitespace-nowrap">
-                    {alumniData.length} alumni
+                    {new Set(alumniData.map(a => a.user_id)).size} alumni
                   </span>
                 )}
               </div>

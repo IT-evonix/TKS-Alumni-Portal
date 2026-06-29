@@ -1,5 +1,7 @@
 import React, { createContext, useContext } from 'react';
 import { useAuth } from './AuthContext';
+import { io } from 'socket.io-client';
+import { clientConfig } from '@/lib/config';
 
 interface Notification {
   id: string;
@@ -196,24 +198,47 @@ export function NotificationProvider({ children }: { children: React.ReactNode }
         }, 100);
       }
       
-      // Listen for notifications from the main Socket.IO connection in App.tsx
-      const handleNewNotification = ((event: CustomEvent) => {
-        const notification = event.detail;
-        // Add notification directly to state (no need to fetch)
-        setNotifications(prev => {
-          // Check if notification already exists (prevent duplicates)
-          const exists = prev.some(n => n.id === notification.id);
-          if (exists) return prev;
-          return [notification, ...prev];
-        });
-        // Update timestamp to prevent immediate refetch
-        lastFetchTimestampRef.current = Date.now();
-      }) as EventListener;
+      // Connect to Socket.IO
+      const socket = io(clientConfig.apiUrl, {
+        auth: {
+          token: userId
+        },
+        transports: ['polling', 'websocket'],
+        reconnection: true,
+        reconnectionDelay: 1000,
+        reconnectionAttempts: 5,
+        path: '/socket.io/'
+      });
 
-      window.addEventListener('new-notification', handleNewNotification);
+      socket.on('connect', () => {
+        socket.emit('authenticate', userId);
+      });
+
+      socket.on('notification', (notification) => {
+        const mappedNotification: Notification = {
+          id: notification.id,
+          type: notification.type,
+          title: notification.title,
+          content: notification.content,
+          relatedId: notification.related_id || notification.relatedId,
+          isRead: notification.is_read !== undefined ? notification.is_read : (notification.isRead !== undefined ? notification.isRead : false),
+          createdAt: notification.created_at || notification.createdAt || new Date().toISOString()
+        };
+
+        setNotifications(prev => {
+          const exists = prev.some(n => n.id === mappedNotification.id);
+          if (exists) return prev;
+          return [mappedNotification, ...prev];
+        });
+        lastFetchTimestampRef.current = Date.now();
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('Socket.IO connection error in context:', error);
+      });
 
       return () => {
-        window.removeEventListener('new-notification', handleNewNotification);
+        socket.disconnect();
         if (fetchTimeoutRef.current) {
           clearTimeout(fetchTimeoutRef.current);
           fetchTimeoutRef.current = null;
