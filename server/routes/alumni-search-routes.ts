@@ -80,6 +80,7 @@ router.get("/search", async (req, res) => {
         if (search) {
             const searchTerm = search as string;
             const sanitizedSearchTerm = escapeLike(searchTerm.replace(/,/g, " ").trim());
+            const searchWords = sanitizedSearchTerm.split(/\s+/).filter(w => w.length > 1);
 
             // Smart search: Search users.email separately to find matching user_ids
             // This allows partial email matching (e.g., "atul" matches "atultelang@gmail.com")
@@ -92,9 +93,31 @@ router.get("/search", async (req, res) => {
             const emailMatchedUserIds = emailMatches?.map(u => u.id) || [];
 
             // Smart search enhancement: Also search in experiences and projects
+            const expOrConditions = [
+                `company_name.ilike.%${sanitizedSearchTerm}%`,
+                `position.ilike.%${sanitizedSearchTerm}%`
+            ];
+            const projOrConditions = [
+                `project_name.ilike.%${sanitizedSearchTerm}%`,
+                `description.ilike.%${sanitizedSearchTerm}%`
+            ];
+
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    expOrConditions.push(
+                        `company_name.ilike.%${word}%`,
+                        `position.ilike.%${word}%`
+                    );
+                    projOrConditions.push(
+                        `project_name.ilike.%${word}%`,
+                        `description.ilike.%${word}%`
+                    );
+                });
+            }
+
             const [{ data: expMatches }, { data: projMatches }] = await Promise.all([
-                supabase.from("alumni_experiences").select("alumni_id").or(`company_name.ilike.%${sanitizedSearchTerm}%,position.ilike.%${sanitizedSearchTerm}%`).limit(50),
-                supabase.from("alumni_projects").select("alumni_id").or(`project_name.ilike.%${sanitizedSearchTerm}%,description.ilike.%${sanitizedSearchTerm}%`).limit(50)
+                supabase.from("alumni_experiences").select("alumni_id").or(expOrConditions.join(',')).limit(50),
+                supabase.from("alumni_projects").select("alumni_id").or(projOrConditions.join(',')).limit(50)
             ]);
 
             const relatedAlumniIds = new Set([
@@ -104,7 +127,33 @@ router.get("/search", async (req, res) => {
 
             // Build search condition for alumni table fields
             // Note: current_role is a reserved keyword in PostgreSQL, but Supabase PostgREST handles column names automatically
-            let orCondition = `first_name.ilike.%${sanitizedSearchTerm}%,last_name.ilike.%${sanitizedSearchTerm}%,current_company.ilike.%${sanitizedSearchTerm}%,current_role.ilike.%${sanitizedSearchTerm}%,current_city.ilike.%${sanitizedSearchTerm}%,current_country.ilike.%${sanitizedSearchTerm}%,bio.ilike.%${sanitizedSearchTerm}%,skills.ilike.%${sanitizedSearchTerm}%`;
+            const orConditions = [
+                `first_name.ilike.%${sanitizedSearchTerm}%`,
+                `last_name.ilike.%${sanitizedSearchTerm}%`,
+                `current_company.ilike.%${sanitizedSearchTerm}%`,
+                `current_role.ilike.%${sanitizedSearchTerm}%`,
+                `current_city.ilike.%${sanitizedSearchTerm}%`,
+                `current_country.ilike.%${sanitizedSearchTerm}%`,
+                `bio.ilike.%${sanitizedSearchTerm}%`,
+                `skills.ilike.%${sanitizedSearchTerm}%`
+            ];
+
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    orConditions.push(
+                        `first_name.ilike.%${word}%`,
+                        `last_name.ilike.%${word}%`,
+                        `current_company.ilike.%${word}%`,
+                        `current_role.ilike.%${word}%`,
+                        `current_city.ilike.%${word}%`,
+                        `current_country.ilike.%${word}%`,
+                        `bio.ilike.%${word}%`,
+                        `skills.ilike.%${word}%`
+                    );
+                });
+            }
+
+            let orCondition = orConditions.join(',');
 
             // Add email-matched user_ids to the search
             if (emailMatchedUserIds.length > 0) {

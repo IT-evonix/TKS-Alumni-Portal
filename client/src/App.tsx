@@ -9,9 +9,8 @@ import { AuthProvider, useAuth } from "@/contexts/AuthContext";
 import { SearchProvider } from "@/contexts/SearchContext";
 import { NotificationProvider } from "@/contexts/NotificationContext";
 import { GamificationProvider } from "@/contexts/GamificationContext";
-import { GlobalSearchModal } from "@/components/search/GlobalSearchModal";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
-import { io } from "socket.io-client";
+import { GlobalSearchModal } from "@/components/search/GlobalSearchModal";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { clientConfig } from "@/lib/config";
 import { registerServiceWorker } from "@/utils/serviceWorker";
@@ -240,67 +239,6 @@ function App() {
           });
         });
       }
-    }
-  }, []);
-
-  useEffect(() => {
-    // Check for either user session or admin session
-    let userId = localStorage.getItem('userId');
-
-    // If no regular user ID, check for admin user
-    if (!userId) {
-      const adminUserStr = localStorage.getItem('adminUser');
-      if (adminUserStr) {
-        try {
-          const adminUser = JSON.parse(adminUserStr);
-          userId = adminUser.id;
-        } catch {
-          // Silently fail - admin user parsing error is not critical
-          console.error('Failed to parse admin user from storage');
-        }
-      }
-    }
-
-    if (userId) {
-      // Connect to the server using centralized config
-      const serverUrl = clientConfig.apiUrl;
-
-      // console.log('Connecting Socket.IO to:', serverUrl);
-
-      const socket = io(serverUrl, {
-        auth: {
-          token: userId
-        },
-        transports: ['polling', 'websocket'], // Try polling first, then websocket
-        reconnection: true,
-        reconnectionDelay: 1000,
-        reconnectionAttempts: 5,
-        path: '/socket.io/' // Explicitly set the path
-      });
-
-
-      socket.on('connect', () => {
-        // console.log('Socket.IO connected');
-        socket.emit('authenticate', userId);
-      });
-
-      socket.on('notification', (data) => {
-        // console.log('Received notification:', data);
-        // Trigger notification count refresh
-        window.dispatchEvent(new CustomEvent('new-notification', { detail: data }));
-      });
-
-      socket.on('connect_error', (error) => {
-        console.error('Socket.IO connection error:', error);
-      });
-
-      socket.on('disconnect', () => {
-        // console.log('Socket.IO disconnected');
-      });
-
-      return () => {
-        socket.disconnect();
-      };
     }
   }, []);
 

@@ -389,7 +389,33 @@ router.get("/", async (req, res) => {
                     .eq("is_active", true);
 
                 // Build search condition (all OR clauses merged into one .or() call to avoid Supabase AND-of-ORs bug)
-                let searchCondition = `first_name.ilike.%${sanitizedSearch}%,last_name.ilike.%${sanitizedSearch}%,bio.ilike.%${sanitizedSearch}%,skills.ilike.%${sanitizedSearch}%,current_company.ilike.%${sanitizedSearch}%,current_role.ilike.%${sanitizedSearch}%,current_city.ilike.%${sanitizedSearch}%,industry.ilike.%${sanitizedSearch}%`;
+                const orConditions = [
+                    `first_name.ilike.%${sanitizedSearch}%`,
+                    `last_name.ilike.%${sanitizedSearch}%`,
+                    `bio.ilike.%${sanitizedSearch}%`,
+                    `skills.ilike.%${sanitizedSearch}%`,
+                    `current_company.ilike.%${sanitizedSearch}%`,
+                    `current_role.ilike.%${sanitizedSearch}%`,
+                    `current_city.ilike.%${sanitizedSearch}%`,
+                    `industry.ilike.%${sanitizedSearch}%`
+                ];
+
+                if (searchWords.length > 1) {
+                    searchWords.forEach(word => {
+                        orConditions.push(
+                            `first_name.ilike.%${word}%`,
+                            `last_name.ilike.%${word}%`,
+                            `bio.ilike.%${word}%`,
+                            `skills.ilike.%${word}%`,
+                            `current_company.ilike.%${word}%`,
+                            `current_role.ilike.%${word}%`,
+                            `current_city.ilike.%${word}%`,
+                            `industry.ilike.%${word}%`
+                        );
+                    });
+                }
+
+                let searchCondition = orConditions.join(',');
 
                 // Add email-matched user_ids to the search
                 if (emailMatchedUserIds.length > 0) {
@@ -655,6 +681,27 @@ router.get("/", async (req, res) => {
 
         // 2. Search Jobs (if type is 'all' or 'job') 
         if (searchType === 'all' || searchType === 'job') {
+            const jobOrConditions = [
+                `title.ilike.%${sanitizedSearch}%`,
+                `company.ilike.%${sanitizedSearch}%`,
+                `description.ilike.%${sanitizedSearch}%`,
+                `location.ilike.%${sanitizedSearch}%`,
+                `industry.ilike.%${sanitizedSearch}%`,
+                `skills.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    jobOrConditions.push(
+                        `title.ilike.%${word}%`,
+                        `company.ilike.%${word}%`,
+                        `description.ilike.%${word}%`,
+                        `location.ilike.%${word}%`,
+                        `industry.ilike.%${word}%`,
+                        `skills.ilike.%${word}%`
+                    );
+                });
+            }
+
             let jobQuery = supabase
                 .from("jobs")
                 .select(`
@@ -662,7 +709,7 @@ router.get("/", async (req, res) => {
                     posted_by_user:users!posted_by(id, username, email, alumni(first_name, last_name))
                 `)
                 .eq("is_active", true)
-                .or(`title.ilike.%${sanitizedSearch}%,company.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%,location.ilike.%${sanitizedSearch}%,industry.ilike.%${sanitizedSearch}%,skills.ilike.%${sanitizedSearch}%`);
+                .or(jobOrConditions.join(','));
 
             // Apply filters
             if (searchLocation) {
@@ -727,11 +774,26 @@ router.get("/", async (req, res) => {
 
         // 3. Search Events (if type is 'all' or 'event')
         if (searchType === 'all' || searchType === 'event') {
+            const eventOrConditions = [
+                `title.ilike.%${sanitizedSearch}%`,
+                `description.ilike.%${sanitizedSearch}%`,
+                `location.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    eventOrConditions.push(
+                        `title.ilike.%${word}%`,
+                        `description.ilike.%${word}%`,
+                        `location.ilike.%${word}%`
+                    );
+                });
+            }
+
             let eventQuery = supabase
                 .from("events")
                 .select("*")
                 .eq("is_active", true)
-                .or(`title.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%,location.ilike.%${sanitizedSearch}%`);
+                .or(eventOrConditions.join(','));
 
             // Apply filters
             if (searchLocation) {
@@ -774,6 +836,15 @@ router.get("/", async (req, res) => {
 
         // 4. Search Posts (if type is 'all' or 'post')
         if (searchType === 'all' || searchType === 'post') {
+            const postOrConditions = [
+                `content.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    postOrConditions.push(`content.ilike.%${word}%`);
+                });
+            }
+
             let postQuery = supabase
                 .from("feed_posts")
                 .select(`
@@ -781,7 +852,7 @@ router.get("/", async (req, res) => {
                     users!author_id(id, username, email, alumni(first_name, last_name))
                 `)
                 .eq("is_active", true)
-                .ilike("content", `%${sanitizedSearch}%`);
+                .or(postOrConditions.join(','));
 
             // Apply date filter
             postQuery = applyDateFilter(postQuery);
@@ -824,6 +895,19 @@ router.get("/", async (req, res) => {
 
         // 5. Search Forum Threads (if type is 'all' or 'forum')
         if (searchType === 'all' || searchType === 'forum') {
+            const forumOrConditions = [
+                `title.ilike.%${sanitizedSearch}%`,
+                `content.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    forumOrConditions.push(
+                        `title.ilike.%${word}%`,
+                        `content.ilike.%${word}%`
+                    );
+                });
+            }
+
             const { data: forumData } = await supabase
                 .from("forum_threads")
                 .select(`
@@ -832,7 +916,7 @@ router.get("/", async (req, res) => {
                     author:users!forum_threads_author_id_fkey(username)
                 `)
                 .eq("is_deleted", false)
-                .or(`title.ilike.%${sanitizedSearch}%,content.ilike.%${sanitizedSearch}%`)
+                .or(forumOrConditions.join(','))
                 .order("last_activity_at", { ascending: false })
                 .limit(Math.ceil(searchLimit * 0.1));
 
@@ -857,6 +941,21 @@ router.get("/", async (req, res) => {
 
         // 6. Search Blog Posts (if type is 'all' or 'blog')
         if (searchType === 'all' || searchType === 'blog') {
+            const blogOrConditions = [
+                `title.ilike.%${sanitizedSearch}%`,
+                `excerpt.ilike.%${sanitizedSearch}%`,
+                `content.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    blogOrConditions.push(
+                        `title.ilike.%${word}%`,
+                        `excerpt.ilike.%${word}%`,
+                        `content.ilike.%${word}%`
+                    );
+                });
+            }
+
             const { data: blogData } = await supabase
                 .from("blog_posts")
                 .select(`
@@ -865,7 +964,7 @@ router.get("/", async (req, res) => {
                     author:users!author_id(username, alumni(first_name, last_name))
                 `)
                 .eq("status", "published")
-                .or(`title.ilike.%${sanitizedSearch}%,excerpt.ilike.%${sanitizedSearch}%,content.ilike.%${sanitizedSearch}%`)
+                .or(blogOrConditions.join(','))
                 .order("published_at", { ascending: false })
                 .limit(Math.ceil(searchLimit * 0.1));
 
@@ -898,11 +997,26 @@ router.get("/", async (req, res) => {
 
         // 7. Search Podcasts (if type is 'all' or 'podcast')
         if (searchType === 'all' || searchType === 'podcast') {
+            const podcastOrConditions = [
+                `title.ilike.%${sanitizedSearch}%`,
+                `description.ilike.%${sanitizedSearch}%`,
+                `show_notes.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    podcastOrConditions.push(
+                        `title.ilike.%${word}%`,
+                        `description.ilike.%${word}%`,
+                        `show_notes.ilike.%${word}%`
+                    );
+                });
+            }
+
             const { data: podcastData } = await supabase
                 .from("podcasts")
                 .select("id, title, slug, description, created_at")
                 .eq("status", "published")
-                .or(`title.ilike.%${sanitizedSearch}%,description.ilike.%${sanitizedSearch}%,show_notes.ilike.%${sanitizedSearch}%`)
+                .or(podcastOrConditions.join(','))
                 .order("published_at", { ascending: false })
                 .limit(Math.ceil(searchLimit * 0.05));
 
@@ -925,11 +1039,24 @@ router.get("/", async (req, res) => {
 
         // 8. Search Newsletters (if type is 'all' or 'newsletter')
         if (searchType === 'all' || searchType === 'newsletter') {
+            const newsletterOrConditions = [
+                `title.ilike.%${sanitizedSearch}%`,
+                `excerpt.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    newsletterOrConditions.push(
+                        `title.ilike.%${word}%`,
+                        `excerpt.ilike.%${word}%`
+                    );
+                });
+            }
+
             const { data: newsletterData } = await supabase
                 .from("newsletters")
                 .select("id, title, slug, excerpt, cover_image, sent_at, created_at")
                 .eq("status", "sent")
-                .or(`title.ilike.%${sanitizedSearch}%,excerpt.ilike.%${sanitizedSearch}%`)
+                .or(newsletterOrConditions.join(','))
                 .order("sent_at", { ascending: false })
                 .limit(Math.ceil(searchLimit * 0.05));
 
@@ -952,11 +1079,26 @@ router.get("/", async (req, res) => {
 
         // 9. Search Travel Journal posts (if type is 'all' or 'travel')
         if (searchType === 'all' || searchType === 'travel') {
+            const travelOrConditions = [
+                `caption.ilike.%${sanitizedSearch}%`,
+                `city.ilike.%${sanitizedSearch}%`,
+                `country.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    travelOrConditions.push(
+                        `caption.ilike.%${word}%`,
+                        `city.ilike.%${word}%`,
+                        `country.ilike.%${word}%`
+                    );
+                });
+            }
+
             const { data: travelData } = await supabase
                 .from("travel_posts")
                 .select("id, caption, city, country, created_at")
                 .eq("is_hidden", false)
-                .or(`caption.ilike.%${sanitizedSearch}%,city.ilike.%${sanitizedSearch}%,country.ilike.%${sanitizedSearch}%`)
+                .or(travelOrConditions.join(','))
                 .order("created_at", { ascending: false })
                 .limit(Math.ceil(searchLimit * 0.05));
 
@@ -979,6 +1121,29 @@ router.get("/", async (req, res) => {
 
         // 10. Search Mentors (if type is 'all' or 'mentor')
         if (searchType === 'all' || searchType === 'mentor') {
+            const mentorOrConditions = [
+                `first_name.ilike.%${sanitizedSearch}%`,
+                `last_name.ilike.%${sanitizedSearch}%`,
+                `expertise_areas.ilike.%${sanitizedSearch}%`,
+                `help_topics.ilike.%${sanitizedSearch}%`,
+                `bio.ilike.%${sanitizedSearch}%`,
+                `current_role.ilike.%${sanitizedSearch}%`,
+                `current_company.ilike.%${sanitizedSearch}%`
+            ];
+            if (searchWords.length > 1) {
+                searchWords.forEach(word => {
+                    mentorOrConditions.push(
+                        `first_name.ilike.%${word}%`,
+                        `last_name.ilike.%${word}%`,
+                        `expertise_areas.ilike.%${word}%`,
+                        `help_topics.ilike.%${word}%`,
+                        `bio.ilike.%${word}%`,
+                        `current_role.ilike.%${word}%`,
+                        `current_company.ilike.%${word}%`
+                    );
+                });
+            }
+
             const { data: mentorData } = await supabase
                 .from("alumni")
                 .select(`
@@ -988,7 +1153,7 @@ router.get("/", async (req, res) => {
                 `)
                 .eq("is_mentor", true)
                 .eq("is_active", true)
-                .or(`first_name.ilike.%${sanitizedSearch}%,last_name.ilike.%${sanitizedSearch}%,expertise_areas.ilike.%${sanitizedSearch}%,help_topics.ilike.%${sanitizedSearch}%,bio.ilike.%${sanitizedSearch}%,current_role.ilike.%${sanitizedSearch}%,current_company.ilike.%${sanitizedSearch}%`)
+                .or(mentorOrConditions.join(','))
                 .limit(Math.ceil(searchLimit * 0.1));
 
             if (mentorData) {

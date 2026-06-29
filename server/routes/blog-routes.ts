@@ -741,7 +741,7 @@ router.post("/:id/publish", async (req, res) => {
       const { data: admins } = await supabase
         .from("users")
         .select("id")
-        .eq("is_admin", true);
+        .or("is_admin.eq.true,user_role.eq.administrator");
       if (admins && admins.length > 0) {
         for (const admin of admins) {
           try {
