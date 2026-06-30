@@ -65,14 +65,14 @@ export default function TravelChaptersDirectoryPage() {
   const isError = feedQuery.isError;
 
   return (
-    <AppLayout currentPage="travel-journal">
+    <AppLayout currentPage="city-chapter">
       <div className="max-w-4xl mx-auto px-4 py-6">
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
             <h1 className="text-2xl font-bold text-gray-900 flex items-center gap-2">
               <Globe className="w-6 h-6 text-blue-500" />
-              Travel Journal
+              City Chapter
             </h1>
             <p className="text-sm text-gray-500 mt-1">Stories from alumni across the globe</p>
           </div>
@@ -158,7 +158,7 @@ export default function TravelChaptersDirectoryPage() {
                 <TravelPostCard
                   key={post.id}
                   post={post}
-                  onClick={() => navigate(`/travel-journal/${post.id}`)}
+                  onClick={() => navigate(`/city-chapter/${post.id}`)}
                   isOwnPost={activeTab === "mine"}
                   onEdit={activeTab === "mine" ? () => setEditingPost(post) : undefined}
                 />

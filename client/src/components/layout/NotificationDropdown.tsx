@@ -269,11 +269,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
       case 'post_deleted':
         return '/blogs';
       case 'post_approved':
-        return '/travel-journal';
+        return '/city-chapter';
       case 'post_rejected':
-        return '/travel-journal?tab=mine';
+        return '/city-chapter?tab=mine';
       case 'post_pending_approval':
-        return '/admin/travel-chapters';
+        return '/admin/city-chapters';
       case 'new_blog':
         return '/admin/blogs';
       case 'event_rsvp':
@@ -495,7 +495,7 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
             break;
 
           case 'post_pending_approval':
-            redirectUrl = '/admin/travel-chapters?tab=pending';
+            redirectUrl = '/admin/city-chapters?tab=pending';
             break;
 
           case 'mentorship_request':

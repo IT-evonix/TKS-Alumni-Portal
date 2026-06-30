@@ -1102,7 +1102,7 @@ export const GlobalSearchModal: React.FC = () => {
                            type === 'blog' ? 'Blog Posts' :
                            type === 'podcast' ? 'Podcasts' :
                            type === 'newsletter' ? 'Newsletters' :
-                           type === 'travel' ? 'Travel Chapters' :
+                           type === 'travel' ? 'City Chapters' :
                            type === 'command' ? 'Quick Actions' : type}
                         </h3>
                       </div>

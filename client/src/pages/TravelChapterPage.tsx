@@ -27,7 +27,7 @@ function getHeaders() {
 }
 
 export default function TravelChapterPage() {
-  const [match, params] = useRoute("/travel-journal/:id");
+  const [match, params] = useRoute("/city-chapter/:id");
   const [, navigate] = useLocation();
   const { toast } = useToast();
   const { user } = useAuth();
@@ -66,13 +66,13 @@ export default function TravelChapterPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["travel-posts"] });
       toast({ title: "Post deleted" });
-      navigate("/travel-journal");
+      navigate("/city-chapter");
     },
     onError: () => toast({ title: "Failed to delete post", variant: "destructive" }),
   });
 
   function handleShare() {
-    const url = `${window.location.origin}/travel-journal/${postId}`;
+    const url = `${window.location.origin}/city-chapter/${postId}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).then(() => toast({ title: "Link copied!", description: "Share it with friends." }));
     } else {
@@ -89,14 +89,14 @@ export default function TravelChapterPage() {
   if (!match) return null;
 
   return (
-    <AppLayout currentPage="travel-journal">
+    <AppLayout currentPage="city-chapter">
       <div className="max-w-2xl mx-auto px-4 py-6">
         {/* Back button */}
         <button
-          onClick={() => navigate("/travel-journal")}
+          onClick={() => navigate("/city-chapter")}
           className="flex items-center gap-1.5 text-sm text-gray-500 hover:text-gray-800 mb-4 transition-colors"
         >
-          <ArrowLeft className="w-4 h-4" /> Back to Travel Journal
+          <ArrowLeft className="w-4 h-4" /> Back to City Chapter
         </button>
 
         {isLoading ? (
@@ -107,7 +107,7 @@ export default function TravelChapterPage() {
           <div className="text-center py-20">
             <Globe className="w-12 h-12 mx-auto text-gray-300 mb-3" />
             <p className="text-gray-500">Post not found or has been removed.</p>
-            <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/travel-journal")}>
+            <Button variant="outline" size="sm" className="mt-3" onClick={() => navigate("/city-chapter")}>
               Back to Feed
             </Button>
           </div>

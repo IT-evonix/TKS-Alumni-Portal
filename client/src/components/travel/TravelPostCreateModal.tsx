@@ -120,7 +120,7 @@ function PreviewStep({ mediaFiles, city, country, caption, links }: {
 
   return (
     <div className="space-y-4">
-      <p className="text-sm text-gray-500">Preview your travel post before publishing.</p>
+      <p className="text-sm text-gray-500">Preview your city chapter post before publishing.</p>
       <div className="border border-gray-200 rounded-2xl overflow-hidden">
         {mediaFiles.length > 0 ? (
           <div className="relative aspect-video bg-black">
@@ -561,7 +561,7 @@ export function TravelPostCreateModal({ open, onClose, onCreated, editPost }: Pr
         queryClient.invalidateQueries({ queryKey: ["travel-post", editPost.id] });
 
         if (isResubmit) {
-          toast({ title: "Post resubmitted for review!", description: "Your updated travel story will be visible once an admin approves it." });
+          toast({ title: "Post resubmitted for review!", description: "Your updated city chapter story will be visible once an admin approves it." });
         } else {
           toast({ title: "Post updated!", description: "Your changes have been saved." });
         }
@@ -589,7 +589,7 @@ export function TravelPostCreateModal({ open, onClose, onCreated, editPost }: Pr
 
         queryClient.invalidateQueries({ queryKey: ["travel-posts"] });
         queryClient.invalidateQueries({ queryKey: ["travel-my-posts"] });
-        toast({ title: "Story submitted for review!", description: `Your travel post from ${city} will be visible once an admin approves it.` });
+        toast({ title: "Story submitted for review!", description: `Your city chapter post from ${city} will be visible once an admin approves it.` });
       }
 
       resetForm();
@@ -609,7 +609,7 @@ export function TravelPostCreateModal({ open, onClose, onCreated, editPost }: Pr
       case 0: // Location
         return (
           <div className="space-y-4 pb-64">
-            <p className="text-sm text-gray-500">Where did you travel to?</p>
+            <p className="text-sm text-gray-500">Which city is this chapter about?</p>
             <CityAutocomplete
               city={city}
               onCityChange={setCity}
@@ -692,7 +692,7 @@ export function TravelPostCreateModal({ open, onClose, onCreated, editPost }: Pr
       case 3: // Caption
         return (
           <div className="space-y-2">
-            <p className="text-sm text-gray-500">Tell the story behind your travels. (optional)</p>
+            <p className="text-sm text-gray-500">Tell the story behind your city chapter. (optional)</p>
             <Textarea
               placeholder="What was this trip like? Share the highlights, tips, or memories…"
               value={caption}
@@ -721,7 +721,7 @@ export function TravelPostCreateModal({ open, onClose, onCreated, editPost }: Pr
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-base">
               <MapPin className="w-5 h-5 text-blue-500" />
-              {isEditMode ? "Edit Travel Story" : "Share Your Travel Story"}
+              {isEditMode ? "Edit City Chapter Story" : "Share Your City Chapter Story"}
             </DialogTitle>
           </DialogHeader>
 

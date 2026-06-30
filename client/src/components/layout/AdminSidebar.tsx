@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe, BookOpen, Mic2, Newspaper } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'travel-chapters' | 'blogs' | 'podcasts' | 'newsletters';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'city-chapters' | 'blogs' | 'podcasts' | 'newsletters';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -139,9 +139,9 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
     },
     {
       icon: Globe,
-      label: "Travel Journal",
-      path: "/admin/travel-chapters",
-      key: "travel-chapters",
+      label: "City Chapter",
+      path: "/admin/city-chapters",
+      key: "city-chapters",
       color: "text-emerald-600",
       bgColor: "bg-emerald-50"
     },

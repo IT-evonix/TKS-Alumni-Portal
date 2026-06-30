@@ -24,7 +24,6 @@ import { CityAutocomplete } from "@/components/profile/CityAutocomplete";
 import { Edit } from "lucide-react";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeading } from "@/components/common/PageHeading";
-import maplibregl from 'maplibre-gl';
 import { supabase } from "@/lib/supabase";
 import { generateCoordinatesForCity } from "@/components/TravelChaptersMap";
 
@@ -49,11 +48,11 @@ const cardVariants = {
   visible: { opacity: 1, y: 0, transition: { duration: 0.4, ease: [0.25, 0.1, 0.25, 1] } },
 };
 
-interface TravelChapterSectionProps {
+interface CityChapterSectionProps {
   hideHeader?: boolean;
   chapters?: any[];
   isLoading?: boolean;
-  mapBounds?: maplibregl.LngLatBounds | null;
+  mapBounds?: google.maps.LatLngBounds | null;
   selectedChapter?: any | null;
   onChapterClick?: (chapter: any | null) => void;
   sidebarMode?: boolean;
@@ -69,7 +68,7 @@ export function TravelChapterSection({
   onChapterClick,
   sidebarMode = false,
   mapInteracted = false
-}: TravelChapterSectionProps): JSX.Element {
+}: CityChapterSectionProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const isInView = useInView(containerRef, { once: true, margin: "-60px" });
   const [, setLocation] = useLocation();
@@ -80,7 +79,7 @@ export function TravelChapterSection({
   const [activeTab, setActiveTab] = useState<'all' | 'my' | 'admin'>('all');
 
   const { data: myProposals = [] } = useQuery({
-    queryKey: ['my-travel-chapters'],
+    queryKey: ['my-city-chapters'],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/travel-chapters/my-proposals');
       if (!res.ok) return [];
@@ -89,7 +88,7 @@ export function TravelChapterSection({
   });
 
   const { data: adminProposals = [] } = useQuery({
-    queryKey: ['admin-travel-chapters'],
+    queryKey: ['admin-city-chapters'],
     queryFn: async () => {
       const res = await apiRequest('GET', '/api/travel-chapters/admin');
       if (!res.ok) return [];
@@ -171,14 +170,14 @@ export function TravelChapterSection({
           lng = coords[0];
           lat = coords[1];
         }
-        return mapBounds.contains([lng, lat]);
+        return mapBounds.contains({ lat, lng });
       });
     }
 
     return filtered;
   }, [chapters, mapBounds, mapInteracted]);
 
-  // Separate out current user's own chapters — only show in My Travel Chapters, not in directory
+  // Separate out current user's own chapters — only show in My City Chapters, not in directory
   const directoryChapters = useMemo(() =>
     visibleChapters,
     [visibleChapters]
@@ -223,8 +222,8 @@ export function TravelChapterSection({
       setDescription("");
       setCoverFile(null);
       setCoverPreview(null);
-      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
-      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['city-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-city-chapters'] });
     },
     onError: (err) => {
       setIsUploading(false);
@@ -243,8 +242,8 @@ export function TravelChapterSection({
     },
     onSuccess: () => {
       toast({ title: "Deleted", description: "Chapter proposal deleted successfully." });
-      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
-      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['city-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-city-chapters'] });
     },
     onError: (err) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -259,8 +258,8 @@ export function TravelChapterSection({
     },
     onSuccess: (data) => {
       toast({ title: "Success", description: data.message });
-      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
-      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['city-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-city-chapters'] });
     },
     onError: (err) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -279,8 +278,8 @@ export function TravelChapterSection({
     onSuccess: () => {
       toast({ title: "Success", description: "Chapter updated successfully." });
       setEditingChapter(null);
-      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
-      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['city-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-city-chapters'] });
     },
     onError: (err) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -326,7 +325,7 @@ export function TravelChapterSection({
                   <Globe className="w-48 h-48" />
                 </div>
                 <DialogHeader className="text-left relative z-10">
-                  <DialogTitle className="text-2xl sm:text-3xl font-extrabold text-white">Start a Travel Chapter</DialogTitle>
+                  <DialogTitle className="text-2xl sm:text-3xl font-extrabold text-white">Start a City Chapter</DialogTitle>
                   <DialogDescription className="text-emerald-100 mt-2 text-base">
                     Start a new alumni community in your city.
                   </DialogDescription>
@@ -472,7 +471,7 @@ export function TravelChapterSection({
             transition={{ duration: 0.15 }}
             className="py-20"
           >
-            <LoadingState message="Discovering travel chapters..." size="lg" />
+            <LoadingState message="Discovering city chapters..." size="lg" />
           </motion.div>
         ) : (activeTab === 'all' ? directoryChapters : activeTab === 'my' ? myProposals : adminProposals).length === 0 ? (
           <motion.div
@@ -497,8 +496,8 @@ export function TravelChapterSection({
               {activeTab === 'all' 
                 ? "Pan or zoom the map to discover chapters in other areas, or propose a new one!"
                 : activeTab === 'my'
-                  ? "You haven't proposed any travel chapters yet. Click 'Propose Chapter' to start a local community!"
-                  : "All submitted travel chapter proposals have been reviewed."}
+                  ? "You haven't proposed any city chapters yet. Click 'Propose Chapter' to start a local community!"
+                  : "All submitted city chapter proposals have been reviewed."}
             </p>
           </motion.div>
         ) : (
@@ -695,12 +694,12 @@ export function TravelChapterSection({
         </AlertDialogContent>
       </AlertDialog>
 
-      {/* Edit Travel Chapter Dialog */}
+      {/* Edit City Chapter Dialog */}
       <Dialog open={!!editingChapter} onOpenChange={(open) => !open && setEditingChapter(null)}>
         <DialogContent className="w-[92vw] max-w-[500px] rounded-3xl p-0 max-h-[90vh] overflow-y-auto bg-white border-0 shadow-2xl">
           <div className="bg-gradient-to-br from-[#008060] to-emerald-800 p-6 text-white rounded-t-3xl relative overflow-hidden">
             <DialogHeader className="text-left relative z-10">
-              <DialogTitle className="text-xl sm:text-2xl font-extrabold text-white">Edit Travel Chapter</DialogTitle>
+              <DialogTitle className="text-xl sm:text-2xl font-extrabold text-white">Edit City Chapter</DialogTitle>
               <DialogDescription className="text-emerald-100 mt-2 text-sm">
                 Update the details for {editingChapter?.city} Chapter.
               </DialogDescription>
@@ -804,7 +803,7 @@ function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selecte
   const { user } = useAuth();
 
   const { data: chapterDetails, isLoading } = useQuery({
-    queryKey: ['travel-chapter', selectedChapter?.id],
+    queryKey: ['city-chapter', selectedChapter?.id],
     queryFn: async () => {
       const res = await apiRequest('GET', `/api/travel-chapters/${selectedChapter.id}`);
       if (!res.ok) throw new Error("Failed to fetch chapter details");
@@ -823,10 +822,10 @@ function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selecte
       return res.json();
     },
     onSuccess: () => {
-      toast({ title: "Joined!", description: "You are now a member of this travel chapter." });
-      queryClient.invalidateQueries({ queryKey: ['travel-chapter', selectedChapter.id] });
-      queryClient.invalidateQueries({ queryKey: ['travel-chapters'] });
-      queryClient.invalidateQueries({ queryKey: ['my-travel-chapters'] });
+      toast({ title: "Joined!", description: "You are now a member of this city chapter." });
+      queryClient.invalidateQueries({ queryKey: ['city-chapter', selectedChapter.id] });
+      queryClient.invalidateQueries({ queryKey: ['city-chapters'] });
+      queryClient.invalidateQueries({ queryKey: ['my-city-chapters'] });
     },
     onError: (err) => {
       toast({ title: "Error", description: err.message, variant: "destructive" });
@@ -881,7 +880,7 @@ function ChapterDetailModal({ selectedChapter, onClose, setLocation }: { selecte
               <div className="p-6 border-t border-gray-100 flex flex-col sm:flex-row gap-3 bg-gray-50">
                 <Button 
                   className="flex-1 h-12 bg-[#008060] hover:bg-[#006b51] text-white shadow-sm font-bold rounded-xl border-0"
-                  onClick={() => setLocation(`/travel-chapters/${selectedChapter.id}`)}
+                  onClick={() => setLocation(`/city-chapter/${selectedChapter.id}`)}
                 >
                   <Users className="w-4 h-4 mr-2" /> Open Group Chat
                 </Button>

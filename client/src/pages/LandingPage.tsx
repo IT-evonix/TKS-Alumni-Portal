@@ -13,7 +13,7 @@ const WhatYouWillFindSection = React.lazy(() => import("./sections/WhatYouWillFi
 const UpcomingEventsSection = React.lazy(() => import("./sections/UpcomingEventsSection").then(module => ({ default: module.UpcomingEventsSection })));
 const UpcomingJobsSection = React.lazy(() => import("./sections/UpcomingJobsSection").then(module => ({ default: module.UpcomingJobsSection })));
 const CallToActionSection = React.lazy(() => import("./sections/CallToActionSection").then(module => ({ default: module.CallToActionSection })));
-const TravelChapterSection = React.lazy(() => import("./sections/TravelChapterSection").then(module => ({ default: module.TravelChapterSection })));
+const CityChapterSection = React.lazy(() => import("./sections/TravelChapterSection").then(module => ({ default: module.TravelChapterSection })));
 import { AlumniPrideVideo } from "@/components/common/AlumniPrideVideo";
 import { LandingNavbar } from "@/components/common/LandingNavbar";
 
@@ -438,13 +438,13 @@ export const LandingPage = (): JSX.Element => {
         <div className="absolute inset-0 bg-gradient-to-b from-white/60 via-transparent to-transparent pointer-events-none" />
         <div className="relative max-w-7xl mx-auto px-6">
           <SectionHeader
-            label="Travel Chapter"
+            label="City Chapter"
             title="TKS Alumni Across the Globe"
             description="From Pune to New York, Singapore to Sydney — our alumni have carried the TKS spirit to every corner of the world."
             align="center"
           />
           <Suspense fallback={<SectionLoader />}>
-            <TravelChapterSection />
+            <CityChapterSection />
           </Suspense>
         </div>
       </section>

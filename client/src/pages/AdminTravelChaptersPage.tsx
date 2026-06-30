@@ -44,7 +44,7 @@ export default function AdminTravelChaptersPage() {
     });
   }
 
-  React.useEffect(() => { document.title = "Travel Journal - Admin"; }, []);
+  React.useEffect(() => { document.title = "City Chapter - Admin"; }, []);
 
   const getHeaders = () => {
     const token = localStorage.getItem("auth_token") || "";
@@ -149,14 +149,14 @@ export default function AdminTravelChaptersPage() {
 
   return (
     <div className="flex h-screen bg-gray-50">
-      <AdminSidebar currentPage="travel-chapters" />
+      <AdminSidebar currentPage="city-chapters" />
 
       <div className="flex-1 overflow-auto">
         {/* Top bar */}
         <header className="sticky top-0 z-10 bg-white border-b border-gray-200 px-6 py-3 flex items-center justify-between">
           <div className="flex items-center gap-2">
             <Globe className="w-5 h-5 text-blue-500" />
-            <h1 className="text-lg font-semibold text-gray-900">Travel Journal</h1>
+            <h1 className="text-lg font-semibold text-gray-900">City Chapter</h1>
             <Badge variant="outline" className="ml-1">{total} posts</Badge>
           </div>
           <div className="flex items-center gap-3">

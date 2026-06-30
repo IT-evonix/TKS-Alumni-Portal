@@ -278,7 +278,7 @@ export const NotificationHistoryPage: React.FC = () => {
         }
         break;
       case 'post_pending_approval':
-        redirectUrl = '/admin/travel-chapters?tab=pending';
+        redirectUrl = '/admin/city-chapters?tab=pending';
         break;
       case 'signup_request':
         redirectUrl = '/admin/users';

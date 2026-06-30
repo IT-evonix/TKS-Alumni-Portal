@@ -1,4 +1,5 @@
 import React, { useEffect, lazy, Suspense } from "react";
+import { APIProvider } from "@vis.gl/react-google-maps";
 import { Route, Switch, Redirect, useLocation } from "wouter";
 import { HelmetProvider } from "react-helmet-async";
 import { queryClient } from "./lib/queryClient";
@@ -87,8 +88,8 @@ const ForumCategoryPage = lazy(() => import("@/pages/ForumCategoryPage").then(m 
 const BlogsPage = lazy(() => import("@/pages/BlogsPage").then(m => ({ default: m.BlogsPage })));
 const BlogDetailPage = lazy(() => import("@/pages/BlogDetailPage").then(m => ({ default: m.BlogDetailPage })));
 const AdminBlogsPage = lazy(() => import("@/pages/AdminBlogsPage").then(m => ({ default: m.AdminBlogsPage })));
-const TravelChaptersDirectoryPage = lazy(() => import("@/pages/TravelChaptersDirectoryPage").then(m => ({ default: m.default })));
-const TravelChapterPage = lazy(() => import("@/pages/TravelChapterPage").then(m => ({ default: m.default })));
+const CityChaptersDirectoryPage = lazy(() => import("@/pages/TravelChaptersDirectoryPage").then(m => ({ default: m.default })));
+const CityChapterPage = lazy(() => import("@/pages/TravelChapterPage").then(m => ({ default: m.default })));
 const PodcastPage = lazy(() => import("@/pages/PodcastPage").then(m => ({ default: m.PodcastPage })));
 const AdminPodcastsPage = lazy(() => import("@/pages/AdminPodcastsPage").then(m => ({ default: m.AdminPodcastsPage })));
 const AdminNewslettersPage = lazy(() =>
@@ -120,7 +121,7 @@ const AdminBulkEmailPage = lazy(() => import("./pages/AdminBulkEmailPage").then(
 const AdminInboxPage = lazy(() => import("@/pages/AdminInboxPage").then(m => ({ default: m.AdminInboxPage })));
 const AdminGamificationPage = lazy(() => import("@/pages/AdminGamificationPage").then(m => ({ default: m.AdminGamificationPage })));
 const AdminLocationExportPage = lazy(() => import("./pages/AdminLocationExportPage").then(m => ({ default: m.default })));
-const AdminTravelChaptersPage = lazy(() => import("@/pages/AdminTravelChaptersPage").then(m => ({ default: m.default })));
+const AdminCityChaptersPage = lazy(() => import("@/pages/AdminTravelChaptersPage").then(m => ({ default: m.default })));
 
 // Other pages - lazy loaded
 const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ default: m.SharedPostPage })));
@@ -178,12 +179,12 @@ function Router() {
           <ProtectedRoute path="/forums/category/:slug" component={ForumCategoryPage} />
           <ProtectedRoute path="/blogs" component={BlogsPage} />
           <ProtectedRoute path="/blogs/:slug" component={BlogDetailPage} />
-          <ProtectedRoute path="/travel-journal" component={TravelChaptersDirectoryPage} />
+          <ProtectedRoute path="/city-chapter" component={CityChaptersDirectoryPage} />
           <ProtectedRoute path="/podcast" component={PodcastPage} />
           <ProtectedRoute path="/podcasts/:slug" component={PodcastPage} />
           <ProtectedRoute path="/newsletters" component={NewslettersPage} />
           <ProtectedRoute path="/newsletters/:slug" component={NewslettersPage} />
-          <ProtectedRoute path="/travel-journal/:id" component={TravelChapterPage} />
+          <ProtectedRoute path="/city-chapter/:id" component={CityChapterPage} />
 
           {/* Protected Admin Routes */}
           <ProtectedRoute path="/admin/dashboard" component={AdminDashboard} adminOnly />
@@ -201,7 +202,7 @@ function Router() {
           <ProtectedRoute path="/admin/location-export" component={AdminLocationExportPage} adminOnly />
           <ProtectedRoute path="/admin/blogs" component={AdminBlogsPage} adminOnly />
           <ProtectedRoute path="/admin/podcasts" component={AdminPodcastsPage} adminOnly />
-          <ProtectedRoute path="/admin/travel-chapters" component={AdminTravelChaptersPage} adminOnly />
+          <ProtectedRoute path="/admin/city-chapters" component={AdminCityChaptersPage} adminOnly />
           <ProtectedRoute path="/admin/newsletters/new" component={AdminNewsletterComposerPage} adminOnly />
           <ProtectedRoute path="/admin/newsletters/:id/edit" component={AdminNewsletterComposerPage} adminOnly />
           <ProtectedRoute path="/admin/newsletters" component={AdminNewslettersPage} adminOnly />
@@ -244,23 +245,28 @@ function App() {
 
   return (
     <ErrorBoundary>
-      <QueryClientProvider client={queryClient}>
-        <HelmetProvider>
-          <AuthProvider>
-            <SearchProvider>
-              <NotificationProvider>
-                <GamificationProvider>
-                  <TooltipProvider>
-                    <Router />
-                    <GlobalSearchModal />
-                    <Toaster />
-                  </TooltipProvider>
-                </GamificationProvider>
-              </NotificationProvider>
-            </SearchProvider>
-          </AuthProvider>
-        </HelmetProvider>
-      </QueryClientProvider>
+      <APIProvider
+        apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ''}
+        libraries={['visualization']}
+      >
+        <QueryClientProvider client={queryClient}>
+          <HelmetProvider>
+            <AuthProvider>
+              <SearchProvider>
+                <NotificationProvider>
+                  <GamificationProvider>
+                    <TooltipProvider>
+                      <Router />
+                      <GlobalSearchModal />
+                      <Toaster />
+                    </TooltipProvider>
+                  </GamificationProvider>
+                </NotificationProvider>
+              </SearchProvider>
+            </AuthProvider>
+          </HelmetProvider>
+        </QueryClientProvider>
+      </APIProvider>
     </ErrorBoundary>
   );
 }

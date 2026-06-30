@@ -1350,7 +1350,7 @@ export const FeedPage = (): JSX.Element => {
                   <div className="flex items-center justify-between gap-3 flex-wrap py-4 mb-2">
                     <div className="flex items-center gap-3 flex-wrap">
                       {allFeedItems.length > 0 && (["all", "post", "blog", "podcast", "travel_post"] as const).map((type) => {
-                        const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts", travel_post: "Travel" };
+                        const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts", travel_post: "City Chapters" };
                         const isActive = feedFilter === type;
                         return (
                           <button
@@ -1404,7 +1404,7 @@ export const FeedPage = (): JSX.Element => {
                           key={`travel-${item.id}`}
                           post={item}
                           isOwnPost={item.author_id === user?.id}
-                          onClick={() => setLocation(`/travel-journal/${item.id}`)}
+                          onClick={() => setLocation(`/city-chapter/${item.id}`)}
                           onLike={() => handleTravelPostLike(item.id)}
                           onBookmark={() => handleTravelPostBookmark(item.id)}
                         />

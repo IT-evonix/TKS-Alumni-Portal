@@ -84,7 +84,7 @@ export function TravelPostCard({ post, onClick, isOwnPost, onEdit, onLike, onBoo
 
   function handleShare(e: React.MouseEvent) {
     e.stopPropagation();
-    const url = `${window.location.origin}/travel-journal/${post.id}`;
+    const url = `${window.location.origin}/city-chapter/${post.id}`;
     if (navigator.clipboard) {
       navigator.clipboard.writeText(url).then(() => toast({ title: "Link copied!", description: "Share it with friends." }));
     } else {
@@ -148,7 +148,7 @@ export function TravelPostCard({ post, onClick, isOwnPost, onEdit, onLike, onBoo
         <div className="absolute top-2 right-2 z-10">
           <span className="inline-flex items-center gap-1 text-[10px] font-semibold text-white bg-blue-500 px-1.5 py-0 h-5 rounded-full shadow-sm">
             <Globe className="w-2.5 h-2.5" />
-            Travel Journal
+            City Chapter
           </span>
         </div>
         {coverMedia ? (
@@ -170,7 +170,7 @@ export function TravelPostCard({ post, onClick, isOwnPost, onEdit, onLike, onBoo
             <img
               key={coverMedia.url}
               src={coverMedia.url}
-              alt={`${post.city} travel`}
+              alt={`${post.city} city chapter`}
               className="w-full h-full object-cover transition-opacity duration-500"
               loading="lazy"
             />
