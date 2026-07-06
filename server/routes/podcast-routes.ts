@@ -427,7 +427,7 @@ router.get("/:id/comments", async (req: any, res: any) => {
     if (error) return res.status(500).json({ error: error.message });
 
     const userIds = (data || []).map((c: any) => c.user_id).filter(Boolean);
-    let alumniMap: Record<string, any> = {};
+    const alumniMap: Record<string, any> = {};
     if (userIds.length > 0) {
       const { data: alumniData } = await supabase
         .from("alumni")
@@ -533,7 +533,7 @@ router.get("/:id/viewers", async (req: any, res: any) => {
     if (error) return res.status(500).json({ error: error.message });
 
     const userIds = (data || []).map((row: any) => row.user_id).filter(Boolean);
-    let alumniMap: Record<string, any> = {};
+    const alumniMap: Record<string, any> = {};
     if (userIds.length > 0) {
       const { data: alumniData } = await supabase
         .from("alumni")
@@ -598,7 +598,7 @@ router.get("/", async (req: any, res: any) => {
     }
 
     const userId = req.headers["user-id"] as string | undefined;
-    let likedSet = new Set<string>();
+    const likedSet = new Set<string>();
     if (userId && data && data.length > 0) {
       const podcastIds = data.map((ep: any) => ep.id);
       const { data: likes } = await supabase

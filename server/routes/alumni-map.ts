@@ -70,11 +70,37 @@ const normalizeName = (name: string): string => {
   return lower.split(' ').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ');
 };
 
-const getCoordinates = async (name: string, context?: string) => {
+// Small deterministic hash (FNV-1a) so the same person+location always
+// jitters to the same offset across requests, instead of visibly jumping.
+const fnv1aHash = (str: string): number => {
+  let hash = 0x811c9dc5;
+  for (let i = 0; i < str.length; i++) {
+    hash ^= str.charCodeAt(i);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return hash >>> 0;
+};
+
+// Spreads alumni that collapse onto the same static COORDINATES centroid
+// into a small, stable-per-person radius (~a few km) instead of stacking
+// as one saturated heatmap point.
+const JITTER_DEGREES = 0.05;
+const jitterCoords = (coords: { lat: number; lng: number }, seed: string) => {
+  const h1 = fnv1aHash(`${seed}|lat`);
+  const h2 = fnv1aHash(`${seed}|lng`);
+  const offsetLat = ((h1 % 2000) / 1000 - 1) * JITTER_DEGREES;
+  const offsetLng = ((h2 % 2000) / 1000 - 1) * JITTER_DEGREES;
+  return { lat: coords.lat + offsetLat, lng: coords.lng + offsetLng };
+};
+
+const getCoordinates = async (name: string, context?: string, jitterSeed?: string) => {
   const normalized = normalizeName(name);
   if (!normalized) return null;
   const cacheKey = context ? `${normalized}|${context}` : normalized;
-  if (COORDINATES[normalized]) return COORDINATES[normalized];
+  if (COORDINATES[normalized]) {
+    const base = COORDINATES[normalized];
+    return jitterSeed ? jitterCoords(base, `${jitterSeed}|${normalized}`) : base;
+  }
   if (GEO_CACHE[cacheKey]) return GEO_CACHE[cacheKey];
 
   const searchQuery = context ? `${normalized}, ${context}` : normalized;
@@ -160,10 +186,11 @@ router.get('/map-data', async (req, res) => {
         
         const contextParts = [state, country].filter(Boolean);
         const context = contextParts.join(', ');
+        const jitterSeed = String(person.user_id || person.id);
 
-        const cityCoords = await getCoordinates(city, context);
-        const stateCoords = !cityCoords ? await getCoordinates(state, country) : null;
-        const countryCoords = (!cityCoords && !stateCoords) ? await getCoordinates(country) : null;
+        const cityCoords = await getCoordinates(city, context, jitterSeed);
+        const stateCoords = !cityCoords ? await getCoordinates(state, country, jitterSeed) : null;
+        const countryCoords = (!cityCoords && !stateCoords) ? await getCoordinates(country, undefined, jitterSeed) : null;
 
         const coords = cityCoords || stateCoords || countryCoords;
         if (coords) {
@@ -227,10 +254,11 @@ router.get('/map-data', async (req, res) => {
         const state = normalizeName(row.state || '');
         const country = normalizeName(row.country || '');
         const context = [state, country].filter(Boolean).join(', ');
+        const jitterSeed = `${row.alumni.user_id || row.alumni.id}|${row.id}`;
 
-        const cityCoords = await getCoordinates(city, context);
-        const stateCoords = !cityCoords ? await getCoordinates(state, country) : null;
-        const countryCoords = (!cityCoords && !stateCoords) ? await getCoordinates(country) : null;
+        const cityCoords = await getCoordinates(city, context, jitterSeed);
+        const stateCoords = !cityCoords ? await getCoordinates(state, country, jitterSeed) : null;
+        const countryCoords = (!cityCoords && !stateCoords) ? await getCoordinates(country, undefined, jitterSeed) : null;
 
         const coords = cityCoords || stateCoords || countryCoords;
         if (coords) {
@@ -267,9 +295,34 @@ router.get('/map-data', async (req, res) => {
     const allAlumni = [...finalAlumni, ...mappedExtra];
     const distinctAlumniIds = new Set(allAlumni.map(a => a.user_id)).size;
 
+    // Normalize heatmap weight so each person contributes ~1 total unit of
+    // density regardless of how many locations they've saved (Home, University,
+    // Job, Internship). Without this, someone with 4 saved locations would
+    // appear 4x "denser" on the heatmap than someone with just 1.
+    const LOCATION_TYPE_BASE_WEIGHT: { [key: string]: number } = {
+      Home: 3,
+      University: 2,
+      Job: 2,
+      Internship: 1,
+      Other: 1,
+    };
+    const baseWeightFor = (locationType?: string) => LOCATION_TYPE_BASE_WEIGHT[locationType || 'Home'] ?? 1;
+
+    const totalBaseWeightByUser = new Map<string, number>();
+    allAlumni.forEach(a => {
+      const key = a.user_id;
+      totalBaseWeightByUser.set(key, (totalBaseWeightByUser.get(key) || 0) + baseWeightFor((a as any).location_type));
+    });
+
+    const weightedAlumni = allAlumni.map(a => {
+      const totalBaseWeight = totalBaseWeightByUser.get(a.user_id) || 1;
+      const weight = baseWeightFor((a as any).location_type) / totalBaseWeight;
+      return { ...a, weight };
+    });
+
     res.json({
       success: true,
-      alumni: allAlumni,
+      alumni: weightedAlumni,
       statistics: {
         total: distinctAlumniIds
       }

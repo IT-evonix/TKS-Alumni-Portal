@@ -270,7 +270,11 @@ export const MenteeDashboard = (): JSX.Element => {
         const data = await res.json();
         setBookmarkedIds(prev => {
           const next = new Set(prev);
-          data.bookmarked ? next.add(mentorId) : next.delete(mentorId);
+          if (data.bookmarked) {
+            next.add(mentorId);
+          } else {
+            next.delete(mentorId);
+          }
           return next;
         });
       } else {

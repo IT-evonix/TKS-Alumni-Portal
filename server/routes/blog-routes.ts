@@ -360,8 +360,8 @@ router.get("/", async (req, res) => {
     if (error) throw error;
 
     // Batch-fetch viewer likes/bookmarks and author alumni info
-    let likedSet = new Set<string>();
-    let bookmarkedSet = new Set<string>();
+    const likedSet = new Set<string>();
+    const bookmarkedSet = new Set<string>();
     const authorMap = new Map<string, any>();
 
     if (data && data.length > 0) {

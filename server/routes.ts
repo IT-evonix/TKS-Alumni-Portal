@@ -6492,6 +6492,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Fetch all messages with sender and receiver information
+      // eslint-disable-next-line prefer-const -- messages is reassigned in fallback path below
       let { data: messages, error } = await supabase
         .from("messages")
         .select(
@@ -6655,6 +6656,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Valid email is required" });
       }
 
+      // eslint-disable-next-line prefer-const -- recipient is reassigned in fallback path below
       let { data: recipient, error: recipientError } = await supabase
         .from("users")
         .select("id, username, email, account_blocked")

@@ -336,7 +336,7 @@ router.get("/admin/users", async (req: Request, res: Response) => {
       const alumni = alumniUsers?.find(a => a.user_id === u.id);
       
       let firstName = alumni?.first_name;
-      let lastName = alumni?.last_name;
+      const lastName = alumni?.last_name;
       
       // Fallback to auth users username if alumni data is missing
       if (!firstName || firstName.trim() === '') {
@@ -754,9 +754,9 @@ router.get("/leaderboard", async (req: Request, res: Response) => {
       const alumni = alumniUsers?.find(a => a.user_id === u.id);
       
       let firstName = alumni?.first_name;
-      let lastName = alumni?.last_name;
-      let profilePicture = alumni?.profile_picture;
-      let graduationYear = alumni?.graduation_year;
+      const lastName = alumni?.last_name;
+      const profilePicture = alumni?.profile_picture;
+      const graduationYear = alumni?.graduation_year;
 
       // Fallback to auth users username if alumni data is missing
       if (!firstName || firstName.trim() === '') {
