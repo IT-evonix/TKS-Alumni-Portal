@@ -785,7 +785,7 @@ router.get("/:id/events", requireAuth, async (req, res) => {
       const creatorUser = Array.isArray(evt.creator) ? evt.creator[0] : evt.creator;
       const creatorAlumni = Array.isArray(creatorUser?.alumni) ? creatorUser.alumni[0] : creatorUser?.alumni;
       
-      let rsvpsList = (evt.rsvps || []).map((r: any) => {
+      const rsvpsList = (evt.rsvps || []).map((r: any) => {
         const rUser = Array.isArray(r.user) ? r.user[0] : r.user;
         const rAlumni = Array.isArray(rUser?.alumni) ? rUser.alumni[0] : rUser?.alumni;
         return {

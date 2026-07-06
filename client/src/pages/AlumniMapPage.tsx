@@ -13,10 +13,10 @@ function AlumniMapPage() {
 
   return (
     <AppLayout currentPage="alumni-map">
-      <div className="w-full max-w-6xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
+      <div className="w-full animate-in fade-in slide-in-from-bottom-4 duration-500 pb-10">
 
         {/* Subtitle + stat chips row */}
-        <div className="flex flex-wrap items-center gap-3 px-2 mb-5">
+        <div className="flex flex-wrap items-center gap-3 px-4 sm:px-6 lg:px-8 mb-5">
           <p className="text-sm text-gray-500 flex items-center gap-1.5 mr-2">
             <MapPin className="w-4 h-4 text-[#008060] shrink-0" />
             Explore the global alumni network. Click locations for details.
@@ -51,13 +51,13 @@ function AlumniMapPage() {
           initial={{ opacity: 0, y: 16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut", delay: 0.05 }}
-          className="w-full"
+          className="w-full px-4 sm:px-6 lg:px-8"
         >
           <AlumniHeatMap onDataLoad={setMapStats} />
         </motion.div>
 
         {/* How to explore tips */}
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 px-2">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-5 px-4 sm:px-6 lg:px-8">
           {[
             {
               icon: <MapPin className="w-4 h-4 text-[#008060]" />,

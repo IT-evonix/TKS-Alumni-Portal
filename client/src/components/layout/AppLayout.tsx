@@ -672,7 +672,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
         {/* Page Content - Scrollable with centered container for large screens */}
         <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' || activePage === 'city-chapter-detail' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-14 sm:mt-16 w-full max-w-full`}>
-          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'city-chapter-detail' ? 'h-full' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-8 py-6 sm:py-8 lg:py-10'}`}>
+          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'city-chapter-detail' ? 'h-full' : activePage === 'alumni-map' ? 'py-6 sm:py-8' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-8 py-6 sm:py-8 lg:py-10'}`}>
             {children}
           </div>
         </div>

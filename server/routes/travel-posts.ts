@@ -640,7 +640,7 @@ router.delete("/:id", requireAuth, async (req: any, res: any) => {
         type: NotificationType.POST_DELETED,
         title: "Travel Post Removed",
         content: `Your travel post from ${post.city}, ${post.country} has been removed by an admin.`,
-        link: "/travel-journal",
+        redirectUrl: "/travel-journal",
       }).catch((err) => console.error("Travel post delete notification error:", err));
     }
 

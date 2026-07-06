@@ -4,11 +4,15 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
-import { MapPin, Globe, RefreshCw } from 'lucide-react';
+import { MapPin, Globe, RefreshCw, ChevronDown } from 'lucide-react';
 import { Map, useMap, AdvancedMarker, InfoWindow, MapMouseEvent } from '@vis.gl/react-google-maps';
 import { GoogleMapsOverlay } from '@deck.gl/google-maps';
 import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { supabase } from '@/lib/supabase';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+
+// Shared card height across loading skeleton and real render — keep in sync.
+const MAP_CARD_HEIGHT = 'h-[calc(100vh-220px)] min-h-[420px] max-h-[900px]';
 
 interface AlumniData {
   id: string;
@@ -22,6 +26,7 @@ interface AlumniData {
   current_state?: string;
   current_country?: string;
   location_type?: string;
+  weight?: number;
 }
 
 const LOCATION_TYPE_COLORS: Record<string, string> = {
@@ -106,18 +111,24 @@ interface MapWrapperProps {
   showHeatmap: boolean;
 }
 
-function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: MapWrapperProps) {
+interface HeatmapOverlayProps {
+  data: AlumniData[];
+  showHeatmap: boolean;
+  onHeatmapHidden?: () => void;
+}
+
+// Must be rendered as a child of <Map> — useMap() only resolves the map
+// instance for components inside the Map's own context, not the component
+// that renders <Map> itself.
+function HeatmapOverlay({ data, showHeatmap, onHeatmapHidden }: HeatmapOverlayProps) {
   const map = useMap();
-  const prevViewVersionRef = useRef(0);
   const overlayRef = useRef<GoogleMapsOverlay | null>(null);
-  const [currentZoom, setCurrentZoom] = useState(view.zoom);
-  const [infoTarget, setInfoTarget] = useState<PopupTarget | null>(null);
 
   // Create/destroy the deck.gl overlay on map mount (replaces the deprecated
   // google.maps.visualization.HeatmapLayer, removed in Maps JS API v3.65+)
   useEffect(() => {
     if (!map) return;
-    const overlay = new GoogleMapsOverlay({});
+    const overlay = new GoogleMapsOverlay({ interleaved: false });
     overlay.setMap(map);
     overlayRef.current = overlay;
     return () => {
@@ -138,10 +149,11 @@ function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: Ma
               id: 'alumni-heatmap',
               data,
               getPosition: (a: AlumniData) => [a.longitude, a.latitude],
-              getWeight: 1,
-              radiusPixels: 30,
-              intensity: 1,
-              threshold: 0.05,
+              getWeight: (a: AlumniData) => a.weight ?? 1,
+              radiusPixels: 45,
+              intensity: 3,
+              threshold: 0.01,
+              aggregation: 'SUM',
               colorRange: [
                 [16, 185, 129, 0],
                 [16, 185, 129, 200],
@@ -154,8 +166,17 @@ function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: Ma
           ]
         : [],
     });
-    if (!showHeatmap) setInfoTarget(null);
-  }, [data, showHeatmap]);
+    if (!showHeatmap) onHeatmapHidden?.();
+  }, [data, showHeatmap, onHeatmapHidden]);
+
+  return null;
+}
+
+function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: MapWrapperProps) {
+  const map = useMap();
+  const prevViewVersionRef = useRef(0);
+  const [currentZoom, setCurrentZoom] = useState(view.zoom);
+  const [infoTarget, setInfoTarget] = useState<PopupTarget | null>(null);
 
   // Camera control: respond to external viewVersion changes
   useEffect(() => {
@@ -274,6 +295,8 @@ function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: Ma
       onClick={handleMapClick}
       className="w-full h-full rounded-2xl"
     >
+      <HeatmapOverlay data={data} showHeatmap={showHeatmap} onHeatmapHidden={() => setInfoTarget(null)} />
+
       {/* Individual point dots at high zoom */}
       {currentZoom >= 8 && data.map((alumnus, idx) => (
         <AdvancedMarker
@@ -306,6 +329,110 @@ function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: Ma
   );
 }
 
+type SidebarItem = { label: string; count: number; lat: number; lng: number };
+
+interface SidebarItemsListProps {
+  sidebarItems: SidebarItem[];
+  mapBounds: { sw: { lng: number; lat: number }; ne: { lng: number; lat: number }; zoom: number } | null;
+  alumniData: AlumniData[];
+  setMapView: (v: { center: [number, number]; zoom: number; bounds?: [[number, number], [number, number]] }) => void;
+  setViewVersion: React.Dispatch<React.SetStateAction<number>>;
+}
+
+function SidebarItemsList({ sidebarItems, mapBounds, alumniData, setMapView, setViewVersion }: SidebarItemsListProps) {
+  if (sidebarItems.length === 0) {
+    return (
+      <div className="p-6 mt-4 text-center border border-dashed border-border rounded-xl bg-muted/20">
+        <div className="relative w-12 h-12 mx-auto mb-3">
+          <div className="absolute inset-0 rounded-full bg-muted/60 flex items-center justify-center">
+            <MapPin className="w-6 h-6 text-muted-foreground/40" />
+          </div>
+          <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center">
+            <span className="text-[9px] font-bold text-muted-foreground/50">0</span>
+          </div>
+        </div>
+        <p className="text-sm font-semibold text-foreground">No Alumni in View</p>
+        <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-[180px] mx-auto">
+          Zoom out or pan the map to discover alumni in other areas.
+        </p>
+      </div>
+    );
+  }
+
+  return (
+    <>
+      {sidebarItems.map(item => (
+        <div
+          key={item.label}
+          className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all duration-200 border shadow-sm border-border/50 hover:border-primary/30 border-l-[3px] border-l-transparent hover:border-l-primary group"
+          onClick={() => {
+            const z = mapBounds ? mapBounds.zoom : 1;
+            const isCountryLevel = z < 4;
+            const isStateLevel = z >= 4 && z < 7;
+
+            const groupAlumni = alumniData.filter(a => {
+              if (isCountryLevel) {
+                const country = a.current_country || (a.location_label ? a.location_label.split(',').pop()?.trim() || '' : '') || 'Unknown Country';
+                return country === item.label;
+              } else if (isStateLevel) {
+                let st = a.current_state || 'Unknown State';
+                if (st === 'Unknown State' && a.location_label) {
+                  const parts = a.location_label.split(',');
+                  if (parts.length >= 2) st = parts[parts.length - 2].trim();
+                }
+                return st === item.label;
+              } else {
+                return (a.location_label || 'Unknown Location') === item.label;
+              }
+            });
+
+            if (groupAlumni.length > 0) {
+              let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
+              groupAlumni.forEach(a => {
+                if (a.longitude < minLng) minLng = a.longitude;
+                if (a.longitude > maxLng) maxLng = a.longitude;
+                if (a.latitude < minLat) minLat = a.latitude;
+                if (a.latitude > maxLat) maxLat = a.latitude;
+              });
+              if (minLng === maxLng && minLat === maxLat) {
+                let targetZoom = 10;
+                if (isCountryLevel) targetZoom = 5;
+                else if (isStateLevel) targetZoom = 8;
+                setMapView({ center: [minLng, minLat], zoom: targetZoom });
+              } else {
+                setMapView({
+                  center: [(minLng + maxLng) / 2, (minLat + maxLat) / 2],
+                  zoom: 12,
+                  bounds: [[minLng, minLat], [maxLng, maxLat]],
+                });
+              }
+              setViewVersion(v => v + 1);
+            }
+          }}
+        >
+          <div className="flex-1 min-w-0 pr-3">
+            <span className="font-medium text-sm block truncate" title={item.label}>
+              {item.label.split(',')[0]}
+            </span>
+            {item.label.includes(',') && (
+              <span className="text-xs text-muted-foreground block truncate" title={item.label}>
+                {item.label.substring(item.label.indexOf(',') + 1).trim()}
+              </span>
+            )}
+          </div>
+          <Badge
+            key={`${item.label}-${item.count}`}
+            variant="secondary"
+            className="bg-primary/10 text-primary whitespace-nowrap shrink-0"
+          >
+            {item.count} {item.count === 1 ? 'Alumnus' : 'Alumni'}
+          </Badge>
+        </div>
+      ))}
+    </>
+  );
+}
+
 interface AlumniHeatMapProps {
   onDataLoad?: (stats: { totalAlumni: number; countries: number; continents: number }) => void;
 }
@@ -315,9 +442,10 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showHeatmap, setShowHeatmap] = useState(true);
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   const [mapBounds, setMapBounds] = useState<{ sw: { lng: number; lat: number }; ne: { lng: number; lat: number }; zoom: number } | null>(null);
-  const [mapView, setMapView] = useState<{ center: [number, number]; zoom: number; bounds?: [[number, number], [number, number]] }>({ center: [0, 20], zoom: 1 });
+  const [mapView, setMapView] = useState<{ center: [number, number]; zoom: number; bounds?: [[number, number], [number, number]] }>({ center: [100, 30], zoom: 2.5 });
   const [viewVersion, setViewVersion] = useState(0);
 
   const hasLoadedOnce = useRef(false);
@@ -359,24 +487,6 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
           countries: uniqueCountries.size,
           continents: uniqueContinents.size,
         });
-      }
-
-      if (isInitial && loadedAlumni.length > 0) {
-        let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
-        loadedAlumni.forEach(a => {
-          if (a.longitude < minLng) minLng = a.longitude;
-          if (a.longitude > maxLng) maxLng = a.longitude;
-          if (a.latitude < minLat) minLat = a.latitude;
-          if (a.latitude > maxLat) maxLat = a.latitude;
-        });
-        if (minLng !== maxLng || minLat !== maxLat) {
-          setMapView({
-            center: [(minLng + maxLng) / 2, (minLat + maxLat) / 2],
-            zoom: 1,
-            bounds: [[minLng, minLat], [maxLng, maxLat]],
-          });
-          setViewVersion(v => v + 1);
-        }
       }
 
       hasLoadedOnce.current = true;
@@ -447,10 +557,10 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
   }, [alumniData, mapBounds]);
 
   if (loading) return (
-    <div className="p-0 space-y-6 w-full max-w-5xl mx-auto">
-      <div className="overflow-hidden border border-slate-200 shadow-sm rounded-2xl">
-        <div className="flex flex-col-reverse lg:flex-row w-full h-[600px] min-h-[500px]">
-          <div className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-slate-100 bg-white/60 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0 p-4 gap-4">
+    <div className="p-0 space-y-6 w-full">
+      <div className={`overflow-hidden border border-slate-200 shadow-sm rounded-2xl ${MAP_CARD_HEIGHT}`}>
+        <div className="flex flex-col lg:flex-row w-full h-full relative">
+          <div className="hidden lg:flex w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-slate-100 bg-white/60 flex-col h-full overflow-hidden shrink-0 p-4 gap-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <div className="flex items-center gap-2">
                 <Skeleton className="w-5 h-5 rounded-full" />
@@ -472,12 +582,17 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
               ))}
             </div>
           </div>
-          <div className="flex-1 h-[55%] lg:h-full relative overflow-hidden rounded-tr-2xl rounded-br-2xl">
+          <div className="flex-1 h-full relative overflow-hidden lg:rounded-tr-2xl lg:rounded-br-2xl">
             <div className="w-full h-full animate-pulse" style={{ background: 'linear-gradient(135deg, #e8f4f0 0%, #d1ece4 30%, #e8f4f0 60%, #d1ece4 100%)' }} />
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-3">
               <div className="w-12 h-12 rounded-full border-2 border-[#008060]/30 border-t-[#008060] animate-spin" />
               <p className="text-sm font-medium text-[#008060]/70 tracking-wide">Loading global network…</p>
             </div>
+          </div>
+          {/* Mobile collapsed directory bar placeholder */}
+          <div className="lg:hidden absolute bottom-0 left-0 right-0 bg-white/95 border-t border-slate-100 px-4 py-3 flex items-center justify-between">
+            <Skeleton className="w-40 h-4 rounded" />
+            <Skeleton className="w-5 h-5 rounded-full" />
           </div>
         </div>
       </div>
@@ -487,12 +602,42 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
   if (error) return <Card className="p-6 text-center text-destructive m-4">Error: {error}</Card>;
 
   return (
-    <div className="p-0 space-y-6 w-full max-w-5xl mx-auto">
-      <Card className="border shadow-sm overflow-hidden rounded-2xl bg-card border-gray-200">
-        <CardContent className="p-0 flex flex-col-reverse lg:flex-row w-full h-[600px] min-h-[500px]">
+    <div className="p-0 space-y-6 w-full">
+      <Card className={`border shadow-sm overflow-hidden rounded-2xl bg-card border-gray-200 ${MAP_CARD_HEIGHT}`}>
+        <CardContent className="p-0 flex flex-col lg:flex-row w-full h-full relative">
 
-          {/* Sidebar */}
-          <div className="w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex flex-col h-[45%] lg:h-full overflow-hidden shrink-0">
+          {/* Sidebar (desktop: static side panel; mobile: collapsible bottom sheet) */}
+          <Collapsible
+            open={sidebarOpen}
+            onOpenChange={setSidebarOpen}
+            className="lg:contents"
+          >
+          <div className="lg:hidden absolute bottom-0 left-0 right-0 z-20 bg-background border-t border-border rounded-t-2xl shadow-[0_-4px_16px_rgba(0,0,0,0.08)] max-h-[70%] flex flex-col">
+            <CollapsibleTrigger asChild>
+              <button className="w-full flex items-center justify-between gap-2 px-4 py-3 shrink-0" aria-label="Toggle alumni directory">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Globe className="w-4 h-4 text-primary shrink-0" />
+                  <span className="font-bold text-sm truncate">Global Directory</span>
+                  {alumniData.length > 0 && (
+                    <span className="inline-flex items-center bg-primary/10 text-primary text-[10px] font-bold px-2 py-0.5 rounded-full leading-none whitespace-nowrap shrink-0">
+                      {new Set(alumniData.map(a => a.user_id)).size} alumni
+                    </span>
+                  )}
+                </div>
+                <ChevronDown className={`w-4 h-4 text-muted-foreground shrink-0 transition-transform duration-200 ${sidebarOpen ? 'rotate-180' : ''}`} />
+              </button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="overflow-y-auto px-4 pb-4 space-y-2">
+              <SidebarItemsList
+                sidebarItems={sidebarItems}
+                mapBounds={mapBounds}
+                alumniData={alumniData}
+                setMapView={setMapView}
+                setViewVersion={setViewVersion}
+              />
+            </CollapsibleContent>
+          </div>
+          <div className="hidden lg:flex w-full lg:w-[280px] xl:w-[300px] border-t lg:border-t-0 lg:border-r border-border bg-muted/10 flex-col h-full overflow-hidden shrink-0">
             <div className="p-4 border-b border-border sticky top-0 bg-background/95 backdrop-blur z-10 flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0">
                 <Globe className="w-5 h-5 text-primary shrink-0" />
@@ -525,7 +670,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
                       setViewVersion(v => v + 1);
                     }
                   } else {
-                    setMapView({ center: [0, 20], zoom: 1 });
+                    setMapView({ center: [100, 30], zoom: 2.5 });
                     setViewVersion(v => v + 1);
                   }
                 }}
@@ -539,94 +684,19 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
               <p className="text-[11px] font-bold text-muted-foreground uppercase tracking-widest mb-3 px-1 select-none">
                 {mapBounds && mapBounds.zoom < 4 ? 'Countries in View' : (mapBounds && mapBounds.zoom < 7 ? 'States / Regions in View' : 'Cities / Locations in View')}
               </p>
-              {sidebarItems.length > 0 ? sidebarItems.map(item => (
-                <div
-                  key={item.label}
-                  className="flex items-center justify-between p-3 rounded-lg bg-background hover:bg-muted cursor-pointer transition-all duration-200 border shadow-sm border-border/50 hover:border-primary/30 border-l-[3px] border-l-transparent hover:border-l-primary group"
-                  onClick={() => {
-                    const z = mapBounds ? mapBounds.zoom : 1;
-                    const isCountryLevel = z < 4;
-                    const isStateLevel = z >= 4 && z < 7;
-
-                    const groupAlumni = alumniData.filter(a => {
-                      if (isCountryLevel) {
-                        const country = a.current_country || (a.location_label ? a.location_label.split(',').pop()?.trim() || '' : '') || 'Unknown Country';
-                        return country === item.label;
-                      } else if (isStateLevel) {
-                        let st = a.current_state || 'Unknown State';
-                        if (st === 'Unknown State' && a.location_label) {
-                          const parts = a.location_label.split(',');
-                          if (parts.length >= 2) st = parts[parts.length - 2].trim();
-                        }
-                        return st === item.label;
-                      } else {
-                        return (a.location_label || 'Unknown Location') === item.label;
-                      }
-                    });
-
-                    if (groupAlumni.length > 0) {
-                      let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
-                      groupAlumni.forEach(a => {
-                        if (a.longitude < minLng) minLng = a.longitude;
-                        if (a.longitude > maxLng) maxLng = a.longitude;
-                        if (a.latitude < minLat) minLat = a.latitude;
-                        if (a.latitude > maxLat) maxLat = a.latitude;
-                      });
-                      if (minLng === maxLng && minLat === maxLat) {
-                        let targetZoom = 10;
-                        if (isCountryLevel) targetZoom = 5;
-                        else if (isStateLevel) targetZoom = 8;
-                        setMapView({ center: [minLng, minLat], zoom: targetZoom });
-                      } else {
-                        setMapView({
-                          center: [(minLng + maxLng) / 2, (minLat + maxLat) / 2],
-                          zoom: 12,
-                          bounds: [[minLng, minLat], [maxLng, maxLat]],
-                        });
-                      }
-                      setViewVersion(v => v + 1);
-                    }
-                  }}
-                >
-                  <div className="flex-1 min-w-0 pr-3">
-                    <span className="font-medium text-sm block truncate" title={item.label}>
-                      {item.label.split(',')[0]}
-                    </span>
-                    {item.label.includes(',') && (
-                      <span className="text-xs text-muted-foreground block truncate" title={item.label}>
-                        {item.label.substring(item.label.indexOf(',') + 1).trim()}
-                      </span>
-                    )}
-                  </div>
-                  <Badge
-                    key={`${item.label}-${item.count}`}
-                    variant="secondary"
-                    className="bg-primary/10 text-primary whitespace-nowrap shrink-0"
-                  >
-                    {item.count} {item.count === 1 ? 'Alumnus' : 'Alumni'}
-                  </Badge>
-                </div>
-              )) : (
-                <div className="p-6 mt-4 text-center border border-dashed border-border rounded-xl bg-muted/20">
-                  <div className="relative w-12 h-12 mx-auto mb-3">
-                    <div className="absolute inset-0 rounded-full bg-muted/60 flex items-center justify-center">
-                      <MapPin className="w-6 h-6 text-muted-foreground/40" />
-                    </div>
-                    <div className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-background border border-border flex items-center justify-center">
-                      <span className="text-[9px] font-bold text-muted-foreground/50">0</span>
-                    </div>
-                  </div>
-                  <p className="text-sm font-semibold text-foreground">No Alumni in View</p>
-                  <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed max-w-[180px] mx-auto">
-                    Zoom out or pan the map to discover alumni in other areas.
-                  </p>
-                </div>
-              )}
+              <SidebarItemsList
+                sidebarItems={sidebarItems}
+                mapBounds={mapBounds}
+                alumniData={alumniData}
+                setMapView={setMapView}
+                setViewVersion={setViewVersion}
+              />
             </div>
           </div>
+          </Collapsible>
 
           {/* Map Area */}
-          <div className="relative w-full h-[55%] lg:h-full flex-1 overflow-hidden">
+          <div className="relative w-full h-full flex-1 overflow-hidden">
             <MapWrapper
               data={alumniData}
               view={mapView}
