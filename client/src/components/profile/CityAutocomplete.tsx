@@ -1,8 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
 import { MapPin, X, Loader2, Building2, Locate } from "lucide-react";
-
-const PHOTON_API_URL = (import.meta.env.VITE_PHOTON_API_URL || 'https://photon.komoot.io').replace(/\/$/, '');
+import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 interface CityAutocompleteProps {
   city: string;
@@ -11,15 +10,30 @@ interface CityAutocompleteProps {
   disabled?: boolean;
 }
 
+function getAddressComponent(components: google.maps.places.AddressComponent[] | undefined, type: string): string {
+  return components?.find(c => c.types.includes(type))?.longText ?? '';
+}
+
+function getPlaceType(types: string[] | undefined): string {
+  const t = types || [];
+  if (t.some(x => ['locality', 'postal_town'].includes(x))) return 'City';
+  if (t.some(x => ['sublocality', 'neighborhood'].includes(x))) return 'Area';
+  if (t.some(x => ['administrative_area_level_1', 'administrative_area_level_2'].includes(x))) return 'Region';
+  if (t.some(x => ['university', 'school'].includes(x))) return 'Education';
+  return 'Location';
+}
+
 export function CityAutocomplete({ city, onCityChange, onLocationSelect, disabled }: CityAutocompleteProps) {
+  const placesLib = useMapsLibrary('places');
   const [query, setQuery] = useState(city || '');
-  const [suggestions, setSuggestions] = useState<any[]>([]);
+  const [suggestions, setSuggestions] = useState<google.maps.places.AutocompleteSuggestion[]>([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
   const [isSearching, setIsSearching] = useState(false);
   const [isLocating, setIsLocating] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
   const wrapperRef = useRef<HTMLDivElement>(null);
   const debounceRef = useRef<NodeJS.Timeout | null>(null);
-  const abortRef = useRef<AbortController | null>(null);
+  const sessionTokenRef = useRef<google.maps.places.AutocompleteSessionToken | null>(null);
 
   const isTypingRef = useRef(false);
 
@@ -43,136 +57,90 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
   useEffect(() => {
     return () => {
       if (debounceRef.current) clearTimeout(debounceRef.current);
-      if (abortRef.current) abortRef.current.abort();
     };
   }, []);
 
+  const getSessionToken = useCallback(() => {
+    if (!sessionTokenRef.current && placesLib) {
+      sessionTokenRef.current = new placesLib.AutocompleteSessionToken();
+    }
+    return sessionTokenRef.current;
+  }, [placesLib]);
+
   const fetchSuggestions = useCallback(async (text: string) => {
-    if (!text.trim() || text.length < 2) {
+    if (!placesLib || !text.trim() || text.length < 2) {
       setSuggestions([]);
       setShowSuggestions(false);
       setIsSearching(false);
       return;
     }
 
-    if (abortRef.current) abortRef.current.abort();
-    abortRef.current = new AbortController();
-
     setIsSearching(true);
+    setSearchError(null);
     try {
-      // Use Photon API for fuzzy search (handles typos like "jalgoan", "dharngoan")
-      // It is much more tolerant than Nominatim for long unstructured addresses
-      const params = new URLSearchParams({
-        q: text,
-        limit: '15',
-        lang: 'en'
-      });
+      const request: google.maps.places.AutocompleteRequest = {
+        input: text,
+        sessionToken: getSessionToken() ?? undefined,
+      };
 
-      const res = await fetch(
-        `${PHOTON_API_URL}/api/?${params.toString()}`,
-        { signal: abortRef.current.signal }
-      );
-
-      if (!res.ok) {
-        setIsSearching(false);
-        return;
-      }
-
-      const data = await res.json();
-
-      if (data.features && data.features.length > 0) {
-        const uniqueSuggestions = [];
-        const seenNames = new Set<string>();
-
-        for (const feature of data.features) {
-          const props = feature.properties;
-          
-          // Construct a highly detailed hierarchical name from Photon properties
-          const parts = [];
-          const localName = props.village || props.town || props.city || props.locality || props.hamlet;
-          const isGeographic = ['city', 'town', 'village', 'hamlet', 'locality', 'district'].includes(props.type);
-
-          if (isGeographic && props.name) {
-            parts.push(props.name);
-          } else if (localName) {
-            parts.push(localName);
-          } else if (props.name) {
-            parts.push(props.name);
-          }
-
-          const baseName = parts[0] || '';
-          if (localName && localName !== baseName) parts.push(localName);
-          
-          if (props.county && props.county !== baseName && props.county !== localName) parts.push(props.county);
-          if (props.state && props.state !== props.county) parts.push(props.state);
-          if (props.country) parts.push(props.country);
-
-          const fullDisplayName = parts.join(', ');
-          
-          const uniqueKey = fullDisplayName.toLowerCase().trim();
-          if (!seenNames.has(uniqueKey) && parts.length > 1) {
-            seenNames.add(uniqueKey);
-            // Attach the constructed display name to the feature for later use
-            feature.display_name = fullDisplayName;
-            uniqueSuggestions.push(feature);
-          }
-        }
-
-        setSuggestions(uniqueSuggestions.slice(0, 10));
-        setShowSuggestions(uniqueSuggestions.length > 0);
-      } else {
-        setSuggestions([]);
-        setShowSuggestions(false);
-      }
-    } catch (error: any) {
-      if (error?.name === 'AbortError') return;
+      const { suggestions: results } = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
+      const predictions = (results || []).filter(r => r.placePrediction);
+      setSuggestions(predictions);
+      setShowSuggestions(predictions.length > 0);
+    } catch (error) {
       console.error("Error fetching location suggestions", error);
+      setSearchError("Location search is unavailable right now. Please try again later.");
+      setSuggestions([]);
+      setShowSuggestions(false);
     } finally {
       setIsSearching(false);
     }
-  }, []);
+  }, [placesLib, getSessionToken]);
 
   const searchLocation = (text: string) => {
     isTypingRef.current = true;
     setQuery(text);
     onCityChange(text);
 
+    setSearchError(null);
     if (debounceRef.current) clearTimeout(debounceRef.current);
-    // 500ms debounce is fine for Photon
     debounceRef.current = setTimeout(() => {
       fetchSuggestions(text);
-    }, 500); 
+    }, 500);
   };
 
-  const extractLocationParts = (item: any) => {
-    const props = item.properties || {};
-    
-    // Prioritize clean geographic divisions over building/POI names
-    const localName = props.village || props.town || props.city || props.locality || props.hamlet;
-    const isGeographic = ['city', 'town', 'village', 'hamlet', 'locality', 'district'].includes(props.type);
-    
-    const place = (isGeographic && props.name) ? props.name : (localName || props.name || '');
-    const state = props.state || '';
-    const country = props.country || '';
+  const selectSuggestion = async (suggestion: google.maps.places.AutocompleteSuggestion) => {
+    const placePrediction = suggestion.placePrediction;
+    if (!placePrediction) return;
 
-    return { place, state, country, full: item.display_name };
-  };
-
-  const selectSuggestion = (item: any) => {
     isTypingRef.current = false;
-    const { place, state, country, full } = extractLocationParts(item);
-    
-    // We display the full hierarchical name as requested
-    setQuery(full);
     setSuggestions([]);
     setShowSuggestions(false);
 
-    // Photon uses GeoJSON format: [lng, lat]
-    const lng = parseFloat(item.geometry.coordinates[0]);
-    const lat = parseFloat(item.geometry.coordinates[1]);
+    try {
+      const place = placePrediction.toPlace();
+      await place.fetchFields({ fields: ['location', 'addressComponents', 'formattedAddress'] });
 
-    // full variable contains the exact hierarchy: City/Village, Tehsil, District, State, Country
-    onLocationSelect(place, state, country, lat, lng, full);
+      const comps = place.addressComponents ?? undefined;
+      const cityName = getAddressComponent(comps, 'locality')
+        || getAddressComponent(comps, 'postal_town')
+        || getAddressComponent(comps, 'sublocality')
+        || getAddressComponent(comps, 'administrative_area_level_2');
+      const state = getAddressComponent(comps, 'administrative_area_level_1');
+      const country = getAddressComponent(comps, 'country');
+      const lat = place.location?.lat();
+      const lng = place.location?.lng();
+      const full = place.formattedAddress ?? placePrediction.text.text;
+
+      setQuery(full);
+      onCityChange(cityName || full);
+      onLocationSelect(cityName, state, country, lat, lng, full);
+    } catch (error) {
+      console.error("Error fetching place details", error);
+    } finally {
+      // Reset the session so the next search starts a new billed session
+      sessionTokenRef.current = null;
+    }
   };
 
   const clearInput = () => {
@@ -182,11 +150,16 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
     onLocationSelect('', '', '');
     setSuggestions([]);
     setShowSuggestions(false);
+    sessionTokenRef.current = null;
   };
 
   const handleLocateUser = () => {
     if (!navigator.geolocation) {
       alert("Geolocation is not supported by your browser");
+      return;
+    }
+    if (!window.google?.maps) {
+      console.error("Google Maps not loaded yet");
       return;
     }
 
@@ -195,41 +168,21 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
       async (position) => {
         const { latitude, longitude } = position.coords;
         try {
-          const res = await fetch(`${PHOTON_API_URL}/reverse?lat=${latitude}&lon=${longitude}&lang=en`);
-          if (!res.ok) throw new Error("Reverse geocoding failed");
-          
-          const data = await res.json();
-          if (data.features && data.features.length > 0) {
-            const feature = data.features[0];
-            
-            const props = feature.properties || {};
-            const parts = [];
-            const localName = props.village || props.town || props.city || props.locality || props.hamlet;
-            const isGeographic = ['city', 'town', 'village', 'hamlet', 'locality', 'district'].includes(props.type);
+          const geocoder = new google.maps.Geocoder();
+          const response = await geocoder.geocode({ location: { lat: latitude, lng: longitude } });
+          const result = response.results[0];
 
-            if (isGeographic && props.name) {
-              parts.push(props.name);
-            } else if (localName) {
-              parts.push(localName);
-            } else if (props.name) {
-              parts.push(props.name);
-            }
+          if (result) {
+            const comps = result.address_components;
+            const find = (type: string) => comps.find(c => c.types.includes(type))?.long_name ?? '';
+            const cityName = find('locality') || find('postal_town') || find('sublocality');
+            const state = find('administrative_area_level_1');
+            const country = find('country');
+            const full = result.formatted_address;
 
-            const baseName = parts[0] || '';
-            if (localName && localName !== baseName) parts.push(localName);
-            
-            if (props.county && props.county !== baseName && props.county !== localName) parts.push(props.county);
-            if (props.state && props.state !== props.county) parts.push(props.state);
-            if (props.country) parts.push(props.country);
-
-            const fullDisplayName = parts.join(', ');
-            feature.display_name = fullDisplayName;
-
-            const { place, state, country, full } = extractLocationParts(feature);
-            
-            setQuery(full || place);
-            onCityChange(place);
-            onLocationSelect(place, state, country, latitude, longitude, full || place);
+            setQuery(full);
+            onCityChange(cityName || full);
+            onLocationSelect(cityName, state, country, latitude, longitude, full);
           } else {
             console.error("No location found for coordinates");
           }
@@ -247,16 +200,6 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
     );
   };
 
-  const getPlaceType = (item: any): string => {
-    const type = item.properties?.osm_value || '';
-    if (['city', 'town', 'municipality'].includes(type)) return 'City';
-    if (['village', 'hamlet'].includes(type)) return 'Village';
-    if (['suburb', 'neighbourhood'].includes(type)) return 'Area';
-    if (['administrative', 'state', 'province'].includes(type)) return 'Region';
-    if (['college', 'university', 'school'].includes(type)) return 'Education';
-    return 'Location';
-  };
-
   return (
     <div className="relative w-full" ref={wrapperRef}>
       <div className="relative flex-1">
@@ -272,7 +215,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
               isTypingRef.current = false;
             }, 300);
           }}
-          placeholder="Search location (Village, City, State, Country...)"
+          placeholder="Search location (City, State, Country...)"
           disabled={disabled}
           className="pl-9 pr-9 min-h-[44px]"
           autoComplete="off"
@@ -304,15 +247,20 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
         )}
       </div>
 
+      {searchError && (
+        <p className="text-xs text-destructive mt-1.5 px-0.5">{searchError}</p>
+      )}
+
       {showSuggestions && suggestions.length > 0 && (
         <div className="absolute z-50 w-full mt-1 bg-background rounded-md shadow-lg border border-border max-h-80 overflow-auto">
           {suggestions.map((suggestion, index) => {
-            const { place } = extractLocationParts(suggestion);
-            const fullLabel = suggestion.display_name;
-            
+            const prediction = suggestion.placePrediction!;
+            const mainText = prediction.mainText?.text || prediction.text.text;
+            const secondaryText = prediction.secondaryText?.text || '';
+
             return (
               <div
-                key={`${suggestion.place_id || index}`}
+                key={`${prediction.placeId || index}`}
                 className="px-4 py-3 hover:bg-muted cursor-pointer text-sm border-b border-border last:border-0 flex items-start gap-3"
                 onMouseDown={(e) => {
                   e.preventDefault();
@@ -324,14 +272,16 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground truncate">{place || suggestion.properties?.name || 'Unknown'}</span>
+                    <span className="font-semibold text-foreground truncate">{mainText}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold shrink-0 uppercase border border-primary/20">
-                      {getPlaceType(suggestion)}
+                      {getPlaceType(prediction.types)}
                     </span>
                   </div>
-                  <p className="text-xs text-muted-foreground mt-0.5 whitespace-normal line-clamp-2">
-                    {fullLabel}
-                  </p>
+                  {secondaryText && (
+                    <p className="text-xs text-muted-foreground mt-0.5 whitespace-normal line-clamp-2">
+                      {secondaryText}
+                    </p>
+                  )}
                 </div>
               </div>
             );

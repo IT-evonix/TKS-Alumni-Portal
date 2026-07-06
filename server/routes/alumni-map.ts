@@ -1,10 +1,8 @@
 import express from 'express';
 import { db } from '../db.js';
-import axios from 'axios';
+import { geocodeAddress } from '../services/google-geocoding.js';
 
 const router = express.Router();
-
-const NOMINATIM_API_URL = (process.env.NOMINATIM_API_URL || 'https://nominatim.openstreetmap.org').replace(/\/$/, '');
 
 const GEO_CACHE: { [key: string]: { lat: number; lng: number } } = {};
 
@@ -80,31 +78,20 @@ const getCoordinates = async (name: string, context?: string) => {
   if (GEO_CACHE[cacheKey]) return GEO_CACHE[cacheKey];
 
   const searchQuery = context ? `${normalized}, ${context}` : normalized;
-  try {
-    const response = await axios.get(`${NOMINATIM_API_URL}/search`, {
-      params: { q: searchQuery, format: 'json', limit: 1, addressdetails: 1 },
-      headers: { 'User-Agent': 'TKS-Alumni-Portal/1.0' }
-    });
-    if (response.data && response.data.length > 0) {
-      const { lat, lon } = response.data[0];
-      const coords = { lat: parseFloat(lat), lng: parseFloat(lon) };
+  const result = await geocodeAddress(searchQuery);
+  if (result) {
+    const coords = { lat: result.lat, lng: result.lng };
+    GEO_CACHE[cacheKey] = coords;
+    return coords;
+  }
+
+  if (context) {
+    const fallback = await geocodeAddress(normalized);
+    if (fallback) {
+      const coords = { lat: fallback.lat, lng: fallback.lng };
       GEO_CACHE[cacheKey] = coords;
       return coords;
     }
-    if (context) {
-      const fallbackResponse = await axios.get(`${NOMINATIM_API_URL}/search`, {
-        params: { q: normalized, format: 'json', limit: 1 },
-        headers: { 'User-Agent': 'TKS-Alumni-Portal/1.0' }
-      });
-      if (fallbackResponse.data && fallbackResponse.data.length > 0) {
-        const { lat, lon } = fallbackResponse.data[0];
-        const coords = { lat: parseFloat(lat), lng: parseFloat(lon) };
-        GEO_CACHE[cacheKey] = coords;
-        return coords;
-      }
-    }
-  } catch (error) {
-    console.error(`[GEO] Failed to fetch coordinates for ${searchQuery}:`, error);
   }
   return null;
 };
@@ -183,6 +170,14 @@ router.get('/map-data', async (req, res) => {
           lat = coords.lat;
           lng = coords.lng;
           label = label || [city, state, country].filter(Boolean).join(', ') || 'Unknown Location';
+
+          // Persist the geocoded result so future requests skip geocoding for this row
+          db.from('alumni')
+            .update({ latitude: lat, longitude: lng, location_label: label })
+            .eq('id', person.id)
+            .then(({ error: updateError }) => {
+              if (updateError) console.error(`[GEO] Failed to persist coordinates for alumni ${person.id}:`, updateError);
+            });
         }
       }
 
@@ -220,23 +215,54 @@ router.get('/map-data', async (req, res) => {
           )
         )
       `)
-      .eq('alumni.users.user_role', 'alumni')
-      .not('latitude', 'is', null)
-      .not('longitude', 'is', null);
+      .eq('alumni.users.user_role', 'alumni');
 
-    const mappedExtra = (extraLocations || []).map((row: any) => ({
-      id: row.alumni.id,
-      user_id: row.alumni.user_id,
-      first_name: row.alumni.first_name,
-      last_name: row.alumni.last_name,
-      latitude: Number(row.latitude),
-      longitude: Number(row.longitude),
-      location_label: row.location_label || [row.city, row.state, row.country].filter(Boolean).join(', '),
-      current_city: row.city,
-      current_state: row.state,
-      current_country: row.country,
-      location_type: row.label_type,
-    }));
+    const mappedExtra = (await Promise.all((extraLocations || []).map(async (row: any) => {
+      let lat = row.latitude != null ? Number(row.latitude) : null;
+      let lng = row.longitude != null ? Number(row.longitude) : null;
+      let label = row.location_label;
+
+      if (lat == null || lng == null) {
+        const city = normalizeName(row.city || '');
+        const state = normalizeName(row.state || '');
+        const country = normalizeName(row.country || '');
+        const context = [state, country].filter(Boolean).join(', ');
+
+        const cityCoords = await getCoordinates(city, context);
+        const stateCoords = !cityCoords ? await getCoordinates(state, country) : null;
+        const countryCoords = (!cityCoords && !stateCoords) ? await getCoordinates(country) : null;
+
+        const coords = cityCoords || stateCoords || countryCoords;
+        if (coords) {
+          lat = coords.lat;
+          lng = coords.lng;
+          label = label || [city, state, country].filter(Boolean).join(', ') || 'Unknown Location';
+
+          db.from('alumni_locations')
+            .update({ latitude: lat, longitude: lng, location_label: label })
+            .eq('id', row.id)
+            .then(({ error: updateError }) => {
+              if (updateError) console.error(`[GEO] Failed to persist coordinates for alumni_location ${row.id}:`, updateError);
+            });
+        }
+      }
+
+      if (lat == null || lng == null) return null;
+
+      return {
+        id: row.alumni.id,
+        user_id: row.alumni.user_id,
+        first_name: row.alumni.first_name,
+        last_name: row.alumni.last_name,
+        latitude: lat,
+        longitude: lng,
+        location_label: label || [row.city, row.state, row.country].filter(Boolean).join(', '),
+        current_city: row.city,
+        current_state: row.state,
+        current_country: row.country,
+        location_type: row.label_type,
+      };
+    }))).filter((row): row is NonNullable<typeof row> => row != null);
 
     const allAlumni = [...finalAlumni, ...mappedExtra];
     const distinctAlumniIds = new Set(allAlumni.map(a => a.user_id)).size;

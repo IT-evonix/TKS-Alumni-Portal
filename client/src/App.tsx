@@ -247,7 +247,7 @@ function App() {
     <ErrorBoundary>
       <APIProvider
         apiKey={import.meta.env.VITE_GOOGLE_MAPS_API_KEY ?? ''}
-        libraries={['visualization']}
+        libraries={['places']}
       >
         <QueryClientProvider client={queryClient}>
           <HelmetProvider>
