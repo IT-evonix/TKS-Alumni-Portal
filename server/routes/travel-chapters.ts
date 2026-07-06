@@ -1,6 +1,7 @@
 import { Router } from "express";
 import { supabase } from "../supabase";
 import { requireAuth, requireAdmin } from "../middleware/auth";
+import { geocodeAddress } from "../services/google-geocoding";
 import { z } from "zod";
 
 const router = Router();
@@ -107,6 +108,45 @@ router.delete("/:id", requireAuth, async (req, res) => {
   } catch (error) {
     console.error("Error deleting chapter:", error);
     res.status(500).json({ error: "Failed to delete chapter" });
+  }
+});
+
+// POST /api/travel-chapters/admin/backfill-coordinates - Geocode chapters missing lat/lng
+router.post("/admin/backfill-coordinates", requireAdmin, async (req, res) => {
+  try {
+    const { data: chapters, error } = await supabase
+      .from("travel_chapters")
+      .select("id, city, country")
+      .or("latitude.is.null,longitude.is.null");
+
+    if (error) throw error;
+
+    let updated = 0;
+    let failed = 0;
+
+    for (const ch of chapters || []) {
+      const geo = await geocodeAddress(`${ch.city}, ${ch.country}`);
+      if (geo) {
+        const { error: updateError } = await supabase
+          .from("travel_chapters")
+          .update({ latitude: geo.lat, longitude: geo.lng })
+          .eq("id", ch.id);
+        if (updateError) {
+          console.error(`[travel-chapters] backfill update failed for ${ch.id}:`, updateError);
+          failed++;
+        } else {
+          updated++;
+        }
+      } else {
+        failed++;
+      }
+      await new Promise((resolve) => setTimeout(resolve, 150));
+    }
+
+    res.json({ success: true, updated, failed, total: (chapters || []).length });
+  } catch (error) {
+    console.error("Error backfilling chapter coordinates:", error);
+    res.status(500).json({ error: "Backfill failed" });
   }
 });
 
@@ -237,6 +277,11 @@ router.post("/", requireAuth, async (req, res) => {
       finalCoverImageUrl = publicUrl;
     }
 
+    const geo = await geocodeAddress(`${validatedData.city}, ${validatedData.country}`);
+    if (!geo) {
+      console.warn(`[travel-chapters] geocoding failed for "${validatedData.city}, ${validatedData.country}"`);
+    }
+
     const { data, error } = await supabase
       .from("travel_chapters")
       .insert({
@@ -246,6 +291,8 @@ router.post("/", requireAuth, async (req, res) => {
         description: validatedData.description,
         cover_image: finalCoverImageUrl,
         coordinates: validatedData.coordinates,
+        latitude: geo?.lat ?? null,
+        longitude: geo?.lng ?? null,
         created_by: userId,
         status: "pending"
       })
@@ -604,7 +651,7 @@ router.patch("/:id", requireAuth, async (req, res) => {
     // Fetch existing chapter
     const { data: chapter, error: fetchError } = await supabase
       .from("travel_chapters")
-      .select("created_by, status")
+      .select("created_by, status, city, country")
       .eq("id", id)
       .single();
 
@@ -651,6 +698,18 @@ router.patch("/:id", requireAuth, async (req, res) => {
     // Reset rejected status to pending if updated
     if (chapter.status === 'rejected') {
       updates.status = 'pending';
+    }
+
+    if (validatedData.city !== undefined || validatedData.country !== undefined) {
+      const effectiveCity = validatedData.city ?? chapter.city;
+      const effectiveCountry = validatedData.country ?? chapter.country;
+      const geo = await geocodeAddress(`${effectiveCity}, ${effectiveCountry}`);
+      if (geo) {
+        updates.latitude = geo.lat;
+        updates.longitude = geo.lng;
+      } else {
+        console.warn(`[travel-chapters] geocoding failed for "${effectiveCity}, ${effectiveCountry}"`);
+      }
     }
 
     const { data: updatedChapter, error: updateError } = await supabase

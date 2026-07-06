@@ -6,6 +6,8 @@ import { Switch } from '@/components/ui/switch';
 import { Skeleton } from '@/components/ui/skeleton';
 import { MapPin, Globe, RefreshCw } from 'lucide-react';
 import { Map, useMap, AdvancedMarker, InfoWindow, MapMouseEvent } from '@vis.gl/react-google-maps';
+import { GoogleMapsOverlay } from '@deck.gl/google-maps';
+import { HeatmapLayer } from '@deck.gl/aggregation-layers';
 import { supabase } from '@/lib/supabase';
 
 interface AlumniData {
@@ -107,50 +109,53 @@ interface MapWrapperProps {
 function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: MapWrapperProps) {
   const map = useMap();
   const prevViewVersionRef = useRef(0);
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const heatmapLayerRef = useRef<any>(null);
+  const overlayRef = useRef<GoogleMapsOverlay | null>(null);
   const [currentZoom, setCurrentZoom] = useState(view.zoom);
   const [infoTarget, setInfoTarget] = useState<PopupTarget | null>(null);
 
-  // Create/destroy heatmap layer on map mount
+  // Create/destroy the deck.gl overlay on map mount (replaces the deprecated
+  // google.maps.visualization.HeatmapLayer, removed in Maps JS API v3.65+)
   useEffect(() => {
     if (!map) return;
-    // google.maps.visualization is loaded via the 'visualization' library in APIProvider
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const gmv = (window as any).google?.maps?.visualization;
-    if (!gmv) return;
-    const layer = new gmv.HeatmapLayer({
-      map: map as unknown,
-      radius: 30,
-      maxIntensity: 5,
-      gradient: ['rgba(0,0,0,0)', '#10b981', '#fbbf24', '#f97316', '#ef4444'],
-      opacity: 0.8,
-    });
-    heatmapLayerRef.current = layer;
+    const overlay = new GoogleMapsOverlay({});
+    overlay.setMap(map);
+    overlayRef.current = overlay;
     return () => {
-      layer.setMap(null);
-      heatmapLayerRef.current = null;
+      overlay.setMap(null);
+      overlay.finalize();
+      overlayRef.current = null;
     };
   }, [map]);
 
-  // Update heatmap data when alumni data changes
+  // Update heatmap layer whenever data or visibility changes
   useEffect(() => {
-    const layer = heatmapLayerRef.current;
-    if (!layer) return;
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const LatLng = (window as any).google?.maps?.LatLng;
-    if (!LatLng) return;
-    const points = data.map(a => ({ location: new LatLng(a.latitude, a.longitude), weight: 1 }));
-    layer.setData(points);
-  }, [data]);
-
-  // Toggle heatmap visibility
-  useEffect(() => {
-    const layer = heatmapLayerRef.current;
-    if (!layer || !map) return;
-    layer.setMap(showHeatmap ? (map as unknown) : null);
+    const overlay = overlayRef.current;
+    if (!overlay) return;
+    overlay.setProps({
+      layers: showHeatmap
+        ? [
+            new HeatmapLayer({
+              id: 'alumni-heatmap',
+              data,
+              getPosition: (a: AlumniData) => [a.longitude, a.latitude],
+              getWeight: 1,
+              radiusPixels: 30,
+              intensity: 1,
+              threshold: 0.05,
+              colorRange: [
+                [16, 185, 129, 0],
+                [16, 185, 129, 200],
+                [251, 191, 36, 220],
+                [249, 115, 22, 235],
+                [239, 68, 68, 255],
+              ],
+              opacity: 0.8,
+            }),
+          ]
+        : [],
+    });
     if (!showHeatmap) setInfoTarget(null);
-  }, [showHeatmap, map]);
+  }, [data, showHeatmap]);
 
   // Camera control: respond to external viewVersion changes
   useEffect(() => {

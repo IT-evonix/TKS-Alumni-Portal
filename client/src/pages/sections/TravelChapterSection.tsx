@@ -25,7 +25,7 @@ import { Edit } from "lucide-react";
 import { LoadingState } from "@/components/common/LoadingState";
 import { PageHeading } from "@/components/common/PageHeading";
 import { supabase } from "@/lib/supabase";
-import { generateCoordinatesForCity } from "@/components/TravelChaptersMap";
+import { resolveChapterCoords } from "@/components/TravelChaptersMap";
 
 const getAccent = (index: number) => {
   const accents = [
@@ -160,17 +160,9 @@ export function TravelChapterSection({
     // Only filter by bounds when the user has actively interacted/panned/zoomed
     if (mapInteracted && mapBounds && filtered.length > 0) {
       filtered = filtered.filter(chap => {
-        let lng: number, lat: number;
-        if (chap.coordinates) {
-          const parts = chap.coordinates.split(',');
-          lng = parseFloat(parts[0]);
-          lat = parseFloat(parts[1]);
-        } else {
-          const coords = generateCoordinatesForCity(chap.city);
-          lng = coords[0];
-          lat = coords[1];
-        }
-        return mapBounds.contains({ lat, lng });
+        const coords = resolveChapterCoords(chap);
+        if (!coords) return false;
+        return mapBounds.contains(coords);
       });
     }
 

@@ -11,59 +11,18 @@ interface CityChaptersMapProps {
   resetTrigger?: number;
 }
 
-// Simple hash function to generate consistent rough coordinates for a city
-export function generateCoordinatesForCity(city: string): [number, number] {
-  const known: Record<string, [number, number]> = {
-    'Paris': [2.3522, 48.8566],
-    'New York': [-74.0060, 40.7128],
-    'Tokyo': [139.6917, 35.6895],
-    'London': [-0.1276, 51.5074],
-    'Dubai': [55.2708, 25.2048],
-    'San Francisco': [-122.4194, 37.7749],
-    'Cape Town': [18.4232, -33.9249],
-    'Sydney': [151.2093, -33.8688],
-    'Bondi Beach': [151.2743, -33.8915],
-    'Singapore': [103.8198, 1.3521],
-    'Toronto': [-79.3832, 43.6532],
-    'Pimpri-Chinchwad': [73.7868, 18.6298],
-    'Pune': [73.8567, 18.5204],
-    'Mumbai': [72.8777, 19.0760],
-    'Delhi': [77.1025, 28.7041],
-    'Bangalore': [77.5946, 12.9716],
-    'Berlin': [13.4050, 52.5200],
-    'Amsterdam': [4.9041, 52.3676],
-    'Barcelona': [2.1734, 41.3851],
-    'Chicago': [-87.6298, 41.8781],
-    'Los Angeles': [-118.2437, 34.0522],
-    'Hyderabad': [78.4867, 17.3850],
-    'Chennai': [80.2707, 13.0827],
-    'Kolkata': [88.3639, 22.5726],
-    'Ahmedabad': [72.5714, 23.0225],
-    'Seattle': [-122.3321, 47.6062],
-    'Austin': [-97.7431, 30.2672],
-    'Vancouver': [-123.1207, 49.2827],
-    'Montreal': [-73.5673, 45.5017],
-    'Melbourne': [144.9631, -37.8136],
-  };
-
-  if (known[city]) return known[city];
-
-  let hash = 0;
-  for (let i = 0; i < city.length; i++) {
-    hash = city.charCodeAt(i) + ((hash << 5) - hash);
+export function resolveChapterCoords(chapter: any): { lat: number; lng: number } | null {
+  if (typeof chapter.latitude === 'number' && typeof chapter.longitude === 'number') {
+    return { lat: chapter.latitude, lng: chapter.longitude };
   }
-  const lng = ((Math.abs(hash) % 360) - 180);
-  const lat = ((Math.abs(hash >> 8) % 110) - 50);
-  return [lng, lat];
-}
-
-function resolveChapterCoords(chapter: any): { lat: number; lng: number } {
+  // Legacy fallback for chapters created before geocoding was persisted server-side
   if (chapter.coordinates) {
     const parts = chapter.coordinates.split(',');
-    return { lng: parseFloat(parts[0]), lat: parseFloat(parts[1]) };
+    const lng = parseFloat(parts[0]);
+    const lat = parseFloat(parts[1]);
+    if (!Number.isNaN(lat) && !Number.isNaN(lng)) return { lat, lng };
   }
-  const [lng, lat] = generateCoordinatesForCity(chapter.city || '');
-  return { lat, lng };
+  return null;
 }
 
 interface ActiveGroup {
@@ -204,10 +163,9 @@ function MapInner({
   // selectedChapter flyTo
   useEffect(() => {
     if (!map || !selectedChapter) return;
-    const { lat, lng } = resolveChapterCoords(selectedChapter);
-    const isMobile = window.innerWidth < 640;
-    const mapHeight = map.getDiv().clientHeight;
-    map.panTo({ lat, lng });
+    const coords = resolveChapterCoords(selectedChapter);
+    if (!coords) return;
+    map.panTo(coords);
     map.setZoom(Math.max(map.getZoom() ?? 0, 12));
   }, [selectedChapter, map]);
 
@@ -326,10 +284,11 @@ export function CityChaptersMap({
     const groups: Record<string, { coords: { lat: number; lng: number }; chapters: any[] }> = {};
 
     chapters.forEach(chap => {
+      const coords = resolveChapterCoords(chap);
+      if (!coords) return;
       const cityKey = `${(chap.city || '').trim().toLowerCase()}__${(chap.country || '').trim().toLowerCase()}`;
       if (!groups[cityKey]) {
-        const { lat, lng } = resolveChapterCoords(chap);
-        groups[cityKey] = { coords: { lat, lng }, chapters: [] };
+        groups[cityKey] = { coords, chapters: [] };
       }
       groups[cityKey].chapters.push(chap);
     });
