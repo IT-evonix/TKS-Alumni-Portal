@@ -289,6 +289,7 @@ function MapWrapper({ data, view, viewVersion, onBoundsChange, showHeatmap }: Ma
       maxZoom={14}
       disableDefaultUI
       zoomControl
+      zoomControlOptions={{ position: google.maps.ControlPosition.LEFT_BOTTOM }}
       gestureHandling="greedy"
       onBoundsChanged={handleBoundsChanged}
       onZoomChanged={handleZoomChanged}
@@ -667,8 +668,10 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
                         zoom: 1,
                         bounds: [[minLng, minLat], [maxLng, maxLat]],
                       });
-                      setViewVersion(v => v + 1);
+                    } else {
+                      setMapView({ center: [minLng, minLat], zoom: 2.5 });
                     }
+                    setViewVersion(v => v + 1);
                   } else {
                     setMapView({ center: [100, 30], zoom: 2.5 });
                     setViewVersion(v => v + 1);
