@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Input } from "@/components/ui/input";
-import { MapPin, X, Loader2, Building2, Locate } from "lucide-react";
+import { MapPin, X, Loader2, Building2, Landmark, Map as MapIcon, GraduationCap, Locate, SearchX } from "lucide-react";
 import { useMapsLibrary } from '@vis.gl/react-google-maps';
 
 interface CityAutocompleteProps {
@@ -21,6 +21,21 @@ function getPlaceType(types: string[] | undefined): string {
   if (t.some(x => ['administrative_area_level_1', 'administrative_area_level_2'].includes(x))) return 'Region';
   if (t.some(x => ['university', 'school'].includes(x))) return 'Education';
   return 'Location';
+}
+
+function getPlaceIcon(types: string[] | undefined) {
+  switch (getPlaceType(types)) {
+    case 'City':
+      return Building2;
+    case 'Area':
+      return MapIcon;
+    case 'Region':
+      return Landmark;
+    case 'Education':
+      return GraduationCap;
+    default:
+      return MapPin;
+  }
 }
 
 export function CityAutocomplete({ city, onCityChange, onLocationSelect, disabled }: CityAutocompleteProps) {
@@ -86,7 +101,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
       const { suggestions: results } = await placesLib.AutocompleteSuggestion.fetchAutocompleteSuggestions(request);
       const predictions = (results || []).filter(r => r.placePrediction);
       setSuggestions(predictions);
-      setShowSuggestions(predictions.length > 0);
+      setShowSuggestions(true);
     } catch (error) {
       console.error("Error fetching location suggestions", error);
       setSearchError("Location search is unavailable right now. Please try again later.");
@@ -203,7 +218,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
   return (
     <div className="relative w-full" ref={wrapperRef}>
       <div className="relative flex-1">
-        <MapPin className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground" />
+        <MapPin className="absolute left-3 top-3.5 h-4 w-4 text-muted-foreground pointer-events-none" />
         <Input
           value={query}
           onChange={(e) => searchLocation(e.target.value)}
@@ -217,7 +232,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
           }}
           placeholder="Search location (City, State, Country...)"
           disabled={disabled}
-          className="pl-9 pr-9 min-h-[44px]"
+          className="pl-9 pr-9 min-h-[44px] transition-shadow"
           autoComplete="off"
         />
         {isSearching && (
@@ -240,7 +255,7 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
           <button
             type="button"
             onClick={clearInput}
-            className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground"
+            className="absolute right-3 top-3.5 text-muted-foreground hover:text-foreground transition-colors rounded-full hover:bg-muted p-0.5 -mr-0.5"
           >
             <X className="h-4 w-4" />
           </button>
@@ -251,41 +266,49 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
         <p className="text-xs text-destructive mt-1.5 px-0.5">{searchError}</p>
       )}
 
-      {showSuggestions && suggestions.length > 0 && (
-        <div className="absolute z-50 w-full mt-1 bg-background rounded-md shadow-lg border border-border max-h-80 overflow-auto">
-          {suggestions.map((suggestion, index) => {
-            const prediction = suggestion.placePrediction!;
-            const mainText = prediction.mainText?.text || prediction.text.text;
-            const secondaryText = prediction.secondaryText?.text || '';
+      {showSuggestions && (
+        <div className="absolute z-50 w-full mt-1.5 bg-popover rounded-lg shadow-lg border border-border max-h-80 overflow-auto animate-in fade-in-0 zoom-in-95 slide-in-from-top-1 duration-150 [scrollbar-width:thin]">
+          {suggestions.length > 0 ? (
+            suggestions.map((suggestion, index) => {
+              const prediction = suggestion.placePrediction!;
+              const mainText = prediction.mainText?.text || prediction.text.text;
+              const secondaryText = prediction.secondaryText?.text || '';
+              const PlaceIcon = getPlaceIcon(prediction.types);
 
-            return (
-              <div
-                key={`${prediction.placeId || index}`}
-                className="px-4 py-3 hover:bg-muted cursor-pointer text-sm border-b border-border last:border-0 flex items-start gap-3"
-                onMouseDown={(e) => {
-                  e.preventDefault();
-                }}
-                onClick={() => selectSuggestion(suggestion)}
-              >
-                <div className="mt-0.5 shrink-0 bg-primary/10 p-1.5 rounded-md">
-                  <Building2 className="h-4 w-4 text-primary" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2">
-                    <span className="font-semibold text-foreground truncate">{mainText}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-primary/10 text-primary font-semibold shrink-0 uppercase border border-primary/20">
-                      {getPlaceType(prediction.types)}
-                    </span>
+              return (
+                <div
+                  key={`${prediction.placeId || index}`}
+                  className="group px-3.5 py-2.5 hover:bg-muted cursor-pointer text-sm border-b border-border/70 last:border-0 flex items-start gap-3 transition-colors"
+                  onMouseDown={(e) => {
+                    e.preventDefault();
+                  }}
+                  onClick={() => selectSuggestion(suggestion)}
+                >
+                  <div className="mt-0.5 shrink-0 bg-primary/10 group-hover:bg-primary/15 p-1.5 rounded-md transition-colors">
+                    <PlaceIcon className="h-4 w-4 text-primary" />
                   </div>
-                  {secondaryText && (
-                    <p className="text-xs text-muted-foreground mt-0.5 whitespace-normal line-clamp-2">
-                      {secondaryText}
-                    </p>
-                  )}
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="font-medium text-foreground truncate">{mainText}</span>
+                      <span className="text-[10px] leading-none px-1.5 py-1 rounded-full bg-primary/10 text-primary font-semibold shrink-0 uppercase tracking-wide">
+                        {getPlaceType(prediction.types)}
+                      </span>
+                    </div>
+                    {secondaryText && (
+                      <p className="text-xs text-muted-foreground mt-0.5 whitespace-normal line-clamp-2">
+                        {secondaryText}
+                      </p>
+                    )}
+                  </div>
                 </div>
-              </div>
-            );
-          })}
+              );
+            })
+          ) : (
+            <div className="px-4 py-6 flex flex-col items-center gap-1.5 text-center">
+              <SearchX className="h-4 w-4 text-muted-foreground" />
+              <p className="text-xs text-muted-foreground">No matching locations found</p>
+            </div>
+          )}
         </div>
       )}
     </div>
