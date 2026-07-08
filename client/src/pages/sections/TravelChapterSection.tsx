@@ -101,6 +101,8 @@ export function TravelChapterSection({
 
   const [city, setCity] = useState("");
   const [country, setCountry] = useState("");
+  const [coordLat, setCoordLat] = useState<number | undefined>(undefined);
+  const [coordLng, setCoordLng] = useState<number | undefined>(undefined);
   const [description, setDescription] = useState("");
   const [coverFile, setCoverFile] = useState<File | null>(null);
   const [coverPreview, setCoverPreview] = useState<string | null>(null);
@@ -110,6 +112,8 @@ export function TravelChapterSection({
   const [editingChapter, setEditingChapter] = useState<any | null>(null);
   const [editCity, setEditCity] = useState("");
   const [editCountry, setEditCountry] = useState("");
+  const [editCoordLat, setEditCoordLat] = useState<number | undefined>(undefined);
+  const [editCoordLng, setEditCoordLng] = useState<number | undefined>(undefined);
   const [editDescription, setEditDescription] = useState("");
   const [editCoverPreview, setEditCoverPreview] = useState<string | null>(null);
   const [chapterToDelete, setChapterToDelete] = useState<any | null>(null);
@@ -120,6 +124,8 @@ export function TravelChapterSection({
     if (editingChapter) {
       setEditCity(editingChapter.city || "");
       setEditCountry(editingChapter.country || "");
+      setEditCoordLat(undefined);
+      setEditCoordLng(undefined);
       setEditDescription(editingChapter.description || "");
       setEditCoverPreview(editingChapter.cover_image || null);
     }
@@ -184,18 +190,9 @@ export function TravelChapterSection({
         cover_image_url = coverPreview;
       }
       
-      let coordinatesStr = undefined;
-      try {
-        const nomRes = await fetch(`https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(city + ', ' + country)}&limit=1`);
-        if (nomRes.ok) {
-          const nomData = await nomRes.json();
-          if (nomData && nomData.length > 0) {
-            coordinatesStr = `${nomData[0].lon},${nomData[0].lat}`;
-          }
-        }
-      } catch (err) {
-        console.warn("Geocoding failed during proposal:", err);
-      }
+      const coordinatesStr = (coordLat != null && coordLng != null)
+        ? `${coordLng},${coordLat}`
+        : undefined;
 
       const res = await apiRequest('POST', '/api/travel-chapters', {
         city, country, description, cover_image: cover_image_url, coordinates: coordinatesStr
@@ -211,6 +208,8 @@ export function TravelChapterSection({
       setIsDialogOpen(false);
       setCity("");
       setCountry("");
+      setCoordLat(undefined);
+      setCoordLng(undefined);
       setDescription("");
       setCoverFile(null);
       setCoverPreview(null);
@@ -330,9 +329,11 @@ export function TravelChapterSection({
                   <CityAutocomplete
                     city={city}
                     onCityChange={setCity}
-                    onLocationSelect={(selCity, selState, selCountry) => {
+                    onLocationSelect={(selCity, selState, selCountry, lat, lng) => {
                       setCity(selCity);
                       setCountry(selCountry);
+                      setCoordLat(lat);
+                      setCoordLng(lng);
                     }}
                   />
                 </div>
@@ -704,9 +705,11 @@ export function TravelChapterSection({
               <CityAutocomplete
                 city={editCity}
                 onCityChange={setEditCity}
-                onLocationSelect={(selCity, selState, selCountry) => {
+                onLocationSelect={(selCity, selState, selCountry, lat, lng) => {
                   setEditCity(selCity);
                   setEditCountry(selCountry);
+                  setEditCoordLat(lat);
+                  setEditCoordLng(lng);
                 }}
               />
             </div>
@@ -765,13 +768,17 @@ export function TravelChapterSection({
             <Button
               onClick={() => {
                 if (editingChapter) {
+                  const editCoordinatesStr = (editCoordLat != null && editCoordLng != null)
+                    ? `${editCoordLng},${editCoordLat}`
+                    : undefined;
                   editChapterMutation.mutate({
                     id: editingChapter.id,
                     updates: {
                       city: editCity,
                       country: editCountry,
                       description: editDescription,
-                      cover_image: editCoverPreview || undefined
+                      cover_image: editCoverPreview || undefined,
+                      ...(editCoordinatesStr ? { coordinates: editCoordinatesStr } : {})
                     }
                   });
                 }
