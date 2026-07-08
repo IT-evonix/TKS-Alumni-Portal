@@ -654,28 +654,8 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
                 size="sm"
                 className="flex items-center gap-1.5 text-xs h-8 px-2.5 shrink-0 border-border hover:border-primary/40 hover:text-primary transition-colors"
                 onClick={() => {
-                  if (alumniData.length > 0) {
-                    let minLng = 180, maxLng = -180, minLat = 90, maxLat = -90;
-                    alumniData.forEach(a => {
-                      if (a.longitude < minLng) minLng = a.longitude;
-                      if (a.longitude > maxLng) maxLng = a.longitude;
-                      if (a.latitude < minLat) minLat = a.latitude;
-                      if (a.latitude > maxLat) maxLat = a.latitude;
-                    });
-                    if (minLng !== maxLng || minLat !== maxLat) {
-                      setMapView({
-                        center: [(minLng + maxLng) / 2, (minLat + maxLat) / 2],
-                        zoom: 1,
-                        bounds: [[minLng, minLat], [maxLng, maxLat]],
-                      });
-                    } else {
-                      setMapView({ center: [minLng, minLat], zoom: 2.5 });
-                    }
-                    setViewVersion(v => v + 1);
-                  } else {
-                    setMapView({ center: [100, 30], zoom: 2.5 });
-                    setViewVersion(v => v + 1);
-                  }
+                  setMapView({ center: [100, 30], zoom: 2.5 });
+                  setViewVersion(v => v + 1);
                 }}
               >
                 <RefreshCw className="w-3.5 h-3.5" />
