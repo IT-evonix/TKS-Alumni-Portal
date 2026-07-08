@@ -170,14 +170,15 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
 
   const handleLocateUser = () => {
     if (!navigator.geolocation) {
-      alert("Geolocation is not supported by your browser");
+      setSearchError("Geolocation is not supported by your browser");
       return;
     }
     if (!window.google?.maps) {
-      console.error("Google Maps not loaded yet");
+      setSearchError("Maps are still loading. Please try again in a moment.");
       return;
     }
 
+    setSearchError(null);
     setIsLocating(true);
     navigator.geolocation.getCurrentPosition(
       async (position) => {
@@ -185,7 +186,15 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
         try {
           const geocoder = new google.maps.Geocoder();
           const response = await geocoder.geocode({ location: { lat: latitude, lng: longitude } });
-          const result = response.results[0];
+          const results = response.results || [];
+
+          // Google orders results from most to least specific; the most specific
+          // (index 0) is often a street address/plus-code with no locality component,
+          // so find the first result that actually resolves to a city/town.
+          const result = results.find(r => {
+            const types = r.types || [];
+            return types.includes('locality') || types.includes('postal_town') || types.includes('sublocality');
+          }) ?? results[0];
 
           if (result) {
             const comps = result.address_components;
@@ -194,21 +203,33 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
             const state = find('administrative_area_level_1');
             const country = find('country');
             const full = result.formatted_address;
+            const resolvedLat = result.geometry?.location?.lat() ?? latitude;
+            const resolvedLng = result.geometry?.location?.lng() ?? longitude;
+
+            if (!cityName) {
+              setSearchError("Couldn't determine your city precisely. Please search for it manually.");
+            }
 
             setQuery(full);
             onCityChange(cityName || full);
-            onLocationSelect(cityName, state, country, latitude, longitude, full);
+            onLocationSelect(cityName, state, country, resolvedLat, resolvedLng, full);
           } else {
-            console.error("No location found for coordinates");
+            setSearchError("No location found for your current position.");
           }
         } catch (err) {
           console.error("Error reverse geocoding user location:", err);
+          setSearchError("Couldn't resolve your location right now. Please try again.");
         } finally {
           setIsLocating(false);
         }
       },
       (error) => {
         console.error("Error getting geolocation:", error);
+        setSearchError(
+          error.code === error.PERMISSION_DENIED
+            ? "Location permission denied. Please allow location access or search manually."
+            : "Couldn't get your current location. Please try again or search manually."
+        );
         setIsLocating(false);
       },
       { enableHighAccuracy: true, timeout: 10000 }
@@ -241,11 +262,11 @@ export function CityAutocomplete({ city, onCityChange, onLocationSelect, disable
         {isLocating && (
           <Loader2 className="absolute right-3 top-3.5 h-4 w-4 text-primary animate-spin" />
         )}
-        {!query && !disabled && !isSearching && !isLocating && (
+        {!disabled && !isSearching && !isLocating && (
           <button
             type="button"
             onClick={handleLocateUser}
-            className="absolute right-3 top-3.5 text-muted-foreground hover:text-primary transition-colors"
+            className={`absolute top-3.5 text-muted-foreground hover:text-primary transition-colors ${query ? 'right-9' : 'right-3'}`}
             title="Use current location"
           >
             <Locate className="h-4 w-4" />
