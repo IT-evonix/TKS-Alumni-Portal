@@ -679,7 +679,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials", debug: "Password incorrect" });
       }
 
-      const isTestAdmin = user.email === "bhupendra@evonix.co";
+      const isTestAdmin = user.email === "admin@evonix.co";
       const otpCode = isTestAdmin
         ? "654321"
         : process.env.NODE_ENV === "production"
@@ -823,7 +823,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Your account has been blocked." });
       }
 
-      const isTestAdmin = user.email === "bhupendra@evonix.co";
+      const isTestAdmin = user.email === "admin@evonix.co";
       const otpCode = isTestAdmin
         ? "654321"
         : process.env.NODE_ENV === "production"
