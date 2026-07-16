@@ -939,39 +939,39 @@ export async function registerRoutes(app: Express): Promise<Server> {
   app.post("/api/auth/login", async (req, res) => {
     try {
       const { email, password } = req.body;
+      const normalizedEmail = String(email || "").trim().toLowerCase();
 
-      // console.log("Login attempt for:", email);
+      // console.log("Login attempt for:", normalizedEmail);
 
       // Query Supabase instead of local database
       const { data: user, error: userError } = await supabase
         .from("users")
         .select("*")
-        .eq("email", email)
+        .eq("email", normalizedEmail)
         .single();
 
       if (userError || !user) {
-        // console.log("User not found:", email);
+        console.log("[Login] User not found:", normalizedEmail, userError?.message);
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
       // Check if user is admin - admins cannot login through regular login
       if (user.is_admin === true || user.user_role === "administrator") {
-        // console.log("Admin login attempt blocked on regular login:", email);
+        console.log("[Login] Admin blocked from regular login:", normalizedEmail);
         return res.status(401).json({ error: "Invalid credentials" });
       }
 
       // Check if account is blocked
       if (user.account_blocked === true) {
-        // console.log("Account blocked:", email);
+        console.log("[Login] Account blocked:", normalizedEmail);
         return res.status(403).json({
           error:
             "Your account has been blocked by the administrator. Please contact the authority for account activation.",
         });
       }
 
-      // console.log("User found, comparing password...");
       const isValidPassword = await comparePassword(password, user.password);
-      // console.log("Password valid:", isValidPassword);
+      console.log("[Login] Password valid:", isValidPassword, "for:", normalizedEmail);
 
       if (!isValidPassword) {
         return res.status(401).json({ error: "Invalid credentials" });
@@ -4175,6 +4175,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .order("created_at", { ascending: false })
         .range(Number(offset), Number(offset) + Number(limit) - 1);
 
+      if (error) {
+        console.error("Get posts error:", error);
+        return res.status(500).json({ error: "Failed to fetch posts" });
+      }
+
       // Fetch alumni profile data for all authors (profile picture, first name, last name, gender)
       if (posts && posts.length > 0) {
         const authorIds = posts.map((p) => p.author_id);
@@ -4232,11 +4237,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      if (error) {
-        console.error("Get posts error:", error);
-        return res.status(500).json({ error: "Failed to fetch posts" });
-      }
-
       // Get user's likes for these posts
       let userLikes: Set<string> = new Set();
       if (userId && posts) {
@@ -4291,6 +4291,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(400).json({ error: "Content is required" });
       }
 
+      const VALID_POST_TYPES = ["general", "achievement", "job_update"];
+      if (postType && !VALID_POST_TYPES.includes(postType)) {
+        return res.status(400).json({ error: "Invalid post type" });
+      }
+
       // Check if user is admin
       const { data: userData } = await supabase
         .from("users")
@@ -4309,7 +4314,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
           post_type: postType || "general",
           likes_count: 0,
           comments_count: 0,
-          shares_count: 0,
           is_active: true,
           status: isAutoApproved ? "approved" : "pending",
         })
@@ -4542,7 +4546,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .single();
 
       if (existingLike) {
-        // Unlike: remove like and decrement count
+        // Unlike: remove like record
         const { error: deleteLikeError } = await supabase
           .from("post_likes")
           .delete()
@@ -4553,34 +4557,32 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ error: "Failed to unlike post" });
         }
 
-        // Decrement likes count
-        const { data: post } = await supabase
+        // Use authoritative count from post_likes table to avoid race conditions
+        const { count: newCount } = await supabase
+          .from("post_likes")
+          .select("id", { count: "exact", head: true })
+          .eq("post_id", postId);
+
+        const unlikeCount = newCount ?? 0;
+        await supabase
           .from("feed_posts")
-          .select("likes_count")
-          .eq("id", postId)
-          .single();
+          .update({ likes_count: unlikeCount })
+          .eq("id", postId);
 
-        if (post) {
-          await supabase
-            .from("feed_posts")
-            .update({ likes_count: Math.max(0, post.likes_count - 1) })
-            .eq("id", postId);
-
-          // Emit real-time update
-          const io = (global as any).io;
-          if (io) {
-            io.emit("post_like", {
-              postId,
-              likesCount: Math.max(0, post.likes_count - 1),
-              isLiked: false,
-              userId,
-            });
-          }
+        // Emit real-time update
+        const io = (global as any).io;
+        if (io) {
+          io.emit("post_like", {
+            postId,
+            likesCount: unlikeCount,
+            isLiked: false,
+            userId,
+          });
         }
 
-        return res.json({ message: "Post unliked", isLiked: false });
+        return res.json({ message: "Post unliked", isLiked: false, likesCount: unlikeCount });
       } else {
-        // Like: add like and increment count
+        // Like: add like record
         const { error: insertLikeError } = await supabase
           .from("post_likes")
           .insert({
@@ -4593,25 +4595,26 @@ export async function registerRoutes(app: Express): Promise<Server> {
           return res.status(500).json({ error: "Failed to like post" });
         }
 
-        // Increment likes count and get post author
-        const { data: post } = await supabase
+        // Get post author for notification, and authoritative count from post_likes
+        const [{ data: post }, { count: newCount }] = await Promise.all([
+          supabase.from("feed_posts").select("author_id").eq("id", postId).single(),
+          supabase.from("post_likes").select("id", { count: "exact", head: true }).eq("post_id", postId),
+        ]);
+
+        const likeCount = newCount ?? 0;
+        await supabase
           .from("feed_posts")
-          .select("likes_count, author_id")
-          .eq("id", postId)
-          .single();
+          .update({ likes_count: likeCount })
+          .eq("id", postId);
 
         if (post) {
-          await supabase
-            .from("feed_posts")
-            .update({ likes_count: post.likes_count + 1 })
-            .eq("id", postId);
 
           // Emit real-time update
           const io = (global as any).io;
           if (io) {
             io.emit("post_like", {
               postId,
-              likesCount: post.likes_count + 1,
+              likesCount: likeCount,
               isLiked: true,
               userId,
             });
@@ -4643,7 +4646,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           }
         }
 
-        return res.json({ message: "Post liked", isLiked: true });
+        return res.json({ message: "Post liked", isLiked: true, likesCount: likeCount });
       }
     } catch (error) {
       console.error("Like post error:", error);
@@ -4717,6 +4720,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (!content || content.trim().length === 0) {
         return res.status(400).json({ error: "Comment content is required" });
+      }
+
+      if (content.trim().length > 5000) {
+        return res.status(400).json({ error: "Comment must be 5000 characters or fewer" });
       }
 
       // Insert comment
@@ -4936,6 +4943,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
       if (!content || content.trim().length === 0) {
         console.error("Reply content is empty");
         return res.status(400).json({ error: "Reply content is required" });
+      }
+
+      if (content.trim().length > 5000) {
+        return res.status(400).json({ error: "Reply must be 5000 characters or fewer" });
       }
 
       // console.log("Creating reply with content:", content.trim());

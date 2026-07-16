@@ -125,6 +125,11 @@ process.on('uncaughtException', (error) => {
     registerNotificationEnhancementRoutes(app);
     registerPerformanceAnalyticsRoutes(app);
 
+    // Silence Chrome DevTools well-known probe — must be before Vite catch-all
+    app.get("/.well-known/appspecific/com.chrome.devtools.json", (_req, res) => {
+      res.status(404).end();
+    });
+
     // Step 4: Setup Vite or static serving
     console.log('\n4️⃣ Setting up frontend serving...');
     if (config.nodeEnv === "development") {

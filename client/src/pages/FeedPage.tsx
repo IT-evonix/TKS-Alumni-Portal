@@ -88,6 +88,9 @@ export const FeedPage = (): JSX.Element => {
   const [pullDistance, setPullDistance] = useState(0);
   const [isPulling, setIsPulling] = useState(false);
   const contentRef = useRef<HTMLDivElement>(null);
+  // Refs that mirror pull state so the global mouse-event effect doesn't re-run on every frame
+  const isPullingRef = useRef(false);
+  const pullDistanceRef = useRef(0);
   const PULL_THRESHOLD = 80; // Distance to trigger refresh
   const MAX_PULL_DISTANCE = 120; // Maximum pull distance
 
@@ -317,7 +320,13 @@ export const FeedPage = (): JSX.Element => {
     // Cleanup handled in global effect
   };
 
-  // Add global mouse event listeners for desktop drag
+  // Keep refs in sync with state so the mouse-event effect can read current values
+  // without being added as dependencies (which would cause listener churn on every frame)
+  useEffect(() => { isPullingRef.current = isPulling; }, [isPulling]);
+  useEffect(() => { pullDistanceRef.current = pullDistance; }, [pullDistance]);
+
+  // Add global mouse event listeners for desktop drag.
+  // Depends only on pullStartY so listeners are added/removed once per drag, not every frame.
   useEffect(() => {
     const handleGlobalMouseMove = (e: MouseEvent) => {
       if (!pullStartY) return;
@@ -327,7 +336,7 @@ export const FeedPage = (): JSX.Element => {
 
       // Only activate pulling if user has dragged at least 10px down
       if (contentRef.current && contentRef.current.scrollTop === 0 && distance > 10) {
-        if (!isPulling) {
+        if (!isPullingRef.current) {
           setIsPulling(true);
         }
         const resistance = 0.5;
@@ -338,7 +347,7 @@ export const FeedPage = (): JSX.Element => {
 
     const handleGlobalMouseUp = () => {
       if (pullStartY) {
-        if (isPulling && pullDistance >= PULL_THRESHOLD) {
+        if (isPullingRef.current && pullDistanceRef.current >= PULL_THRESHOLD) {
           handleRefresh();
         } else {
           setIsPulling(false);
@@ -357,7 +366,7 @@ export const FeedPage = (): JSX.Element => {
       document.removeEventListener('mousemove', handleGlobalMouseMove);
       document.removeEventListener('mouseup', handleGlobalMouseUp);
     };
-  }, [isPulling, pullStartY, pullDistance]);
+  }, [pullStartY]);
 
   // State for events from database
   const [upcomingEvents, setUpcomingEvents] = useState<any[]>([]);
@@ -1019,7 +1028,7 @@ export const FeedPage = (): JSX.Element => {
     const commentText = commentTexts[postId];
     if (!commentText?.trim()) return;
 
-    const userId = localStorage.getItem('user');
+    const userId = localStorage.getItem('userId');
     if (!userId) {
       toast({
         title: "Authentication required",
@@ -1030,13 +1039,11 @@ export const FeedPage = (): JSX.Element => {
     }
 
     try {
-      const userIdParsed = JSON.parse(userId).id;
-
       const response = await fetch(`/api/posts/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'user-id': userIdParsed || '',
+          'user-id': userId,
         },
         body: JSON.stringify({
           content: commentText,

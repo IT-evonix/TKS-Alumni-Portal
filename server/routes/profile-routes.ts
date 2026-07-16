@@ -692,11 +692,11 @@ router.post("/update", async (req, res) => {
             volunteer_interests: volunteerInterests,
             keywords: keywords,
             employment_status: employmentStatus,
-            years_of_experience: yearsOfExperience,
+            years_of_experience: (yearsOfExperience !== "" && yearsOfExperience !== null && yearsOfExperience !== undefined) ? Number(yearsOfExperience) : null,
             startup_name: startupName,
             startup_role: startupRole,
             funding_stage: fundingStage,
-            founding_year: foundingYear,
+            founding_year: (foundingYear !== "" && foundingYear !== null && foundingYear !== undefined) ? Number(foundingYear) : null,
             is_startup_founder: isStartupFounder,
             timezone: timezone,
             updated_at: new Date().toISOString()

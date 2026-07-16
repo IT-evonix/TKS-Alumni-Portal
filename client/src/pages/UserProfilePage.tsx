@@ -202,7 +202,7 @@ export const UserProfilePage = (): JSX.Element => {
             batch: data.alumni.batch || '',
             currentCompany: data.alumni.current_company || '',
             currentRole: data.alumni.current_role || '',
-            location: data.alumni.location || (data.alumni.current_city ? `${data.alumni.current_city}${data.alumni.current_country ? `, ${data.alumni.current_country}` : ''}` : ''),
+            location: data.alumni.location || (data.alumni.current_city ? [data.alumni.current_city, data.alumni.current_state, data.alumni.current_country].filter(Boolean).join(', ') : ''),
             linkedinUrl: data.alumni.linkedin_url || '',
             bio: data.alumni.bio || '',
             gender: data.alumni.gender || '',
