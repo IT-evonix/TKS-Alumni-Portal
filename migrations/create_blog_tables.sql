@@ -47,7 +47,11 @@ CREATE TABLE IF NOT EXISTS blog_comments (
   created_at TIMESTAMP DEFAULT NOW(),
   updated_at TIMESTAMP DEFAULT NOW()
 );
-ALTER TABLE blog_comments ADD FOREIGN KEY (parent_id) REFERENCES blog_comments(id) ON DELETE CASCADE;
+DO $$ BEGIN
+  ALTER TABLE blog_comments ADD CONSTRAINT blog_comments_parent_id_fkey FOREIGN KEY (parent_id) REFERENCES blog_comments(id) ON DELETE CASCADE;
+EXCEPTION
+  WHEN duplicate_object THEN null;
+END $$;
 
 -- Blog Likes
 CREATE TABLE IF NOT EXISTS blog_likes (

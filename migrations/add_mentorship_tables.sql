@@ -11,6 +11,10 @@ CREATE TABLE IF NOT EXISTS mentorship_requests (
   updated_at TIMESTAMPTZ DEFAULT now()
 );
 
+-- Backfill columns in case mentorship_requests already existed with a partial schema
+ALTER TABLE mentorship_requests ADD COLUMN IF NOT EXISTS goal_text TEXT;
+ALTER TABLE mentorship_requests ADD COLUMN IF NOT EXISTS match_score INTEGER;
+
 -- Prevent duplicate pending requests from same mentee to same mentor
 CREATE UNIQUE INDEX IF NOT EXISTS idx_unique_pending_request
   ON mentorship_requests(mentee_id, mentor_id)

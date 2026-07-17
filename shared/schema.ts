@@ -21,11 +21,11 @@ export const passwordResetTokens = pgTable("password_reset_tokens", {
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   token: text("token").notNull(),
   tokenType: text("token_type").notNull(), // 'reset', 'setup'
-  expiresAt: timestamp("expires_at").notNull(),
-  usedAt: timestamp("used_at"),
+  expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
+  usedAt: timestamp("used_at", { withTimezone: true }),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
-  createdAt: timestamp("created_at").defaultNow(),
+  createdAt: timestamp("created_at", { withTimezone: true }).defaultNow(),
 });
 
 export const alumni = pgTable("alumni", {

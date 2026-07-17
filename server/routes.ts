@@ -679,12 +679,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid credentials", debug: "Password incorrect" });
       }
 
-      const isTestAdmin = user.email === "bhupendra@evonix.co";
-      const otpCode = isTestAdmin
-        ? "654321"
-        : process.env.NODE_ENV === "production"
-          ? generateAdminOtpCode()
-          : "111111";
+      const otpCode = process.env.NODE_ENV === "production"
+        ? generateAdminOtpCode()
+        : "111111";
       const hashedOtp = await hashPassword(otpCode, 10);
       const expiresAt = new Date(Date.now() + ADMIN_LOGIN_OTP_EXPIRY_MINUTES * 60 * 1000);
       const ipAddress =
@@ -726,31 +723,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userName = alumniProfile?.first_name || user.username || "Admin";
 
-      if (!isTestAdmin) {
-        const emailContent = generateAdminOtpEmail(otpCode, userName, ADMIN_LOGIN_OTP_EXPIRY_MINUTES);
-        try {
-          if (process.env.NODE_ENV === "production") {
-            checkEmailConfig();
-            await sendEmail({
-              to: user.email,
-              toName: userName,
-              subject: emailContent.subject,
-              textBody: emailContent.textBody,
-              htmlBody: emailContent.htmlBody,
-            });
-          } else {
-            console.log(`[DEVELOPMENT] Mock Email Sent: OTP for admin login is ${otpCode}`);
-          }
-        } catch (emailError) {
-          await supabase
-            .from("password_reset_tokens")
-            .update({ used_at: new Date().toISOString() })
-            .eq("id", otpChallenge.id);
-          console.error("Failed to send admin OTP email:", emailError);
-          return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
+      const emailContent = generateAdminOtpEmail(otpCode, userName, ADMIN_LOGIN_OTP_EXPIRY_MINUTES);
+      try {
+        if (process.env.NODE_ENV === "production") {
+          checkEmailConfig();
+          await sendEmail({
+            to: user.email,
+            toName: userName,
+            subject: emailContent.subject,
+            textBody: emailContent.textBody,
+            htmlBody: emailContent.htmlBody,
+          });
+        } else {
+          console.log(`[DEVELOPMENT] Mock Email Sent: OTP for admin login is ${otpCode}`);
         }
-      } else {
-        console.log(`[TEST ADMIN] Static OTP bypass for ${user.email} — no email sent`);
+      } catch (emailError) {
+        await supabase
+          .from("password_reset_tokens")
+          .update({ used_at: new Date().toISOString() })
+          .eq("id", otpChallenge.id);
+        console.error("Failed to send admin OTP email:", emailError);
+        return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
       }
 
       res.json({
@@ -823,12 +816,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(403).json({ error: "Your account has been blocked." });
       }
 
-      const isTestAdmin = user.email === "bhupendra@evonix.co";
-      const otpCode = isTestAdmin
-        ? "654321"
-        : process.env.NODE_ENV === "production"
-          ? generateAdminOtpCode()
-          : "111111";
+      const otpCode = process.env.NODE_ENV === "production"
+        ? generateAdminOtpCode()
+        : "111111";
       const hashedOtp = await hashPassword(otpCode, 10);
       const expiresAt = new Date(Date.now() + ADMIN_LOGIN_OTP_EXPIRY_MINUTES * 60 * 1000);
       const ipAddress =
@@ -870,31 +860,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       const userName = alumniProfile?.first_name || user.username || "Admin";
 
-      if (isTestAdmin) {
-        console.log(`[TEST ADMIN] Static OTP bypass for ${user.email} — no email sent`);
-      } else {
-        const emailContent = generateAdminOtpEmail(otpCode, userName, ADMIN_LOGIN_OTP_EXPIRY_MINUTES);
-        try {
-          if (process.env.NODE_ENV === "production") {
-            checkEmailConfig();
-            await sendEmail({
-              to: user.email,
-              toName: userName,
-              subject: emailContent.subject,
-              textBody: emailContent.textBody,
-              htmlBody: emailContent.htmlBody,
-            });
-          } else {
-            console.log(`[DEVELOPMENT] Mock Email Sent: Resent OTP for admin login is ${otpCode}`);
-          }
-        } catch (emailError) {
-          await supabase
-            .from("password_reset_tokens")
-            .update({ used_at: new Date().toISOString() })
-            .eq("id", otpChallenge.id);
-          console.error("Failed to resend admin OTP email:", emailError);
-          return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
+      const emailContent = generateAdminOtpEmail(otpCode, userName, ADMIN_LOGIN_OTP_EXPIRY_MINUTES);
+      try {
+        if (process.env.NODE_ENV === "production") {
+          checkEmailConfig();
+          await sendEmail({
+            to: user.email,
+            toName: userName,
+            subject: emailContent.subject,
+            textBody: emailContent.textBody,
+            htmlBody: emailContent.htmlBody,
+          });
+        } else {
+          console.log(`[DEVELOPMENT] Mock Email Sent: Resent OTP for admin login is ${otpCode}`);
         }
+      } catch (emailError) {
+        await supabase
+          .from("password_reset_tokens")
+          .update({ used_at: new Date().toISOString() })
+          .eq("id", otpChallenge.id);
+        console.error("Failed to resend admin OTP email:", emailError);
+        return res.status(503).json({ error: "Failed to send OTP email. Please try again." });
       }
 
       res.json({

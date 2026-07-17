@@ -13,10 +13,14 @@ VALUES ('resumes', 'resumes', false)
 ON CONFLICT (id) DO NOTHING;
 
 -- Step 4: Drop existing policies if they exist
+-- (names must match exactly what Step 5 creates below, so this file is
+-- safely re-runnable — the original names here didn't match the CREATEs)
 DROP POLICY IF EXISTS "Users can view resumes" ON storage.objects;
 DROP POLICY IF EXISTS "Users can upload their own resumes" ON storage.objects;
 DROP POLICY IF EXISTS "Users can update their own resumes" ON storage.objects;
 DROP POLICY IF EXISTS "Users can delete their own resumes" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can upload resumes" ON storage.objects;
+DROP POLICY IF EXISTS "Authenticated users can view resumes" ON storage.objects;
 
 -- Step 5: Create simple, working RLS policies
 

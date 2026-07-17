@@ -61,14 +61,18 @@ UPDATE post_comments SET replies_count = 0 WHERE replies_count IS NULL;
 ALTER TABLE post_comment_replies ENABLE ROW LEVEL SECURITY;
 
 -- Create RLS policies (you may need to adjust these based on your security requirements)
+DROP POLICY IF EXISTS "Users can view active replies" ON post_comment_replies;
 CREATE POLICY "Users can view active replies" ON post_comment_replies
   FOR SELECT USING (is_active = true);
 
+DROP POLICY IF EXISTS "Users can create replies" ON post_comment_replies;
 CREATE POLICY "Users can create replies" ON post_comment_replies
   FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can update own replies" ON post_comment_replies;
 CREATE POLICY "Users can update own replies" ON post_comment_replies
   FOR UPDATE USING (auth.uid()::text = user_id);
 
+DROP POLICY IF EXISTS "Users can delete own replies" ON post_comment_replies;
 CREATE POLICY "Users can delete own replies" ON post_comment_replies
   FOR DELETE USING (auth.uid()::text = user_id);

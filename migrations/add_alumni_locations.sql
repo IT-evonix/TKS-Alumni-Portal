@@ -22,6 +22,7 @@ CREATE INDEX IF NOT EXISTS idx_alumni_locations_lat_lng
   WHERE latitude IS NOT NULL AND longitude IS NOT NULL;
 
 -- Reuse the trigger function already defined in multi_entry_profile.sql
+DROP TRIGGER IF EXISTS update_alumni_locations_updated_at ON alumni_locations;
 CREATE TRIGGER update_alumni_locations_updated_at
   BEFORE UPDATE ON alumni_locations
   FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
@@ -30,10 +31,12 @@ CREATE TRIGGER update_alumni_locations_updated_at
 ALTER TABLE alumni_locations ENABLE ROW LEVEL SECURITY;
 
 -- Anyone authenticated can read locations
+DROP POLICY IF EXISTS "alumni_locations_select" ON alumni_locations;
 CREATE POLICY "alumni_locations_select" ON alumni_locations
   FOR SELECT TO authenticated USING (true);
 
 -- Alumni can only insert their own locations
+DROP POLICY IF EXISTS "alumni_locations_insert" ON alumni_locations;
 CREATE POLICY "alumni_locations_insert" ON alumni_locations
   FOR INSERT TO authenticated
   WITH CHECK (
@@ -41,6 +44,7 @@ CREATE POLICY "alumni_locations_insert" ON alumni_locations
   );
 
 -- Alumni can only update their own locations
+DROP POLICY IF EXISTS "alumni_locations_update" ON alumni_locations;
 CREATE POLICY "alumni_locations_update" ON alumni_locations
   FOR UPDATE TO authenticated
   USING (
@@ -48,6 +52,7 @@ CREATE POLICY "alumni_locations_update" ON alumni_locations
   );
 
 -- Alumni can only delete their own locations
+DROP POLICY IF EXISTS "alumni_locations_delete" ON alumni_locations;
 CREATE POLICY "alumni_locations_delete" ON alumni_locations
   FOR DELETE TO authenticated
   USING (
@@ -55,4 +60,9 @@ CREATE POLICY "alumni_locations_delete" ON alumni_locations
   );
 
 -- Enable Realtime
-ALTER PUBLICATION supabase_realtime ADD TABLE alumni_locations;
+-- Guarded: if supabase_realtime was created FOR ALL TABLES (see prod_migration.sql),
+-- explicitly adding a table to it is invalid (error 55000) and unnecessary, since
+-- FOR ALL TABLES already covers every table including this one.
+DO $$ BEGIN
+  ALTER PUBLICATION supabase_realtime ADD TABLE alumni_locations;
+EXCEPTION WHEN others THEN NULL; END $$;

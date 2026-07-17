@@ -46,7 +46,7 @@ CREATE TABLE IF NOT EXISTS public.gamification_point_rules (
 -- Create user_scores table to track points and streaks
 CREATE TABLE IF NOT EXISTS public.user_scores (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    user_id VARCHAR NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     total_points INTEGER DEFAULT 0,
     thread_score INTEGER DEFAULT 0,
     event_score INTEGER DEFAULT 0,
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS public.user_scores (
 -- Create user_badges mapping table for awarded badges
 CREATE TABLE IF NOT EXISTS public.user_badges (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id UUID NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
+    user_id VARCHAR NOT NULL REFERENCES public.users(id) ON DELETE CASCADE,
     badge_id UUID NOT NULL REFERENCES public.gamification_badges(id) ON DELETE CASCADE,
     earned_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()) NOT NULL,
     is_featured BOOLEAN DEFAULT false,
@@ -98,7 +98,7 @@ CREATE POLICY "Enable read access for all users" ON public.gamification_badges F
 
 DROP POLICY IF EXISTS "Enable all access for admins" ON public.gamification_badges;
 CREATE POLICY "Enable all access for admins" ON public.gamification_badges FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.user_role = 'administrator')
+    EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid()::text AND users.user_role = 'administrator')
 );
 
 -- gamification_point_rules policies
@@ -107,7 +107,7 @@ CREATE POLICY "Enable read access for all users on point rules" ON public.gamifi
 
 DROP POLICY IF EXISTS "Enable all access for admins on point rules" ON public.gamification_point_rules;
 CREATE POLICY "Enable all access for admins on point rules" ON public.gamification_point_rules FOR ALL USING (
-    EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid() AND users.user_role = 'administrator')
+    EXISTS (SELECT 1 FROM public.users WHERE users.id = auth.uid()::text AND users.user_role = 'administrator')
 );
 
 -- user_scores policies
@@ -115,23 +115,23 @@ DROP POLICY IF EXISTS "Enable read access for all users on user_scores" ON publi
 CREATE POLICY "Enable read access for all users on user_scores" ON public.user_scores FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Enable update for users on user_scores" ON public.user_scores;
-CREATE POLICY "Enable update for users on user_scores" ON public.user_scores FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Enable update for users on user_scores" ON public.user_scores FOR UPDATE USING (auth.uid()::text = user_id);
 
 DROP POLICY IF EXISTS "Enable insert for users on user_scores" ON public.user_scores;
-CREATE POLICY "Enable insert for users on user_scores" ON public.user_scores FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Enable insert for users on user_scores" ON public.user_scores FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
 -- user_badges policies
 DROP POLICY IF EXISTS "Enable read access for all users on user_badges" ON public.user_badges;
 CREATE POLICY "Enable read access for all users on user_badges" ON public.user_badges FOR SELECT USING (true);
 
 DROP POLICY IF EXISTS "Enable update for users on user_badges" ON public.user_badges;
-CREATE POLICY "Enable update for users on user_badges" ON public.user_badges FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Enable update for users on user_badges" ON public.user_badges FOR UPDATE USING (auth.uid()::text = user_id);
 
 DROP POLICY IF EXISTS "Enable insert for users on user_badges" ON public.user_badges;
-CREATE POLICY "Enable insert for users on user_badges" ON public.user_badges FOR INSERT WITH CHECK (auth.uid() = user_id);
+CREATE POLICY "Enable insert for users on user_badges" ON public.user_badges FOR INSERT WITH CHECK (auth.uid()::text = user_id);
 
 DROP POLICY IF EXISTS "Enable delete for users on user_badges" ON public.user_badges;
-CREATE POLICY "Enable delete for users on user_badges" ON public.user_badges FOR DELETE USING (auth.uid() = user_id);
+CREATE POLICY "Enable delete for users on user_badges" ON public.user_badges FOR DELETE USING (auth.uid()::text = user_id);
 
 
 -- ------------------------------------------------------------------------------

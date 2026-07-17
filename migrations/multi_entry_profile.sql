@@ -139,6 +139,102 @@ CREATE TABLE IF NOT EXISTS alumni_projects (
   CONSTRAINT fk_alumni_projects_alumni FOREIGN KEY (alumni_id) REFERENCES alumni(id) ON DELETE CASCADE
 );
 
+-- ==================== BACKFILL COLUMNS ON PRE-EXISTING TABLES ====================
+-- These 6 tables may already exist on a given database (created by an earlier,
+-- independent process) with a different/partial column set. The CREATE TABLE IF
+-- NOT EXISTS blocks above are then no-ops, so explicitly add every column this
+-- migration expects, guarded, so the file is correct whether the table is fresh
+-- or pre-existing.
+
+-- alumni_experiences
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS employment_type TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS location TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS location_type TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS is_current BOOLEAN DEFAULT false;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS responsibilities TEXT[];
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS achievements TEXT[];
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS skills_used TEXT[];
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS industry TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS company_size TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS company_url TEXT;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE alumni_experiences ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- alumni_skills
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS proficiency_level TEXT;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS years_of_experience INTEGER;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS last_used_date DATE;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS is_primary BOOLEAN DEFAULT false;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS endorsements_count INTEGER DEFAULT 0;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS verified BOOLEAN DEFAULT false;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS related_projects TEXT[];
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS certification_ids TEXT[];
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE alumni_skills ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- alumni_certifications (confirmed live gap: expiry_date was missing)
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS expiry_date DATE;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS credential_id TEXT;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS credential_url TEXT;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS verification_url TEXT;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS is_active BOOLEAN DEFAULT true;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS skills_gained TEXT[];
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS certificate_file_url TEXT;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE alumni_certifications ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- alumni_languages
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS can_read BOOLEAN DEFAULT true;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS can_write BOOLEAN DEFAULT true;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS can_speak BOOLEAN DEFAULT true;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS certification_name TEXT;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS certification_score TEXT;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS certification_date DATE;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS is_native BOOLEAN DEFAULT false;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE alumni_languages ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- alumni_achievements
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS description TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS issuing_organization TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS category TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS level TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS url TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS certificate_url TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS co_recipients TEXT[];
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS impact_description TEXT;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS media_coverage_urls TEXT[];
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS is_featured BOOLEAN DEFAULT false;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE alumni_achievements ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
+-- alumni_projects
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS project_type TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS role TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS start_date DATE;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS end_date DATE;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS is_ongoing BOOLEAN DEFAULT false;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS technologies_used TEXT[];
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS project_url TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS github_url TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS demo_url TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS image_urls TEXT[];
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS team_size INTEGER;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS your_contribution TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS outcomes TEXT;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS display_order INTEGER DEFAULT 0;
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS created_at TIMESTAMP DEFAULT NOW();
+ALTER TABLE alumni_projects ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT NOW();
+
 -- ==================== INDEXES FOR PERFORMANCE ====================
 CREATE INDEX IF NOT EXISTS idx_experiences_alumni ON alumni_experiences(alumni_id);
 CREATE INDEX IF NOT EXISTS idx_experiences_current ON alumni_experiences(is_current);
@@ -175,21 +271,27 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS update_alumni_experiences_updated_at ON alumni_experiences;
 CREATE TRIGGER update_alumni_experiences_updated_at BEFORE UPDATE ON alumni_experiences
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_alumni_skills_updated_at ON alumni_skills;
 CREATE TRIGGER update_alumni_skills_updated_at BEFORE UPDATE ON alumni_skills
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_alumni_certifications_updated_at ON alumni_certifications;
 CREATE TRIGGER update_alumni_certifications_updated_at BEFORE UPDATE ON alumni_certifications
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_alumni_languages_updated_at ON alumni_languages;
 CREATE TRIGGER update_alumni_languages_updated_at BEFORE UPDATE ON alumni_languages
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_alumni_achievements_updated_at ON alumni_achievements;
 CREATE TRIGGER update_alumni_achievements_updated_at BEFORE UPDATE ON alumni_achievements
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
+DROP TRIGGER IF EXISTS update_alumni_projects_updated_at ON alumni_projects;
 CREATE TRIGGER update_alumni_projects_updated_at BEFORE UPDATE ON alumni_projects
     FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
 
@@ -206,6 +308,7 @@ BEGIN
 END;
 $$ language 'plpgsql';
 
+DROP TRIGGER IF EXISTS check_certification_expiry ON alumni_certifications;
 CREATE TRIGGER check_certification_expiry BEFORE INSERT OR UPDATE ON alumni_certifications
     FOR EACH ROW EXECUTE FUNCTION update_certification_active_status();
 

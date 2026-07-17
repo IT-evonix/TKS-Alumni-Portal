@@ -16,7 +16,7 @@ CREATE TABLE IF NOT EXISTS mentorship_sessions (
   id               UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   mentor_id        VARCHAR NOT NULL,
   mentee_id        VARCHAR NOT NULL,
-  request_id       UUID NOT NULL REFERENCES mentorship_requests(id) ON DELETE CASCADE,
+  request_id       VARCHAR NOT NULL REFERENCES mentorship_requests(id) ON DELETE CASCADE,
   scheduled_at     TIMESTAMPTZ NOT NULL,
   duration_minutes INTEGER DEFAULT 60,
   agenda           TEXT,

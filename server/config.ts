@@ -33,7 +33,7 @@ function validateEnv(): Config {
     if (missing.length > 0) {
         console.error('❌ FATAL: Missing required environment variables:');
         missing.forEach(key => console.error(`   - ${key}`));
-        console.error('\nSet these in Railway dashboard or .env file');
+        console.error('\nSet these in Plesk Node.js panel (Custom environment variables) or .env file');
         process.exit(1);
     }
 
