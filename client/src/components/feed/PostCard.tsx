@@ -498,7 +498,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
 
   return (
     <Card id={`post-${post.id}`} className="bg-white max-w-full overflow-hidden transition-shadow duration-200 hover:shadow-md" style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
-      <CardContent className="p-4 sm:p-5">
+      <CardContent className="p-3.5 sm:p-4">
         {/* Author header */}
         <div className="flex items-start gap-3 mb-3">
           <Avatar
@@ -601,13 +601,13 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                 <OptimizedImage
                   src={post.image_url}
                   alt="Post attachment"
-                  className="w-full h-auto object-cover max-h-[480px] mx-auto"
+                  className="w-full h-auto object-cover max-h-[260px] sm:max-h-[300px] mx-auto"
                   loading="lazy"
                   responsive={true}
                   quality={85}
                 />
               ) : post.image_url.match(/\.(mp4|webm)$/i) ? (
-                <video src={post.image_url} controls className="w-full h-auto max-h-[480px] mx-auto" style={{ maxWidth: '100%' }} />
+                <video src={post.image_url} controls className="w-full h-auto max-h-[260px] sm:max-h-[300px] mx-auto" style={{ maxWidth: '100%' }} />
               ) : (
                 <a href={post.image_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 w-full min-h-[50px]">
                   <span className="text-2xl">📄</span>
@@ -645,7 +645,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
 
         {/* Comments section */}
         {showComments && (
-          <div className="mt-4 pt-4 -mx-4 sm:-mx-5 px-4 sm:px-5 pb-0" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}>
+          <div className="mt-4 pt-4 -mx-3.5 sm:-mx-4 px-3.5 sm:px-4 pb-0" style={{ borderTop: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}>
             <div className="flex items-center gap-2 mb-3">
               <Avatar className="w-7 h-7 flex-shrink-0">
                 <AvatarImage src={getAuthorProfilePicture()} alt="Current user" />

@@ -450,7 +450,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
       {/* Left Sidebar - Fixed */}
       {/* z-[60] ensures mobile menu is above Save Changes overlay (z-50) */}
-      <div className={`${showMobileMenu ? 'flex' : 'hidden'} lg:flex w-full sm:w-80 lg:w-60 xl:w-72 bg-white flex-col border-r fixed h-full z-[110] lg:z-30`} style={{ borderColor: 'var(--border-subtle)' }}>
+      <div className={`${showMobileMenu ? 'flex' : 'hidden'} lg:flex w-full sm:w-80 lg:w-48 xl:w-52 flex-col border-r fixed h-full z-[110] lg:z-30`} style={{ borderColor: 'var(--border-subtle)', background: 'var(--brand-gradient-subtle)' }}>
         {/* Logo */}
         <div className="px-3 py-3 shrink-0" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
           <div
@@ -473,24 +473,24 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
         </div>
 
         {/* Navigation */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
+        <nav className="flex-1 px-2.5 py-3 overflow-y-auto">
           {navItems
             .filter(item => hasRole(item.roles as UserRole[]) && item.section === 'main')
             .map((item) => (
               <Button
                 key={item.id}
                 variant="ghost"
-                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter'))
-                  ? "bg-[#e6f5f0] text-[#008060] hover:bg-[#d0ede4]"
-                  : "text-gray-600 hover:bg-[#e6f5f0]/60 hover:text-[#008060]"
+                className={`group w-full justify-start rounded-[10px] px-2.5 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter'))
+                  ? "nav-pill-active shadow-md"
+                  : "text-gray-700 hover:!bg-white hover:!text-[#008060] hover:shadow-sm border border-transparent hover:border-[#d4e4dc]"
                   }`}
                 onClick={() => {
                   setLocation(item.path);
                   setShowMobileMenu(false);
                 }}
               >
-                {(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
-                <item.icon className={`mr-3 w-[18px] h-[18px] flex-shrink-0 ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) ? 'text-[#008060]' : 'text-gray-500'}`} />
+                {(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-white/70" />}
+                <item.icon className={`mr-2.5 w-[18px] h-[18px] flex-shrink-0 transition-colors ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) ? 'text-white' : 'text-gray-500 group-hover:text-[#008060]'}`} />
                 <span className="truncate text-sm">{item.label}</span>
                 {item.id === 'inbox' && unreadMessageCount > 0 && (
                   <span className="ml-auto bg-red-500 text-white text-[10px] font-bold px-1.5 py-0.5 rounded-full min-w-[18px] text-center">
@@ -508,14 +508,14 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
               <Button
                 key={item.id}
                 variant="ghost"
-                className={`w-full justify-start rounded-[10px] px-3 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter'))
-                  ? "bg-[#e6f5f0] text-[#008060] hover:bg-[#d0ede4]"
-                  : "text-gray-600 hover:bg-[#e6f5f0]/60 hover:text-[#008060]"
+                className={`group w-full justify-start rounded-[10px] px-2.5 py-2 h-auto min-h-[38px] font-semibold transition-all duration-200 mb-0.5 relative ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter'))
+                  ? "nav-pill-active shadow-md"
+                  : "text-gray-700 hover:!bg-white hover:!text-[#008060] hover:shadow-sm border border-transparent hover:border-[#d4e4dc]"
                   }`}
                 onClick={() => { setLocation(item.path); setShowMobileMenu(false); }}
               >
-                {(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) && <span className="absolute left-0 top-2 bottom-2 w-[3px] rounded-full bg-[#008060]" />}
-                <item.icon className={`mr-3 w-[17px] h-[17px] flex-shrink-0 ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) ? 'text-[#008060]' : 'text-gray-500'}`} />
+                {(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) && <span className="absolute left-0 top-1.5 bottom-1.5 w-[3px] rounded-full bg-white/70" />}
+                <item.icon className={`mr-2.5 w-[17px] h-[17px] flex-shrink-0 transition-colors ${(activePage === item.id || (activePage === 'city-chapter-detail' && item.id === 'city-chapter')) ? 'text-white' : 'text-gray-500 group-hover:text-[#008060]'}`} />
                 <span className="truncate text-sm">{item.label}</span>
               </Button>
             ))}
@@ -524,9 +524,9 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
       </div>
 
       {/* Main Content - Fixed Layout */}
-      <div className="flex-1 flex flex-col lg:ml-60 xl:ml-72 min-h-screen overflow-x-hidden max-w-full">
+      <div className="flex-1 flex flex-col lg:ml-48 xl:ml-52 min-h-screen overflow-x-hidden max-w-full">
         {/* Header - Fixed */}
-        <div className="bg-white fixed top-0 right-0 left-0 lg:left-60 xl:left-72 z-[100] h-14 sm:h-16" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
+        <div className="fixed top-0 right-0 left-0 lg:left-48 xl:left-52 z-[100] h-14 sm:h-16" style={{ borderBottom: '1px solid var(--border-subtle)', background: 'var(--brand-gradient-subtle)' }}>
           <div className="h-full flex items-center justify-between gap-2 sm:gap-3 px-3 sm:px-4 lg:px-6">
             {/* Mobile Menu Button */}
             <Button
@@ -631,7 +631,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
                 </button>
 
                 {showProfileDropdown && (
-                  <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg border z-[200] py-1.5 animate-in fade-in slide-in-from-top-2 duration-150" style={{ borderColor: 'var(--border-subtle)' }}>
+                  <div className="absolute right-0 top-full mt-2 w-56 rounded-xl shadow-lg border z-[200] py-1.5 animate-in fade-in slide-in-from-top-2 duration-150" style={{ borderColor: 'var(--border-subtle)', background: 'var(--brand-gradient-subtle)' }}>
                     {/* Identity card */}
                     <div className="px-4 py-3 flex items-center gap-3 border-b" style={{ borderColor: 'var(--border-subtle)' }}>
                       <Avatar className="w-10 h-10 ring-2 ring-[#d4e4dc] flex-shrink-0">
@@ -672,7 +672,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
         {/* Page Content - Scrollable with centered container for large screens */}
         <div id="app-main-scroll-container" data-scrollable-container ref={scrollableContainerRef} className={`flex-1 ${activePage === 'inbox' || activePage === 'city-chapter-detail' ? 'overflow-hidden' : 'overflow-y-auto'} overflow-x-hidden mt-14 sm:mt-16 w-full max-w-full`}>
-          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'city-chapter-detail' ? 'h-full' : activePage === 'alumni-map' ? 'py-6 sm:py-8' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-8 py-6 sm:py-8 lg:py-10'}`}>
+          <div className={`w-full mx-auto ${activePage === 'inbox' || activePage === 'city-chapter-detail' ? 'h-full' : activePage === 'alumni-map' ? 'py-6 sm:py-8' : activePage === 'feed' ? 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-8 py-3 sm:py-4' : 'max-w-[1400px] xl:max-w-[1600px] 2xl:max-w-[1800px] px-4 sm:px-6 lg:px-8 xl:px-8 py-6 sm:py-8 lg:py-10'}`}>
             {children}
           </div>
         </div>

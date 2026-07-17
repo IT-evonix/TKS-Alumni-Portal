@@ -602,13 +602,14 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
     <div
       ref={dropdownRef}
       data-notification-dropdown="true"
-      className="fixed left-2 right-2 top-[72px] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 md:w-96 lg:w-[420px] xl:w-[480px] max-w-none sm:max-w-md bg-white border border-gray-200 rounded-xl sm:rounded-lg shadow-2xl z-[9999] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 min-h-[150px] sm:min-h-[200px]"
+      className="fixed left-2 right-2 top-[72px] sm:absolute sm:left-auto sm:right-0 sm:top-full sm:mt-2 w-auto sm:w-80 md:w-96 lg:w-[420px] xl:w-[480px] max-w-none sm:max-w-md border border-gray-200 rounded-xl sm:rounded-lg shadow-2xl z-[9999] flex flex-col animate-in fade-in slide-in-from-top-2 duration-200 min-h-[150px] sm:min-h-[200px]"
       style={{
         maxHeight: isMobile ? 'calc(100vh - 80px)' : '80vh',
+        background: 'var(--brand-gradient-subtle)',
       }}
     >
       {/* Header */}
-      <div className="p-3 sm:p-4 border-b border-gray-100 flex flex-col gap-2 sm:gap-3 sticky top-0 bg-white z-10 flex-shrink-0">
+      <div className="p-3 sm:p-4 border-b border-gray-100 flex flex-col gap-2 sm:gap-3 sticky top-0 z-10 flex-shrink-0" style={{ background: 'var(--brand-gradient-subtle)' }}>
         <div className="flex justify-between items-center gap-2">
           <h3 className="font-semibold text-gray-900 text-sm sm:text-base md:text-lg">Notifications</h3>
           <div className="flex items-center gap-1 sm:gap-2 flex-shrink-0">

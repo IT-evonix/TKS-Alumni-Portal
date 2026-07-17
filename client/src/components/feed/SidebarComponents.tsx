@@ -48,7 +48,7 @@ interface SidebarSectionProps {
 }
 
 const SidebarSection: React.FC<SidebarSectionProps> = ({ title, viewAllPath, onViewAll, children, className = "" }) => (
-    <div className={`bg-white rounded-[14px] p-4 ${className}`} style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+    <div className={`rounded-[14px] p-4 ${className}`} style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', background: 'var(--brand-gradient-subtle)' }}>
         <div className="flex items-center justify-between mb-3">
             <h3 className="font-semibold text-gray-900 text-[13px]">{title}</h3>
             <button

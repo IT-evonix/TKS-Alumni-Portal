@@ -69,10 +69,10 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     onError?.();
   };
 
-  const imageSrc = hasError && fallback ? fallback : (isInView ? src : placeholder);
+  const imageSrc = hasError && fallback ? fallback : (isInView ? src : undefined);
 
   return (
-    <div className={`relative overflow-hidden ${className}`}>
+    <div ref={imgRef} className={`relative overflow-hidden ${className}`}>
       {!isLoaded && (
         <div className="absolute inset-0 bg-gray-200 animate-pulse flex items-center justify-center">
           {placeholder ? (
@@ -84,7 +84,6 @@ export const LazyImage: React.FC<LazyImageProps> = ({
       )}
       {imageSrc && (
         <img
-          ref={imgRef}
           src={imageSrc}
           alt={alt}
           className={`transition-opacity duration-300 ${

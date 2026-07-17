@@ -538,20 +538,20 @@ export const JobPortalPage = (): JSX.Element => {
 
   return (
     <AppLayout currentPage="job-portal">
-      <div className="p-3 sm:p-4 lg:p-6 max-w-[1400px] mx-auto">
+      <div className="p-2.5 sm:p-3 lg:p-4 max-w-[1400px] mx-auto">
         {/* Back Button */}
-        <div className="mb-4 sm:mb-6 lg:hidden">
+        <div className="mb-2 sm:mb-3 lg:hidden">
           <BackButton />
         </div>
 
 {/* Post Job Section */}
-        <Card className="mb-4 sm:mb-6 bg-gray-50">
-          <CardContent className="p-4 sm:p-6">
-            <div className="flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4">
+        <Card className="mb-3 sm:mb-4 bg-gray-50">
+          <CardContent className="p-3 sm:p-4">
+            <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 sm:gap-3">
               <span className="text-sm sm:text-base text-gray-700 text-center sm:text-left">Wish to hire your fellow Alumni ?</span>
               <Dialog open={isJobDialogOpen} onOpenChange={setIsJobDialogOpen}>
                 <DialogTrigger asChild>
-                  <Button variant="brand" className="w-full sm:w-auto px-4 sm:px-6 min-h-[44px] text-sm sm:text-base">
+                  <Button variant="brand" className="w-full sm:w-auto px-4 sm:px-6 min-h-[38px] text-sm sm:text-base">
                     Post a Job Opening 💼
                   </Button>
                 </DialogTrigger>
@@ -731,14 +731,14 @@ export const JobPortalPage = (): JSX.Element => {
         </Card>
 
         {/* Jobs Section with Tabs */}
-        <div className="mb-4 sm:mb-6">
-          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4 mb-4">
+        <div className="mb-3 sm:mb-4">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center gap-2.5 sm:gap-3 mb-3">
             <h2 className="text-lg sm:text-xl lg:text-2xl font-semibold">Jobs</h2>
             <div className="flex gap-2 w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0 scrollbar-hide snap-x snap-mandatory">
               <Button
                 variant={activeTab === 'all' ? 'brand' : 'outline'}
                 onClick={() => setActiveTab('all')}
-                className="min-h-[44px] whitespace-nowrap text-sm sm:text-base snap-center"
+                className="min-h-[38px] whitespace-nowrap text-sm sm:text-base snap-center"
                 aria-pressed={activeTab === 'all'}
               >
                 All Jobs
@@ -746,7 +746,7 @@ export const JobPortalPage = (): JSX.Element => {
               <Button
                 variant={activeTab === 'saved' ? 'brand' : 'outline'}
                 onClick={() => setActiveTab('saved')}
-                className="min-h-[44px] whitespace-nowrap text-sm sm:text-base snap-center"
+                className="min-h-[38px] whitespace-nowrap text-sm sm:text-base snap-center"
                 aria-pressed={activeTab === 'saved'}
               >
                 Saved ({savedJobsData.length})
@@ -754,7 +754,7 @@ export const JobPortalPage = (): JSX.Element => {
               <Button
                 variant={activeTab === 'applied' ? 'brand' : 'outline'}
                 onClick={() => setActiveTab('applied')}
-                className="min-h-[44px] whitespace-nowrap text-sm sm:text-base snap-center"
+                className="min-h-[38px] whitespace-nowrap text-sm sm:text-base snap-center"
                 aria-pressed={activeTab === 'applied'}
               >
                 Applied ({appliedJobsData.length})
@@ -764,9 +764,9 @@ export const JobPortalPage = (): JSX.Element => {
 
           {/* Search and Filters - Only show for All Jobs tab */}
           {activeTab === 'all' && (
-            <Card className="mb-4 sm:mb-6">
-              <CardContent className="p-4 sm:p-6">
-                <div className="flex flex-col lg:flex-row gap-3 sm:gap-4 w-full">
+            <Card className="mb-3 sm:mb-4">
+              <CardContent className="p-3 sm:p-4">
+                <div className="flex flex-col lg:flex-row gap-2.5 sm:gap-3 w-full">
                   <Input
                     placeholder="Search Job by name"
                     value={searchTerm}
@@ -777,13 +777,13 @@ export const JobPortalPage = (): JSX.Element => {
                         applyFilters();
                       }
                     }}
-                    className="flex-1 min-h-[44px] text-sm sm:text-base w-full"
+                    className="flex-1 min-h-[38px] text-sm sm:text-base w-full"
                     aria-label="Search jobs"
                   />
 
-                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-2 sm:gap-3 lg:gap-4 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide w-full lg:w-auto">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:flex gap-2 sm:gap-2.5 lg:gap-3 overflow-x-auto pb-2 lg:pb-0 scrollbar-hide w-full lg:w-auto">
                     <Select value={selectedLocation} onValueChange={setSelectedLocation}>
-                      <SelectTrigger className="w-full lg:w-32 min-h-[44px] text-xs sm:text-sm" data-testid="select-location">
+                      <SelectTrigger className="w-full lg:w-32 min-h-[38px] text-xs sm:text-sm" data-testid="select-location">
                         <SelectValue placeholder="Location" />
                       </SelectTrigger>
                       <SelectContent>
@@ -850,14 +850,14 @@ export const JobPortalPage = (): JSX.Element => {
                     </Select>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-2 sm:gap-3 lg:flex w-full lg:w-auto">
-                    <Button variant="outline" onClick={clearFilters} className="text-[#008060] border-[#008060] min-h-[44px] text-xs sm:text-sm w-full lg:w-auto">
+                  <div className="grid grid-cols-2 gap-2 sm:gap-2.5 lg:flex w-full lg:w-auto">
+                    <Button variant="outline" onClick={clearFilters} className="text-[#008060] border-[#008060] min-h-[38px] text-xs sm:text-sm w-full lg:w-auto">
                       Clear
                     </Button>
                     <Button
                       onClick={applyFilters}
                       variant="brand"
-                      className="min-h-[44px] text-xs sm:text-sm w-full lg:w-auto"
+                      className="min-h-[38px] text-xs sm:text-sm w-full lg:w-auto"
                     >
                       Apply
                     </Button>
@@ -868,7 +868,7 @@ export const JobPortalPage = (): JSX.Element => {
           )}
 
           {/* Job Listings */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 lg:grid-cols-2 xl:grid-cols-3 gap-3">
             {loading ? (
               <div className="lg:col-span-2 xl:col-span-3 space-y-4">
                 {[1, 2, 3].map((i) => (
@@ -909,36 +909,36 @@ export const JobPortalPage = (): JSX.Element => {
               ) : (
                 displayJobs.map((job) => (
                   <Card key={job.id} id={`job-${job.id}`} className="hover:shadow-md transition-shadow">
-                    <CardContent className="p-4 sm:p-6">
-                      <div className="flex flex-col sm:flex-row gap-4">
+                    <CardContent className="p-3 sm:p-4">
+                      <div className="flex flex-col sm:flex-row gap-3">
                         {/* Company Avatar */}
                         <div className="flex-shrink-0">
-                          <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-[#008060] to-[#005c45] flex items-center justify-center shadow-md">
-                            <span className="text-white font-bold text-lg">{(job.company?.[0] || 'J').toUpperCase()}</span>
+                          <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-[#008060] to-[#005c45] flex items-center justify-center shadow-md">
+                            <span className="text-white font-bold text-base">{(job.company?.[0] || 'J').toUpperCase()}</span>
                           </div>
                         </div>
 
                         {/* Job Details */}
                         <div className="flex-1 min-w-0">
-                          <div className="mb-3">
-                            <h3 className="text-base sm:text-lg font-semibold text-[#008060] mb-1 truncate">{job.title || job.company}</h3>
-                              <p className="text-xs sm:text-sm text-gray-600 mb-2">
+                          <div className="mb-2">
+                            <h3 className="text-base sm:text-lg font-semibold text-[#008060] mb-0.5 truncate">{job.title || job.company}</h3>
+                              <p className="text-xs sm:text-sm text-gray-600 mb-1.5">
                                 Posted by {
                                   job.posted_by_user?.alumni?.first_name
                                     ? `${job.posted_by_user.alumni.first_name} ${job.posted_by_user.alumni.last_name || ''}`.trim()
                                     : job.posted_by_user?.username || job.postedBy || 'Unknown'
                                 }
                               </p>
-                              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-gray-600 mb-3">
+                              <div className="flex flex-wrap items-center gap-2 text-xs sm:text-sm text-gray-600 mb-2">
                                 <span className="whitespace-nowrap">{job.location || 'Remote'}</span>
-                                <span className="bg-green-100 text-green-800 px-2 py-1 rounded whitespace-nowrap">
+                                <span className="bg-green-100 text-green-800 px-2 py-0.5 rounded whitespace-nowrap">
                                   {job.experience_level || job.type || 'All levels'}
                                 </span>
                                 <span className="whitespace-nowrap">{job.job_type || job.schedule || 'Full-time'} | {job.work_mode || 'On-site'}</span>
                               </div>
                             </div>
 
-                          <div className="flex flex-wrap gap-2 mb-3">
+                          <div className="flex flex-wrap gap-2 mb-2">
                               {(() => {
                                 const currentUserId = user?.id || localStorage.getItem('userId');
                                 const isJobPoster = job.posted_by === currentUserId;
@@ -1043,20 +1043,20 @@ export const JobPortalPage = (): JSX.Element => {
                               })()}
                             </div>
 
-                          <div className="mb-3">
-                            <p className="text-sm font-medium text-gray-900 mb-1">Job Description:</p>
+                          <div className="mb-2">
+                            <p className="text-sm font-medium text-gray-900 mb-0.5">Job Description:</p>
                             <p className="text-sm text-gray-700 break-words line-clamp-3">{job.description || 'No description provided'}</p>
                           </div>
 
                           {job.skills && (
                             <div>
-                              <p className="text-sm font-medium text-gray-900 mb-1">Key Skills:</p>
+                              <p className="text-sm font-medium text-gray-900 mb-0.5">Key Skills:</p>
                               <p className="text-sm text-gray-700 break-words">{job.skills || job.keySkills}</p>
                             </div>
                           )}
 
                           {/* View Details Button */}
-                          <div className="mt-3 pt-3 border-t border-gray-100">
+                          <div className="mt-2 pt-2 border-t border-gray-100">
                             <Button
                               variant="outline"
                               size="sm"

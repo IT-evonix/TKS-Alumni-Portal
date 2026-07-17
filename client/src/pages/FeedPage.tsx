@@ -1347,7 +1347,7 @@ export const FeedPage = (): JSX.Element => {
 
                 {/* Filter tabs + Create Post on same row */}
                 {!isLoadingPosts && !error && (
-                  <div className="flex items-center justify-between gap-3 flex-wrap py-4 mb-2">
+                  <div className="flex items-center justify-between gap-3 flex-wrap py-2.5 mb-1">
                     <div className="flex items-center gap-3 flex-wrap">
                       {allFeedItems.length > 0 && (["all", "post", "blog", "podcast", "travel_post"] as const).map((type) => {
                         const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts", travel_post: "City Chapters" };
@@ -1378,7 +1378,7 @@ export const FeedPage = (): JSX.Element => {
                 )}
 
                 {/* Feed — posts, blogs, and podcasts interleaved by date */}
-                <div className="space-y-6 mt-2">
+                <div className="space-y-3 mt-1">
                   {feedItems.map((item) => {
                     if (item._type === "blog") {
                       return <FeedBlogCard key={`blog-${item.id}`} blog={item} onBookmark={handleBlogBookmark} />;

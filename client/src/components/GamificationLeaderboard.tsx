@@ -128,7 +128,7 @@ export function GamificationLeaderboard() {
 
   if (loading) {
     return (
-      <div className="bg-white rounded-[14px] p-4" style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+      <div className="rounded-[14px] p-4" style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', background: 'var(--brand-gradient-subtle)' }}>
         <div className="flex items-center gap-2 mb-3">
           <div className="w-7 h-7 rounded-lg bg-amber-50 flex items-center justify-center">
             <Trophy className="w-3.5 h-3.5 text-amber-500" />
@@ -249,7 +249,7 @@ export function GamificationLeaderboard() {
   };
 
   return (
-    <div className="bg-white rounded-[14px] overflow-hidden" style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)' }}>
+    <div className="rounded-[14px] overflow-hidden" style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', background: 'var(--brand-gradient-subtle)' }}>
       <Tabs defaultValue="points" className="w-full" onValueChange={(v) => setActiveTab(v as "points" | "badges")}>
         {/* Header */}
         <div className="px-4 pt-4 pb-3" style={{ borderBottom: '1px solid var(--border-subtle)' }}>
@@ -271,7 +271,7 @@ export function GamificationLeaderboard() {
         {(activeTab === "points" ? myPoints > 0 : myBadgesCount > 0) && (
           <div
             className="mx-3 my-2 px-3 py-2 rounded-xl flex items-center gap-2.5"
-            style={{ background: 'linear-gradient(90deg, #e6f5f0 0%, #f0faf6 100%)', border: '1px solid rgba(0,128,96,0.15)' }}
+            style={{ background: 'linear-gradient(90deg, rgba(254,192,15,0.08) 0%, #e6f5f0 40%, #f0faf6 100%)', border: '1px solid rgba(0,128,96,0.15)' }}
           >
             <Avatar className="w-7 h-7 border-2 border-[#008060]/30 shrink-0">
               <AvatarImage src={myProfilePicture} alt="Your avatar" />

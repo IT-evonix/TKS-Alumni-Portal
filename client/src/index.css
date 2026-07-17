@@ -7,6 +7,12 @@
     all: unset;
   }
 
+  .nav-pill-active,
+  .nav-pill-active:hover {
+    background: var(--brand-gradient-nav-active) !important;
+    color: #ffffff !important;
+  }
+
   .search-highlight {
     animation: highlight-pulse 2s ease-in-out;
     box-shadow: 0 0 0 4px rgba(0, 128, 96, 0.4);
@@ -100,6 +106,11 @@
   --brand-primary-light: #e6f5f0;
   --brand-primary-light-hover: #d0ede4;
   --brand-accent: #A6CE39;
+
+  /* Logo-inspired gradient wash, kept very faint per design guidance */
+  --brand-gradient-subtle: linear-gradient(135deg, rgba(254,192,15,0.05) 0%, rgba(0,128,96,0.04) 45%, rgba(166,206,57,0.06) 100%), #ffffff;
+  --brand-gradient-strong: linear-gradient(135deg, #FEC00F 0%, #008060 55%, #A6CE39 100%);
+  --brand-gradient-nav-active: linear-gradient(120deg, #FDB913 0%, #008060 25%, #006b51 50%, #008060 75%, #A6CE39 100%);
 
   /* Surface tokens */
   --surface-card: #ffffff;
