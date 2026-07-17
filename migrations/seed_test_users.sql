@@ -18,7 +18,6 @@ VALUES
   (
     gen_random_uuid(),
     'admin_tks',
-    'bhupendra@evonix.co',
     '$2a$10$CxGpJXwmRVrIsCqAKZZxrO1ibDvk3qjbloKTL/Kfh4L.Avt4M3QrC',
     true,          -- is_admin = true
     'administrator',
@@ -75,7 +74,6 @@ SELECT
   account_approved
 FROM public.users
 WHERE email IN (
-  'bhupendra@evonix.co',
   'alumni@tks.edu.in',
   'faculty@tks.edu.in',
   'user@tks.edu.in'
