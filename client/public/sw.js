@@ -3,9 +3,9 @@
  * Provides offline functionality, asset caching, and background sync
  */
 
-const CACHE_NAME = 'tks-alumni-portal-v1';
-const RUNTIME_CACHE = 'tks-runtime-v1';
-const STATIC_CACHE = 'tks-static-v1';
+const CACHE_NAME = 'tks-alumni-portal-v3';
+const RUNTIME_CACHE = 'tks-runtime-v3';
+const STATIC_CACHE = 'tks-static-v3';
 
 // Assets to cache on install
 const STATIC_ASSETS = [
@@ -89,6 +89,11 @@ self.addEventListener('fetch', (event) => {
                 });
             })
         );
+        return;
+    }
+
+    // Any other API request: let the browser handle it directly (no SW interception)
+    if (url.pathname.startsWith('/api/')) {
         return;
     }
 

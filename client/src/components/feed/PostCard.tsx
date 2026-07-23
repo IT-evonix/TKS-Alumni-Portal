@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from "react";
 import { useLocation } from "wouter";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Trash2 } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
@@ -7,9 +8,12 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { formatTimeAgo } from "@/lib/dateUtils";
+import { withAuthenticatedMediaUrl } from "@/lib/mediaUrl";
+import { TimeAgoLabel } from "@/components/feed/TimeAgoLabel";
 import { useAuth } from "@/contexts/AuthContext";
 import { OptimizedImage } from "@/components/common/OptimizedImage";
+import { useCurrentUserId } from "@/hooks/useCurrentUserId";
+import { getAvatarUrl } from "@/lib/avatarUrl";
 
 interface CommentReply {
   id: string;
@@ -90,14 +94,13 @@ const PostCardComponent: React.FC<PostCardProps> = ({
   const { toast } = useToast();
   const [, setLocation] = useLocation();
   const { adminUser, user } = useAuth();
-  const currentUserId = localStorage.getItem('userId');
+  const currentUserId = useCurrentUserId();
   const dropdownRef = useRef<HTMLDivElement>(null);
 
   const handleDeleteComment = async (commentId: string) => {
     if (!window.confirm("Delete this comment?")) return;
     try {
-      // Use adminUser ID if in admin context, otherwise use regular user ID
-      const userId = adminUser?.id || user?.id || currentUserId || '';
+      const userId = currentUserId;
       const response = await fetch(`/api/posts/${post.id}/comments/${commentId}`, {
         method: 'DELETE',
         headers: { 'user-id': userId }
@@ -124,8 +127,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
   const handleDeleteReply = async (commentId: string, replyId: string) => {
     if (!window.confirm("Delete this reply?")) return;
     try {
-      // Use adminUser ID if in admin context, otherwise use regular user ID
-      const userId = adminUser?.id || user?.id || currentUserId || '';
+      const userId = currentUserId;
       const response = await fetch(`/api/comments/${commentId}/replies/${replyId}`, {
         method: 'DELETE',
         headers: { 'user-id': userId }
@@ -159,11 +161,9 @@ const PostCardComponent: React.FC<PostCardProps> = ({
     }
   };
 
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [isLoadingComments, setIsLoadingComments] = useState(false);
+  const queryClient = useQueryClient();
   const [isEditing, setIsEditing] = useState(false);
   const [editedContent, setEditedContent] = useState(post.content);
-  const [_currentTime, setCurrentTime] = useState(new Date());
 
   // Reply states
   const [showReplies, setShowReplies] = useState<Set<string>>(new Set());
@@ -171,11 +171,25 @@ const PostCardComponent: React.FC<PostCardProps> = ({
   const [replyTexts, setReplyTexts] = useState<{ [key: string]: string }>({});
   const [loadingReplies, setLoadingReplies] = useState<Set<string>>(new Set());
 
-  useEffect(() => {
-    if (showComments) {
-      fetchComments();
-    }
-  }, [showComments, post.id]);
+  // Comments are fetched via React Query only while the section is expanded
+  // (matches the previous lazy-fetch-on-expand behavior) and support
+  // optimistic posting through usePostComment's cache mutation.
+  const { data: commentsData, isLoading: isLoadingComments } = useQuery({
+    queryKey: ['comments', post.id],
+    queryFn: async () => {
+      const response = await fetch(`/api/posts/${post.id}/comments`);
+      if (!response.ok) throw new Error('Failed to fetch comments');
+      return response.json() as Promise<{ comments: Comment[] }>;
+    },
+    enabled: showComments,
+    staleTime: 15 * 1000,
+  });
+  const comments = commentsData?.comments || [];
+  const setComments = (updater: (prev: Comment[]) => Comment[]) => {
+    queryClient.setQueryData(['comments', post.id], (old: any) => ({
+      comments: updater(old?.comments || []),
+    }));
+  };
 
   // Close dropdown menu when clicking outside
   useEffect(() => {
@@ -210,47 +224,6 @@ const PostCardComponent: React.FC<PostCardProps> = ({
       });
     }
   }, [comments]);
-
-  // Update current time to refresh timestamps for recent posts
-  useEffect(() => {
-    const now = new Date();
-    const posted = new Date(post.created_at);
-    const diffMs = now.getTime() - posted.getTime();
-    const diffMinutes = Math.floor(diffMs / (1000 * 60));
-
-    // Only update timestamps frequently for recent posts (less than 60 minutes old)
-    if (diffMinutes < 60) {
-      const interval = setInterval(() => {
-        setCurrentTime(new Date());
-      }, 1000); // Update every second for posts less than an hour old
-
-      return () => clearInterval(interval);
-    } else if (diffMinutes < 1440) {
-      // Update every minute for posts less than 24 hours old
-      const interval = setInterval(() => {
-        setCurrentTime(new Date());
-      }, 60000);
-
-      return () => clearInterval(interval);
-    }
-  }, [post.created_at]);
-
-  const fetchComments = async () => {
-    try {
-      setIsLoadingComments(true);
-      const response = await fetch(`/api/posts/${post.id}/comments`);
-
-      if (!response.ok) {
-        throw new Error('Failed to fetch comments');
-      }
-
-      const data = await response.json();
-      setComments(data.comments || []);
-    } catch (error) {
-    } finally {
-      setIsLoadingComments(false);
-    }
-  };
 
   const fetchReplies = async (commentId: string) => {
     try {
@@ -297,8 +270,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
     if (!replyText?.trim()) return;
 
     try {
-      // Use adminUser ID if in admin context, otherwise use regular user ID
-      const userId = adminUser?.id || user?.id || currentUserId || '';
+      const userId = currentUserId;
       const response = await fetch(`/api/comments/${commentId}/replies`, {
         method: 'POST',
         headers: {
@@ -348,9 +320,34 @@ const PostCardComponent: React.FC<PostCardProps> = ({
   };
 
   const handlePostComment = async () => {
-    await onPostComment();
-    // Refresh comments after posting
-    fetchComments();
+    const textToPost = commentText;
+    if (!textToPost?.trim()) return;
+
+    // Optimistically append the comment to the cache immediately, then let
+    // the parent's onPostComment perform the actual network POST (it owns
+    // commentText state and comments_count) — reconcile with its result
+    // instead of doing a full comments refetch as before.
+    const tempId = `temp-${Date.now()}`;
+    const optimisticComment: Comment = {
+      id: tempId,
+      content: textToPost,
+      created_at: new Date().toISOString(),
+      replies_count: 0,
+      user: { id: currentUserId || '', username: '', email: '' },
+    };
+    setComments(prev => [...prev, optimisticComment]);
+
+    try {
+      await onPostComment();
+      // Reconcile: invalidate so the next fetch replaces the optimistic
+      // entry with the real comment from the server (simplest correct
+      // behavior without changing the onPostComment prop contract, since
+      // the actual POST + response handling lives in the parent).
+      queryClient.invalidateQueries({ queryKey: ['comments', post.id] });
+    } catch (err) {
+      // Roll back the optimistic comment on failure
+      setComments(prev => prev.filter(c => c.id !== tempId));
+    }
   };
 
   const handleEditSubmit = async () => {
@@ -364,8 +361,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
     }
 
     try {
-      // Use adminUser ID if in admin context, otherwise use regular user ID
-      const userId = adminUser?.id || user?.id || currentUserId || '';
+      const userId = currentUserId;
       const response = await fetch(`/api/posts/${post.id}`, {
         method: 'PUT',
         headers: {
@@ -385,14 +381,12 @@ const PostCardComponent: React.FC<PostCardProps> = ({
           description: "Post updated successfully"
         });
         setIsEditing(false);
-        // Update post content locally without page refresh
+        // Update post content locally without page refresh; the server's
+        // socket 'post_updated' event (consumed in FeedPage) is the single
+        // source of truth for propagating this to other clients.
         if (onEdit) {
           onEdit();
         }
-        // Emit custom event for real-time update
-        window.dispatchEvent(new CustomEvent('post-updated', { 
-          detail: { postId: post.id, content: editedContent } 
-        }));
       } else {
         const error = await response.json();
         toast({
@@ -430,27 +424,8 @@ const PostCardComponent: React.FC<PostCardProps> = ({
       ? `${(post as any).author_first_name} ${(post as any).author_last_name || ''}`.trim()
       : post.author?.username ?? '';
 
-  const getAuthorProfilePicture = () => {
-    if ((post as any).author_profile_picture && (post as any).author_profile_picture.trim() !== '') {
-      return (post as any).author_profile_picture;
-    }
-
-    const seed = encodeURIComponent(authorName);
-    const gender = (post as any).author_gender;
-
-    switch (gender) {
-      case 'male':
-        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-      case 'female':
-        return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
-      case 'other':
-        return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
-      case 'prefer_not_to_say':
-        return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
-      default:
-        return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-    }
-  };
+  const getAuthorProfilePicture = () =>
+    getAvatarUrl((post as any).author_profile_picture, (post as any).author_gender, authorName);
 
   // Helper function to copy text to clipboard
   const copyToClipboard = (text: string) => {
@@ -525,10 +500,10 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                   <span className="bg-[#e6f5f0] text-[#008060] text-[9px] px-1.5 py-0.5 rounded-full uppercase tracking-wide font-bold">Official</span>
                 </span>
               ) : (
-                <span>{post.author?.email} · {formatTimeAgo(post.created_at)}</span>
+                <span>{post.author?.email} · <TimeAgoLabel createdAt={post.created_at} /></span>
               )}
             </p>
-            {!isAdminPost && <p className="sr-only">{formatTimeAgo(post.created_at)}</p>}
+            {!isAdminPost && <p className="sr-only"><TimeAgoLabel createdAt={post.created_at} /></p>}
           </div>
           {(() => {
             const isAuthor = (post as any).author_id === currentUserId;
@@ -607,9 +582,9 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                   quality={85}
                 />
               ) : post.image_url.match(/\.(mp4|webm)$/i) ? (
-                <video src={post.image_url} controls className="w-full h-auto max-h-[260px] sm:max-h-[300px] mx-auto" style={{ maxWidth: '100%' }} />
+                <video src={withAuthenticatedMediaUrl(post.image_url)} controls className="w-full h-auto max-h-[260px] sm:max-h-[300px] mx-auto" style={{ maxWidth: '100%' }} />
               ) : (
-                <a href={post.image_url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 w-full min-h-[50px]">
+                <a href={withAuthenticatedMediaUrl(post.image_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 w-full min-h-[50px]">
                   <span className="text-2xl">📄</span>
                   <span className="text-sm text-gray-700 truncate">View attached document</span>
                 </a>
@@ -676,20 +651,9 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                     ? `${comment.user_first_name} ${comment.user_last_name || ''}`.trim()
                     : comment.user.username;
 
-                  const getCommentAuthorAvatar = () => {
-                    if (comment.user_profile_picture && comment.user_profile_picture.trim() !== '') return comment.user_profile_picture;
-                    const seed = encodeURIComponent(commentAuthorName);
-                    const gender = comment.user_gender;
-                    switch (gender) {
-                      case 'male': return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-                      case 'female': return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
-                      case 'other': return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
-                      case 'prefer_not_to_say': return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
-                      default: return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-                    }
-                  };
+                  const getCommentAuthorAvatar = () =>
+                    getAvatarUrl(comment.user_profile_picture, comment.user_gender, commentAuthorName);
 
-                  const commentTimeAgo = formatTimeAgo(comment.created_at);
                   const replies = commentReplies[comment.id] || [];
                   const hasReplies = (comment.replies_count || 0) > 0;
 
@@ -706,7 +670,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                           <div className="flex items-center justify-between mb-1">
                             <div className="flex items-center gap-1.5 flex-wrap">
                               <span className="font-semibold text-[13px] text-gray-900">{commentAuthorName}</span>
-                              <span className="text-[11px] text-gray-400">{commentTimeAgo}</span>
+                              <span className="text-[11px] text-gray-400"><TimeAgoLabel createdAt={comment.created_at} /></span>
                             </div>
                             {comment.user.id === currentUserId && (
                               <button onClick={() => handleDeleteComment(comment.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete comment">
@@ -766,18 +730,8 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                               ) : replies.length > 0 ? (
                                 replies.map((reply) => {
                                   const replyAuthorName = reply.user_first_name ? `${reply.user_first_name} ${reply.user_last_name || ''}`.trim() : reply.user.username;
-                                  const getReplyAuthorAvatar = () => {
-                                    if (reply.user_profile_picture && reply.user_profile_picture.trim() !== '') return reply.user_profile_picture;
-                                    const seed = encodeURIComponent(replyAuthorName);
-                                    const gender = reply.user_gender;
-                                    switch (gender) {
-                                      case 'male': return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-                                      case 'female': return `https://api.dicebear.com/7.x/avataaars-neutral/svg?seed=${seed}&backgroundColor=ff69b4`;
-                                      case 'other': return `https://api.dicebear.com/7.x/bottts/svg?seed=${seed}&backgroundColor=ffa500`;
-                                      case 'prefer_not_to_say': return `https://api.dicebear.com/7.x/initials/svg?seed=${seed}&backgroundColor=6c63ff`;
-                                      default: return `https://api.dicebear.com/7.x/avataaars/svg?seed=${seed}&backgroundColor=008060`;
-                                    }
-                                  };
+                                  const getReplyAuthorAvatar = () =>
+                                    getAvatarUrl(reply.user_profile_picture, reply.user_gender, replyAuthorName);
                                   return (
                                     <div key={reply.id} className="flex items-start gap-2 bg-white rounded-lg p-2">
                                       <Avatar className="w-5 h-5">
@@ -788,7 +742,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                                         <div className="flex items-center justify-between mb-0.5">
                                           <div className="flex items-center gap-1.5">
                                             <span className="font-semibold text-[12px] text-gray-900">{replyAuthorName}</span>
-                                            <span className="text-[11px] text-gray-400">{formatTimeAgo(reply.created_at)}</span>
+                                            <span className="text-[11px] text-gray-400"><TimeAgoLabel createdAt={reply.created_at} /></span>
                                           </div>
                                           {reply.user.id === currentUserId && (
                                             <button onClick={() => handleDeleteReply(comment.id, reply.id)} className="text-gray-400 hover:text-red-500 transition-colors p-1" title="Delete reply">

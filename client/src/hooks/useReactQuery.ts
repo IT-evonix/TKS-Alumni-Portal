@@ -3,8 +3,19 @@
  * Pre-configured hooks for common data fetching patterns
  */
 
-import { useQuery, useMutation, useQueryClient, UseQueryOptions, UseMutationOptions } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, useInfiniteQuery, UseQueryOptions, UseMutationOptions } from '@tanstack/react-query';
 import { queryClient } from '@/lib/queryClient';
+
+const FEED_PAGE_SIZE = 20;
+
+function authHeaders(): Record<string, string> {
+  const userId = localStorage.getItem('userId');
+  const token = localStorage.getItem('auth_token');
+  return {
+    'user-id': userId || '',
+    Authorization: `Bearer ${token || ''}`,
+  };
+}
 
 /**
  * Generic query hook with default options
@@ -52,6 +63,95 @@ export function usePosts(options?: { limit?: number; offset?: number }) {
       staleTime: 2 * 60 * 1000, // 2 minutes for posts
     }
   );
+}
+
+/**
+ * Hook for fetching feed posts with real server-side infinite scroll
+ * (each page is a genuine offset-paginated request, not a client-side slice).
+ */
+export function usePostsInfinite(searchTerm?: string) {
+  return useInfiniteQuery({
+    queryKey: ['posts', 'infinite', searchTerm ?? null],
+    queryFn: async ({ pageParam = 0 }) => {
+      const params = new URLSearchParams({
+        limit: String(FEED_PAGE_SIZE),
+        offset: String(pageParam),
+      });
+      if (searchTerm) params.append('search', searchTerm);
+
+      const response = await fetch(`/api/posts?${params}`, { headers: authHeaders() });
+      if (!response.ok) throw new Error('Failed to fetch posts');
+      return response.json() as Promise<{
+        posts: any[];
+        total: number;
+        offset: number;
+        limit: number;
+        hasMore: boolean;
+      }>;
+    },
+    initialPageParam: 0,
+    getNextPageParam: (lastPage) =>
+      lastPage.hasMore ? lastPage.offset + lastPage.posts.length : undefined,
+    staleTime: 20 * 1000,
+    refetchOnWindowFocus: false,
+  });
+}
+
+/**
+ * Hook for posting a comment with an optimistic update: the comment appears
+ * immediately in ['comments', postId] and is reconciled with the server
+ * response instead of triggering a full refetch.
+ */
+export function usePostComment(postId: string) {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (content: string) => {
+      const response = await fetch(`/api/posts/${postId}/comments`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', ...authHeaders() },
+        body: JSON.stringify({ content }),
+      });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to post comment');
+      }
+      return response.json();
+    },
+    onMutate: async (content) => {
+      await queryClient.cancelQueries({ queryKey: ['comments', postId] });
+      const previousComments = queryClient.getQueryData(['comments', postId]);
+      const userId = localStorage.getItem('userId') || '';
+      const tempId = `temp-${Date.now()}`;
+
+      const optimisticComment = {
+        id: tempId,
+        content,
+        created_at: new Date().toISOString(),
+        replies_count: 0,
+        user: { id: userId, username: '', email: '' },
+        _optimistic: true,
+      };
+
+      queryClient.setQueryData(['comments', postId], (old: any) => ({
+        comments: [...(old?.comments || []), optimisticComment],
+      }));
+
+      return { previousComments, tempId };
+    },
+    onSuccess: (data, _content, context) => {
+      queryClient.setQueryData(['comments', postId], (old: any) => ({
+        comments: (old?.comments || []).map((c: any) =>
+          c.id === context?.tempId ? data.comment : c,
+        ),
+      }));
+    },
+    onError: (_err, _content, context) => {
+      if (context?.previousComments) {
+        queryClient.setQueryData(['comments', postId], context.previousComments);
+      }
+    },
+  });
 }
 
 /**

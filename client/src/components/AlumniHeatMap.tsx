@@ -436,9 +436,12 @@ function SidebarItemsList({ sidebarItems, mapBounds, alumniData, setMapView, set
 
 interface AlumniHeatMapProps {
   onDataLoad?: (stats: { totalAlumni: number; countries: number; continents: number }) => void;
+  apiEndpoint?: string;
+  filters?: Record<string, string | undefined>;
+  authHeaders?: Record<string, string>;
 }
 
-export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
+export default function AlumniHeatMap({ onDataLoad, apiEndpoint = '/api/alumni-map/map-data', filters, authHeaders }: AlumniHeatMapProps) {
   const [alumniData, setAlumniData] = useState<AlumniData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -454,7 +457,15 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
   const fetchData = useCallback(async (isInitial = false) => {
     try {
       if (isInitial) setLoading(true);
-      const res = await fetch('/api/alumni-map/map-data', { cache: 'no-store' });
+      const params = new URLSearchParams();
+      if (filters) {
+        Object.entries(filters).forEach(([key, value]) => {
+          if (value) params.set(key, value);
+        });
+      }
+      const query = params.toString();
+      const url = query ? `${apiEndpoint}?${query}` : apiEndpoint;
+      const res = await fetch(url, { cache: 'no-store', headers: authHeaders });
       const data = await res.json();
       const loadedAlumni: AlumniData[] = data.alumni || [];
       setAlumniData(loadedAlumni);
@@ -497,7 +508,7 @@ export default function AlumniHeatMap({ onDataLoad }: AlumniHeatMapProps) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [apiEndpoint, filters, authHeaders]);
 
   useEffect(() => { fetchData(true); }, [fetchData]);
 

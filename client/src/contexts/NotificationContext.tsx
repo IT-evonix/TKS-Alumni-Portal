@@ -9,6 +9,8 @@ interface Notification {
   title: string;
   content: string;
   relatedId?: string;
+  redirectUrl?: string;
+  metadata?: string;
   isRead: boolean;
   createdAt: string;
 }

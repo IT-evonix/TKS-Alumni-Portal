@@ -48,9 +48,9 @@ interface SidebarSectionProps {
 }
 
 const SidebarSection: React.FC<SidebarSectionProps> = ({ title, viewAllPath, onViewAll, children, className = "" }) => (
-    <div className={`rounded-[14px] p-4 ${className}`} style={{ border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', background: 'var(--brand-gradient-subtle)' }}>
-        <div className="flex items-center justify-between mb-3">
-            <h3 className="font-semibold text-gray-900 text-[13px]">{title}</h3>
+    <div className={`p-4 sm:p-4.5 ${className}`} style={{ borderRadius: 'var(--radius-lg)', border: '1px solid var(--border-subtle)', boxShadow: 'var(--shadow-card)', background: 'var(--surface-card)' }}>
+        <div className="flex items-center justify-between mb-3.5">
+            <h3 className="font-semibold text-gray-900 text-[13px] tracking-tight">{title}</h3>
             <button
                 onClick={onViewAll}
                 className="text-[12px] font-medium flex items-center gap-0.5 transition-colors group hover:opacity-80"

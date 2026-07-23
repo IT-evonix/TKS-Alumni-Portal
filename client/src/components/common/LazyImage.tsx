@@ -5,6 +5,7 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import { ImageIcon } from 'lucide-react';
+import { withAuthenticatedMediaUrl } from '@/lib/mediaUrl';
 
 interface LazyImageProps {
   src: string | null | undefined;
@@ -69,7 +70,7 @@ export const LazyImage: React.FC<LazyImageProps> = ({
     onError?.();
   };
 
-  const imageSrc = hasError && fallback ? fallback : (isInView ? src : undefined);
+  const imageSrc = hasError && fallback ? fallback : (isInView && src ? withAuthenticatedMediaUrl(src) : undefined);
 
   return (
     <div ref={imgRef} className={`relative overflow-hidden ${className}`}>

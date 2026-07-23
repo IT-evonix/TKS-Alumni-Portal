@@ -4,9 +4,9 @@ import { geocodeAddress } from '../services/google-geocoding.js';
 
 const router = express.Router();
 
-const GEO_CACHE: { [key: string]: { lat: number; lng: number } } = {};
+export const GEO_CACHE: { [key: string]: { lat: number; lng: number } } = {};
 
-const COORDINATES: { [key: string]: { lat: number; lng: number; direction?: string; offset?: [number, number] } } = {
+export const COORDINATES: { [key: string]: { lat: number; lng: number; direction?: string; offset?: [number, number] } } = {
   // Countries
   'India': { lat: 20.5937, lng: 78.9629 },
   'USA': { lat: 37.0902, lng: -95.7129 },
@@ -62,7 +62,7 @@ const COORDINATES: { [key: string]: { lat: number; lng: number; direction?: stri
   'NY': { lat: 40.7128, lng: -74.0060 },
 };
 
-const normalizeName = (name: string): string => {
+export const normalizeName = (name: string): string => {
   if (!name) return '';
   const trimmed = name.trim();
   const lower = trimmed.toLowerCase();
@@ -72,7 +72,7 @@ const normalizeName = (name: string): string => {
 
 // Small deterministic hash (FNV-1a) so the same person+location always
 // jitters to the same offset across requests, instead of visibly jumping.
-const fnv1aHash = (str: string): number => {
+export const fnv1aHash = (str: string): number => {
   let hash = 0x811c9dc5;
   for (let i = 0; i < str.length; i++) {
     hash ^= str.charCodeAt(i);
@@ -84,8 +84,8 @@ const fnv1aHash = (str: string): number => {
 // Spreads alumni that collapse onto the same static COORDINATES centroid
 // into a small, stable-per-person radius (~a few km) instead of stacking
 // as one saturated heatmap point.
-const JITTER_DEGREES = 0.05;
-const jitterCoords = (coords: { lat: number; lng: number }, seed: string) => {
+export const JITTER_DEGREES = 0.05;
+export const jitterCoords = (coords: { lat: number; lng: number }, seed: string) => {
   const h1 = fnv1aHash(`${seed}|lat`);
   const h2 = fnv1aHash(`${seed}|lng`);
   const offsetLat = ((h1 % 2000) / 1000 - 1) * JITTER_DEGREES;
@@ -93,7 +93,7 @@ const jitterCoords = (coords: { lat: number; lng: number }, seed: string) => {
   return { lat: coords.lat + offsetLat, lng: coords.lng + offsetLng };
 };
 
-const getCoordinates = async (name: string, context?: string, jitterSeed?: string) => {
+export const getCoordinates = async (name: string, context?: string, jitterSeed?: string) => {
   const normalized = normalizeName(name);
   if (!normalized) return null;
   const cacheKey = context ? `${normalized}|${context}` : normalized;

@@ -432,7 +432,7 @@ export const AppLayout: React.FC<AppLayoutProps> = ({ children, currentPage = 'f
 
   // Helper function to check if the user has at least one of the required roles
   const hasRole = (requiredRoles: UserRole[]): boolean => {
-    if (!user) return false; // If no user is logged in, deny access
+    if (!user && !admin) return false; // If no user or admin session, deny access
     if (!role) return false; // Fail closed until role is determined
     return requiredRoles.includes(role as UserRole);
   };

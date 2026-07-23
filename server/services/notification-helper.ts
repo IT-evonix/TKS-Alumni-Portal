@@ -318,6 +318,8 @@ export const NotificationType = {
     NEW_PODCAST: "new_podcast",
     /** Sent to all alumni when a new blog post is published */
     NEW_BLOG: "new_blog",
+    /** Sent to all alumni when an admin creates a new event */
+    NEW_EVENT: "new_event",
     /** Sent to the author when an admin permanently deletes their post */
     POST_DELETED: "post_deleted",
     /** Sent to recipients when admin publishes a newsletter */

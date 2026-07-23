@@ -12,6 +12,7 @@ import { NotificationProvider } from "@/contexts/NotificationContext";
 import { GamificationProvider } from "@/contexts/GamificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GlobalSearchModal } from "@/components/search/GlobalSearchModal";
+import { EventAnnouncementPopup } from "@/components/events/EventAnnouncementPopup";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { clientConfig } from "@/lib/config";
 import { registerServiceWorker } from "@/utils/serviceWorker";
@@ -122,6 +123,7 @@ const AdminInboxPage = lazy(() => import("@/pages/AdminInboxPage").then(m => ({ 
 const AdminGamificationPage = lazy(() => import("@/pages/AdminGamificationPage").then(m => ({ default: m.AdminGamificationPage })));
 const AdminLocationExportPage = lazy(() => import("./pages/AdminLocationExportPage").then(m => ({ default: m.default })));
 const AdminCityChaptersPage = lazy(() => import("@/pages/AdminTravelChaptersPage").then(m => ({ default: m.default })));
+const AdminAlumniMapPage = lazy(() => import("./pages/AdminAlumniMapPage").then(m => ({ default: m.default })));
 
 // Other pages - lazy loaded
 const SharedPostPage = lazy(() => import("./pages/SharedPostPage").then(m => ({ default: m.SharedPostPage })));
@@ -143,7 +145,7 @@ function Router() {
       <ErrorBoundary>
         <Switch>
           {/* Public Routes - Authenticated users are redirected to portal */}
-          <Route path="/" component={LandingPage} />
+          <PublicRoute path="/" component={LandingPage} />
           <PublicRoute path="/login" component={LoginPage} />
           <PublicRoute path="/signup" component={SignupPage} />
           <PublicRoute path="/student-signup" component={StudentSignupPage} />
@@ -200,6 +202,7 @@ function Router() {
           <ProtectedRoute path="/admin/inbox" component={AdminInboxPage} adminOnly />
           <ProtectedRoute path="/admin/gamification" component={AdminGamificationPage} adminOnly />
           <ProtectedRoute path="/admin/location-export" component={AdminLocationExportPage} adminOnly />
+          <ProtectedRoute path="/admin/alumni-map" component={AdminAlumniMapPage} adminOnly />
           <ProtectedRoute path="/admin/blogs" component={AdminBlogsPage} adminOnly />
           <ProtectedRoute path="/admin/podcasts" component={AdminPodcastsPage} adminOnly />
           <ProtectedRoute path="/admin/city-chapters" component={AdminCityChaptersPage} adminOnly />
@@ -258,6 +261,7 @@ function App() {
                     <TooltipProvider>
                       <Router />
                       <GlobalSearchModal />
+                      <EventAnnouncementPopup />
                       <Toaster />
                     </TooltipProvider>
                   </GamificationProvider>

@@ -618,11 +618,13 @@ router.get("/", async (req: any, res: any) => {
       isLikedByUser: likedSet.has(ep.id),
     }));
 
+    const total = count || 0;
     return res.json({
       episodes,
-      total: count || 0,
+      total,
       page,
-      totalPages: Math.ceil((count || 0) / limit),
+      totalPages: Math.ceil(total / limit),
+      hasMore: offset + episodes.length < total,
     });
   } catch (err: any) {
     console.error("[podcasts GET / catch]", err);

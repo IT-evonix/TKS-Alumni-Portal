@@ -21,6 +21,7 @@ import auditLogRoutes from "./routes/audit-log-routes";
 import searchAnalyticsRoutes from "./routes/search-analytics-routes";
 import resumeRoutes from "./routes/resume-routes";
 import alumniMapRoutes from "./routes/alumni-map";
+import adminAlumniMapRoutes from "./routes/admin-alumni-map";
 import adminDigestRoutes from "./routes/admin-digest-routes";
 import adminBulkEmailRoutes from "./routes/admin-bulk-email-routes";
 import { adminRouter as newsletterAdminRoutes, publicRouter as newsletterPublicRoutes } from "./routes/newsletter-routes";
@@ -33,6 +34,7 @@ import travelPostsRoutes from "./routes/travel-posts";
 import { ensureDefaultPointRulesExist, ensureDefaultBadgesExist, updateStreak, awardCommonBadge, incrementScore } from "./services/gamification-service";
 import {
   createAndEmitNotification,
+  broadcastNotificationToAllAlumni,
   NotificationType,
   NotificationRedirectUrl
 } from "./services/notification-helper";
@@ -50,7 +52,7 @@ import {
   isValidName,
 } from "./utils/input-sanitization";
 import { determineUserRole } from "./utils/role-logic";
-import { requireAuth, requireAdmin } from "./middleware/auth";
+import { requireAuth, requireAdmin, requireAuthForMedia } from "./middleware/auth";
 import { config } from "./config";
 import crypto from "crypto";
 
@@ -220,7 +222,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
 
   // File proxy endpoint to hide Supabase URLs
-  app.get("/api/storage/view", requireAuth, async (req, res) => {
+  app.get("/api/storage/view", requireAuthForMedia, async (req, res) => {
     try {
       const { bucket, path } = req.query;
 
@@ -229,7 +231,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // Whitelist allowed buckets
-      const allowedBuckets = ['post-attachments', 'message-attachments', 'event-covers', 'event_covers', 'profile-pictures', 'resumes', 'excel-imports'];
+      const allowedBuckets = ['post-attachments', 'message-attachments', 'event-covers', 'event_covers', 'profile-pictures', 'resumes', 'excel-imports', 'newsletter-attachments'];
       if (!allowedBuckets.includes(bucket)) {
         return res.status(403).send("Access to this bucket is forbidden");
       }
@@ -443,6 +445,67 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       } catch (error) {
         console.error("File upload error:", error);
+        res.status(500).json({ error: "Internal server error" });
+      }
+    },
+  );
+
+  // File upload endpoint for newsletter PDF attachments (admin only)
+  app.post(
+    "/api/upload/newsletter-attachment",
+    requireAdmin,
+    uploadPostAttachment.single("file"),
+    handleMulterError,
+    async (req: Request, res: Response) => {
+      try {
+        const userId = req.headers["user-id"] as string;
+
+        if (!userId) {
+          return res.status(401).json({ error: "No user ID provided" });
+        }
+
+        if (!req.file) {
+          return res.status(400).json({ error: "No file uploaded" });
+        }
+
+        const file = req.file;
+
+        const fileExt = file.originalname.split(".").pop()?.toLowerCase() || "";
+        if (fileExt !== "pdf" || file.mimetype !== "application/pdf") {
+          return res.status(400).json({ error: "Only PDF files are allowed" });
+        }
+
+        const timestamp = Date.now();
+        const sanitizedFilename = file.originalname.replace(
+          /[^a-zA-Z0-9.-]/g,
+          "_",
+        );
+        const filePath = `${userId}/${timestamp}_${sanitizedFilename}`;
+
+        const { error } = await supabase.storage
+          .from("newsletter-attachments")
+          .upload(filePath, file.buffer, {
+            contentType: file.mimetype,
+            upsert: false,
+          });
+
+        if (error) {
+          console.error("Supabase Storage upload error:", error);
+          return res
+            .status(500)
+            .json({ error: "Failed to upload file to storage" });
+        }
+
+        const proxyUrl = `/api/storage/view?bucket=newsletter-attachments&path=${encodeURIComponent(filePath)}`;
+
+        res.json({
+          url: proxyUrl,
+          fileName: filePath,
+          size: file.size,
+          mimeType: file.mimetype,
+        });
+      } catch (error) {
+        console.error("Newsletter attachment upload error:", error);
         res.status(500).json({ error: "Internal server error" });
       }
     },
@@ -2394,6 +2457,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Alumni Map routes (public)
   app.use("/api/alumni-map", alumniMapRoutes);
+
+  // Admin Alumni Map routes (admin-only, supports role/graduation-year/location filters)
+  app.use("/api/admin/alumni-map", adminAlumniMapRoutes);
 
   app.put("/api/alumni/profile", async (req, res) => {
     try {
@@ -4362,6 +4428,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
           *,
           author:users!author_id(id, username, email, is_admin, user_role)
         `,
+          { count: "exact" },
         )
         .eq("is_active", true)
         .eq("status", "approved");
@@ -4375,7 +4442,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
       }
 
       // eslint-disable-next-line prefer-const -- posts is reassigned when filtering by search
-      let { data: posts, error } = await query
+      let { data: posts, error, count: total } = await query
         .order("created_at", { ascending: false })
         .range(Number(offset), Number(offset) + Number(limit) - 1);
 
@@ -4462,7 +4529,17 @@ export async function registerRoutes(app: Express): Promise<Server> {
         isLikedByUser: userLikes.has(post.id),
       }));
 
-      res.json({ posts: postsWithLikeStatus || [] });
+      const resolvedTotal = total ?? postsWithLikeStatus?.length ?? 0;
+      const resolvedOffset = Number(offset);
+      const resolvedCount = postsWithLikeStatus?.length ?? 0;
+
+      res.json({
+        posts: postsWithLikeStatus || [],
+        total: resolvedTotal,
+        offset: resolvedOffset,
+        limit: Number(limit),
+        hasMore: resolvedOffset + resolvedCount < resolvedTotal,
+      });
     } catch (error) {
       console.error("Get posts error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -4723,6 +4800,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(500).json({ error: "Failed to delete post" });
       }
 
+      const io = (global as any).io;
+      if (io) {
+        io.emit("post_deleted", { postId });
+      }
+
       // Gamification Deduction: Post deleted
       incrementScore(userId, "thread_score", "feed_create", -1).catch(err => 
         console.error("Gamification post delete error:", err)
@@ -4747,118 +4829,70 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "No user ID provided" });
       }
 
-      // Check if already liked
-      const { data: existingLike } = await supabase
-        .from("post_likes")
-        .select("id")
-        .eq("post_id", postId)
-        .eq("user_id", userId)
+      // Atomically insert/delete the like row and adjust likes_count in one
+      // DB transaction (see migrations/add_post_like_toggle_function.sql) to
+      // avoid the lost-update race of the previous select-then-update flow.
+      const { data: toggleResult, error: toggleError } = await supabase
+        .rpc("toggle_post_like", { p_post_id: postId, p_user_id: userId })
         .single();
 
-      if (existingLike) {
-        // Unlike: remove like and decrement count
-        const { error: deleteLikeError } = await supabase
-          .from("post_likes")
-          .delete()
-          .eq("id", existingLike.id);
-
-        if (deleteLikeError) {
-          console.error("Delete like error:", deleteLikeError);
-          return res.status(500).json({ error: "Failed to unlike post" });
-        }
-
-        // Decrement likes count
-        const { data: post } = await supabase
-          .from("feed_posts")
-          .select("likes_count")
-          .eq("id", postId)
-          .single();
-
-        if (post) {
-          await supabase
-            .from("feed_posts")
-            .update({ likes_count: Math.max(0, post.likes_count - 1) })
-            .eq("id", postId);
-
-          // Emit real-time update
-          const io = (global as any).io;
-          if (io) {
-            io.emit("post_like", {
-              postId,
-              likesCount: Math.max(0, post.likes_count - 1),
-              isLiked: false,
-              userId,
-            });
-          }
-        }
-
-        return res.json({ message: "Post unliked", isLiked: false });
-      } else {
-        // Like: add like and increment count
-        const { error: insertLikeError } = await supabase
-          .from("post_likes")
-          .insert({
-            post_id: postId,
-            user_id: userId,
-          });
-
-        if (insertLikeError) {
-          console.error("Insert like error:", insertLikeError);
-          return res.status(500).json({ error: "Failed to like post" });
-        }
-
-        // Increment likes count and get post author
-        const { data: post } = await supabase
-          .from("feed_posts")
-          .select("likes_count, author_id")
-          .eq("id", postId)
-          .single();
-
-        if (post) {
-          await supabase
-            .from("feed_posts")
-            .update({ likes_count: post.likes_count + 1 })
-            .eq("id", postId);
-
-          // Emit real-time update
-          const io = (global as any).io;
-          if (io) {
-            io.emit("post_like", {
-              postId,
-              likesCount: post.likes_count + 1,
-              isLiked: true,
-              userId,
-            });
-          }
-
-          // Only notify if the liker is not the author
-          if (post.author_id !== userId) {
-            // Get liker details
-            const { data: likerAlumni } = await supabase
-              .from("alumni")
-              .select("first_name, last_name")
-              .eq("user_id", userId)
-              .single();
-
-            const likerName = likerAlumni
-              ? `${likerAlumni.first_name} ${likerAlumni.last_name}`
-              : "Someone";
-
-            // Create notification for post author using new helper
-            await createAndEmitNotification({
-              userId: post.author_id,
-              type: NotificationType.POST_LIKE,
-              title: "Post Liked",
-              content: `${likerName} liked your post`,
-              relatedId: postId,
-              redirectUrl: NotificationRedirectUrl.FEED,
-              actorId: userId,
-            });
-          }
-        }
-
-        return res.json({ message: "Post liked", isLiked: true });
+      if (toggleError || !toggleResult) {
+        console.error("Toggle like error:", toggleError);
+        return res.status(500).json({ error: "Failed to toggle like" });
       }
+
+      const { is_liked: isLiked, likes_count: likesCount } = toggleResult as {
+        is_liked: boolean;
+        likes_count: number;
+      };
+
+      // Emit real-time update
+      const io = (global as any).io;
+      if (io) {
+        io.emit("post_like", {
+          postId,
+          likesCount,
+          isLiked,
+          userId,
+        });
+      }
+
+      // Only notify the author when a new like was added (not on unlike)
+      if (isLiked) {
+        const { data: post } = await supabase
+          .from("feed_posts")
+          .select("author_id")
+          .eq("id", postId)
+          .single();
+
+        if (post && post.author_id !== userId) {
+          const { data: likerAlumni } = await supabase
+            .from("alumni")
+            .select("first_name, last_name")
+            .eq("user_id", userId)
+            .single();
+
+          const likerName = likerAlumni
+            ? `${likerAlumni.first_name} ${likerAlumni.last_name}`
+            : "Someone";
+
+          await createAndEmitNotification({
+            userId: post.author_id,
+            type: NotificationType.POST_LIKE,
+            title: "Post Liked",
+            content: `${likerName} liked your post`,
+            relatedId: postId,
+            redirectUrl: NotificationRedirectUrl.FEED,
+            actorId: userId,
+          });
+        }
+      }
+
+      return res.json({
+        message: isLiked ? "Post liked" : "Post unliked",
+        isLiked,
+        likesCount,
+      });
     } catch (error) {
       console.error("Like post error:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -4891,15 +4925,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (error) throw error;
 
-      // Enrich comments with alumni profile data
-      const enrichedComments = await Promise.all(
-        (comments || []).map(async (comment: any) => {
-          const { data: alumni } = await supabase
-            .from("alumni")
-            .select("first_name, last_name, profile_picture, gender")
-            .eq("user_id", comment.user.id)
-            .single();
+      // Batch-fetch alumni profile data for all comment authors in one query
+      // instead of one query per comment (was a genuine N+1).
+      let enrichedComments = comments || [];
+      if (comments && comments.length > 0) {
+        const authorIds = Array.from(
+          new Set(comments.map((c: any) => c.user.id)),
+        );
+        const { data: alumniData } = await supabase
+          .from("alumni")
+          .select("user_id, first_name, last_name, profile_picture, gender")
+          .in("user_id", authorIds);
 
+        const alumniMap = new Map(
+          (alumniData || []).map((a) => [a.user_id, a]),
+        );
+
+        enrichedComments = comments.map((comment: any) => {
+          const alumni = alumniMap.get(comment.user.id);
           return {
             ...comment,
             user_first_name: alumni?.first_name,
@@ -4907,8 +4950,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             user_profile_picture: alumni?.profile_picture,
             user_gender: alumni?.gender,
           };
-        }),
-      );
+        });
+      }
 
       res.json({ comments: enrichedComments });
     } catch (error) {
@@ -5116,15 +5159,24 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (error) throw error;
 
-      // Enrich replies with alumni profile data
-      const enrichedReplies = await Promise.all(
-        (replies || []).map(async (reply: any) => {
-          const { data: alumni } = await supabase
-            .from("alumni")
-            .select("first_name, last_name, profile_picture, gender")
-            .eq("user_id", reply.user.id)
-            .single();
+      // Batch-fetch alumni profile data for all reply authors in one query
+      // instead of one query per reply (was a genuine N+1).
+      let enrichedReplies = replies || [];
+      if (replies && replies.length > 0) {
+        const authorIds = Array.from(
+          new Set(replies.map((r: any) => r.user.id)),
+        );
+        const { data: alumniData } = await supabase
+          .from("alumni")
+          .select("user_id, first_name, last_name, profile_picture, gender")
+          .in("user_id", authorIds);
 
+        const alumniMap = new Map(
+          (alumniData || []).map((a) => [a.user_id, a]),
+        );
+
+        enrichedReplies = replies.map((reply: any) => {
+          const alumni = alumniMap.get(reply.user.id);
           return {
             ...reply,
             user_first_name: alumni?.first_name,
@@ -5132,8 +5184,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
             user_profile_picture: alumni?.profile_picture,
             user_gender: alumni?.gender,
           };
-        }),
-      );
+        });
+      }
 
       res.json({ replies: enrichedReplies });
     } catch (error) {
@@ -6100,6 +6152,27 @@ export async function registerRoutes(app: Express): Promise<Server> {
         if (userData) {
           (event as any).organized_by_user = userData;
         }
+      }
+
+      // Notify all alumni about the new event (best-effort, must not block response)
+      if (event && event.is_active !== false) {
+        broadcastNotificationToAllAlumni({
+          type: NotificationType.NEW_EVENT,
+          title: "New Event: " + event.title,
+          content: event.location
+            ? `${event.title} at ${event.location}`
+            : event.title,
+          relatedId: event.id,
+          redirectUrl: NotificationRedirectUrl.EVENTS,
+          actorId: userId,
+          metadata: {
+            eventDate: event.event_date,
+            eventTime: event.event_time,
+            location: event.location,
+            isVirtual: event.is_virtual,
+            coverImage: event.cover_image,
+          },
+        }).catch((err) => console.error("[Events] Failed to broadcast new event notification:", err));
       }
 
       res.status(201).json({ event });

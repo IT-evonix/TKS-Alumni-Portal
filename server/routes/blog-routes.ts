@@ -419,7 +419,8 @@ router.get("/", async (req, res) => {
       blog_categories: undefined,
     }));
 
-    res.json({ posts, total: count || 0, page, limit });
+    const total = count || 0;
+    res.json({ posts, total, page, limit, hasMore: offset + posts.length < total });
   } catch (error) {
     console.error("Get blogs error:", error);
     res.status(500).json({ error: "Failed to fetch blogs" });

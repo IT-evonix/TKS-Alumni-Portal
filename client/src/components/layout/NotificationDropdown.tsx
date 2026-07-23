@@ -513,14 +513,6 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
           case 'new_podcast':
             redirectUrl = '/podcasts';
             break;
-
-          case 'signup_request':
-            redirectUrl = '/admin/users';
-            break;
-
-          case 'connection_request':
-            redirectUrl = '/connections?tab=received';
-            break;
         }
       }
 
