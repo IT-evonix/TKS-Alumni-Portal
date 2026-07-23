@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Trophy, Flame, Medal, Star } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -58,7 +58,13 @@ function ShieldIcon({ badge, size = 16 }: { badge: any; size?: number }) {
   );
 }
 
+let leaderboardInstanceCounter = 0;
+
 export function GamificationLeaderboard() {
+  const instanceIdRef = useRef<number>();
+  if (instanceIdRef.current === undefined) {
+    instanceIdRef.current = leaderboardInstanceCounter++;
+  }
   const [pointsLeaderboard, setPointsLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [badgesLeaderboard, setBadgesLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [loading, setLoading] = useState(true);
@@ -114,7 +120,7 @@ export function GamificationLeaderboard() {
     window.addEventListener('new-notification', handleNewNotification);
 
     const channel = supabase
-      .channel("gamification-leaderboard-changes")
+      .channel(`gamification-leaderboard-changes-${instanceIdRef.current}`)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_scores" }, debouncedFetch)
       .on("postgres_changes", { event: "*", schema: "public", table: "user_badges" }, debouncedFetch)
       .subscribe();

@@ -3,7 +3,7 @@ import {
   Plus, Send, Trash2, Clock, CheckCircle, AlertCircle,
   Users, Loader2, Newspaper, Calendar, ChevronUp, ChevronDown,
   GripVertical, Radio, BookOpen, MessageSquare, Search, X, Link2,
-  ArrowLeft, Pencil, UserPlus, Eye, FileText,
+  ArrowLeft, Pencil, UserPlus, Eye, FileText, Upload,
 } from "lucide-react";
 import { useLocation, useRoute } from "wouter";
 import { AdminSidebar } from "@/components/layout/AdminSidebar";
@@ -878,6 +878,8 @@ export function AdminNewsletterComposerPage() {
   const [pdfUrl, setPdfUrl] = useState("");
   const [pdfTitle, setPdfTitle] = useState("");
   const [pdfPreviewUrl, setPdfPreviewUrl] = useState("");
+  const [isUploadingPdf, setIsUploadingPdf] = useState(false);
+  const [pdfUploadError, setPdfUploadError] = useState("");
   const [embeddedItems, setEmbeddedItems] = useState<EmbeddedItem[]>([]);
   const [filterOptions, setFilterOptions] = useState<{ batches: string[]; departments: string[]; graduationYears: string[]; roles: string[] }>({ batches: [], departments: [], graduationYears: [], roles: [] });
   const [recipientPreview, setRecipientPreview] = useState<RecipientPreview | null>(null);
@@ -984,6 +986,42 @@ export function AdminNewsletterComposerPage() {
       url: safeUrl,
     }]);
     setPdfUrl(""); setPdfTitle(""); setPdfPreviewUrl("");
+  };
+
+  const uploadPdfFile = async (file: File) => {
+    setPdfUploadError("");
+    if (file.type !== "application/pdf") {
+      setPdfUploadError("Only PDF files are allowed.");
+      return;
+    }
+    setIsUploadingPdf(true);
+    try {
+      const headers = getHeaders();
+      const { "Content-Type": _omit, ...uploadHeaders } = headers;
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch("/api/upload/newsletter-attachment", {
+        method: "POST",
+        headers: uploadHeaders,
+        body: formData,
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        setPdfUploadError(data.error || "Failed to upload PDF.");
+        return;
+      }
+      setEmbeddedItems((prev) => [...prev, {
+        embedId: makeId(), type: "pdf",
+        id: makeId(), title: pdfTitle.trim() || file.name,
+        excerpt: "", coverImage: "", meta: "",
+        url: data.url,
+      }]);
+      setPdfTitle("");
+    } catch {
+      setPdfUploadError("Failed to upload PDF.");
+    } finally {
+      setIsUploadingPdf(false);
+    }
   };
 
   const getContent = () =>
@@ -1270,16 +1308,6 @@ export function AdminNewsletterComposerPage() {
             </div>
             <div className="space-y-3">
               <div>
-                <Label className="text-xs font-semibold text-gray-600">PDF URL <span className="text-gray-400 font-normal">(optional)</span></Label>
-                <input
-                  type="url" value={pdfUrl}
-                  onChange={(e) => setPdfUrl(e.target.value)}
-                  placeholder="Paste any PDF URL or Google Drive share link"
-                  className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
-                />
-                <p className="mt-1 text-xs text-gray-400">Google Drive links are supported — just paste the share link as-is.</p>
-              </div>
-              <div>
                 <Label className="text-xs font-semibold text-gray-600">Label <span className="text-gray-400 font-normal">(optional)</span></Label>
                 <input
                   type="text" value={pdfTitle}
@@ -1287,6 +1315,37 @@ export function AdminNewsletterComposerPage() {
                   placeholder="e.g. Annual Report 2025"
                   className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
                 />
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-gray-600">Upload PDF</Label>
+                <div className="mt-1 flex items-center gap-2">
+                  <label className="flex items-center gap-1.5 px-3 py-1.5 border border-gray-200 rounded-md text-xs font-medium text-gray-600 hover:bg-gray-50 cursor-pointer transition-colors">
+                    {isUploadingPdf ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Upload className="w-3.5 h-3.5" />}
+                    {isUploadingPdf ? "Uploading…" : "Choose PDF file"}
+                    <input
+                      type="file"
+                      accept="application/pdf"
+                      className="hidden"
+                      disabled={isUploadingPdf}
+                      onChange={(e) => {
+                        const file = e.target.files?.[0];
+                        if (file) uploadPdfFile(file);
+                        e.target.value = "";
+                      }}
+                    />
+                  </label>
+                </div>
+                {pdfUploadError && <p className="mt-1 text-xs text-red-500">{pdfUploadError}</p>}
+              </div>
+              <div>
+                <Label className="text-xs font-semibold text-gray-600">Or paste a PDF URL <span className="text-gray-400 font-normal">(optional)</span></Label>
+                <input
+                  type="url" value={pdfUrl}
+                  onChange={(e) => setPdfUrl(e.target.value)}
+                  placeholder="Paste any PDF URL or Google Drive share link"
+                  className="mt-1 w-full border border-gray-200 rounded-md px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-[#008060]/30 focus:border-[#008060]"
+                />
+                <p className="mt-1 text-xs text-gray-400">Google Drive links are supported — just paste the share link as-is.</p>
               </div>
               <div className="flex gap-2">
                 <button

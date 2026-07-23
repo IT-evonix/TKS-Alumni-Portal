@@ -192,7 +192,7 @@ router.get("/", requireAuth, async (req: any, res: any) => {
     if (error) throw error;
 
     if (!posts || posts.length === 0) {
-      return res.json({ posts: [], total: 0, page, limit });
+      return res.json({ posts: [], total: count ?? 0, page, limit, hasMore: false });
     }
 
     // Batch fetch media (first item only for feed card cover)
@@ -237,7 +237,8 @@ router.get("/", requireAuth, async (req: any, res: any) => {
       );
     });
 
-    res.json({ posts: formatted, total: count ?? 0, page, limit });
+    const total = count ?? 0;
+    res.json({ posts: formatted, total, page, limit, hasMore: offset + formatted.length < total });
   } catch (error) {
     console.error("Travel posts feed error:", error);
     res.status(500).json({ error: "Failed to fetch posts" });

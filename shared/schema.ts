@@ -375,6 +375,7 @@ export const feedPosts = pgTable("feed_posts", {
   postType: text("post_type").default("general"), // general, achievement, job_update, etc.
   likesCount: integer("likes_count").default(0),
   commentsCount: integer("comments_count").default(0),
+  sharesCount: integer("shares_count").default(0),
   isActive: boolean("is_active").default(true),
   status: text("status").default("pending"),
   createdAt: timestamp("created_at").defaultNow(),
@@ -394,6 +395,7 @@ export const postComments = pgTable("post_comments", {
   postId: varchar("post_id").references(() => feedPosts.id, { onDelete: 'cascade' }).notNull(),
   userId: varchar("user_id").references(() => users.id, { onDelete: 'cascade' }).notNull(),
   content: text("content").notNull(),
+  repliesCount: integer("replies_count").default(0),
   isActive: boolean("is_active").default(true),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),

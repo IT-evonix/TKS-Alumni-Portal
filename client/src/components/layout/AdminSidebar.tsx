@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { LayoutDashboard, Users, Calendar, MessageSquare, FileText, Upload, Briefcase, TrendingUp, ChevronRight, Mail, Inbox, Trophy, MapPin, Globe, BookOpen, Mic2, Newspaper } from "lucide-react";
 
 interface AdminSidebarProps {
-  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'city-chapters' | 'blogs' | 'podcasts' | 'newsletters';
+  currentPage: 'dashboard' | 'feed' | 'events' | 'jobs' | 'messages' | 'analytics' | 'users' | 'bulk-email' | 'import' | 'inbox' | 'gamification' | 'location-export' | 'city-chapters' | 'blogs' | 'podcasts' | 'newsletters' | 'alumni-map';
   showMobileMenu?: boolean;
   onCloseMobileMenu?: () => void;
 }
@@ -144,6 +144,14 @@ export const AdminSidebar: React.FC<AdminSidebarProps> = ({
       key: "city-chapters",
       color: "text-emerald-600",
       bgColor: "bg-emerald-50"
+    },
+    {
+      icon: MapPin,
+      label: "Global Network",
+      path: "/admin/alumni-map",
+      key: "alumni-map",
+      color: "text-teal-600",
+      bgColor: "bg-teal-50"
     },
   ];
 

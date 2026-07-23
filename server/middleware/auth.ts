@@ -100,6 +100,55 @@ export async function requireAuth(req: Request, res: Response, next: NextFunctio
   }
 }
 
+// Like requireAuth, but also accepts the JWT via a `?token=` query param.
+// Only for endpoints loaded by plain <img>/<video> tags, which cannot send an Authorization header.
+export async function requireAuthForMedia(req: Request, res: Response, next: NextFunction) {
+  const authHeader = req.headers['authorization'];
+  let token = '';
+
+  if (authHeader && authHeader.startsWith('Bearer ')) {
+    token = authHeader.split(' ')[1];
+  } else if (typeof req.query.token === 'string') {
+    token = req.query.token;
+  }
+
+  if (!token) {
+    const fallbackUser = await authenticateByUserIdHeader(req, false);
+    if (!fallbackUser) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    req.headers['user-id'] = fallbackUser.id;
+    (req as any).user = {
+      id: fallbackUser.id,
+      email: fallbackUser.email,
+      role: fallbackUser.role,
+      is_admin: fallbackUser.is_admin,
+    };
+    return next();
+  }
+
+  try {
+    const decoded = jwt.verify(token, JWT_SECRET) as any;
+
+    if (!decoded || !decoded.userId) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    req.headers['user-id'] = decoded.userId;
+    (req as any).user = {
+      id: decoded.userId,
+      email: decoded.email,
+      role: decoded.role,
+      is_admin: decoded.isAdmin
+    };
+
+    next();
+  } catch (error) {
+    return res.status(401).json({ error: "Invalid or expired session" });
+  }
+}
+
 export async function requireAdmin(req: Request, res: Response, next: NextFunction) {
   const authHeader = req.headers['authorization'];
   let token = '';

@@ -4,8 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
-import { PostCreator } from "@/components/feed/PostCreator";
-import { CreatePostModal } from "@/components/feed/CreatePostModal";
+import { InlinePostComposer } from "@/components/feed/InlinePostComposer";
 import { PostCard } from "@/components/feed/PostCard";
 import { SidebarEvents, SidebarJobs, SidebarConnections } from "@/components/feed/SidebarComponents";
 import { GamificationLeaderboard } from "@/components/GamificationLeaderboard";
@@ -14,12 +13,14 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGamification } from "@/contexts/GamificationContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Flame, Trophy, PenSquare, X } from "lucide-react";
+import { Flame, Trophy, X } from "lucide-react";
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { validateTextLength } from "@/utils/validation";
 import { SkeletonPostCard } from "@/components/common/SkeletonLoader";
 import { useOptimizedFetch } from "@/hooks/useOptimizedFetch";
+import { usePostsInfinite } from "@/hooks/useReactQuery";
+import { useQueryClient } from "@tanstack/react-query";
 import { FeedBlogCard } from "@/components/feed/FeedBlogCard";
 import { FeedPodcastCard } from "@/components/feed/FeedPodcastCard";
 import { TravelPostCard } from "@/components/travel/TravelPostCard";
@@ -77,16 +78,61 @@ export const FeedPage = (): JSX.Element => {
     }
   }, []);
 
-  // Loading and error states
-  const [isLoadingPosts, setIsLoadingPosts] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const queryClient = useQueryClient();
 
-  // Posts data
-  const [posts, setPosts] = useState<any[]>([]);
+  // Posts: real server-paginated infinite query (replaces the old fixed
+  // limit=20/offset=0 fetch + client-side "Load more" slicing).
+  const {
+    data: postsPages,
+    isLoading: isLoadingPostsQuery,
+    isError: isPostsError,
+    error: postsQueryError,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+    refetch: refetchPosts,
+  } = usePostsInfinite();
+
+  const posts = useMemo(
+    () => postsPages?.pages.flatMap((page) => page.posts) ?? [],
+    [postsPages],
+  );
+  // Applies a flat-array updater (map/filter/prepend) to the infinite query's
+  // paginated cache by flattening, transforming, then rebuilding page shapes
+  // sized to match the original pages — keeping any size delta on the first
+  // page, which is where prepends/deletes are expected to occur from
+  // real-time events and local mutations.
+  const setPosts = (updater: (prev: any[]) => any[]) => {
+    queryClient.setQueryData(['posts', 'infinite', null], (old: any) => {
+      if (!old) return old;
+      const flatPosts = old.pages.flatMap((p: any) => p.posts);
+      const updated = updater(flatPosts);
+      const delta = updated.length - flatPosts.length;
+
+      let cursor = 0;
+      const pages = old.pages.map((page: any, i: number) => {
+        const size = page.posts.length + (i === 0 ? delta : 0);
+        const slice = updated.slice(cursor, cursor + Math.max(0, size));
+        cursor += slice.length;
+        return { ...page, posts: slice };
+      });
+      return { ...old, pages };
+    });
+  };
+
+  // Other feed sources still use manual state; only posts have been migrated
+  // onto React Query (Phase 2 scope).
   const [blogs, setBlogs] = useState<any[]>([]);
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [travelPosts, setTravelPosts] = useState<any[]>([]);
   const [feedFilter, setFeedFilter] = useState<"all" | "post" | "blog" | "podcast" | "travel_post">("all");
+
+  // Loading and error states (posts loading/error now derives from the query;
+  // isLoadingPosts covers the initial combined fetch of all 4 sources)
+  const [isLoadingOtherSources, setIsLoadingOtherSources] = useState(true);
+  const [otherSourcesError, setOtherSourcesError] = useState<string | null>(null);
+  const isLoadingPosts = isLoadingPostsQuery || isLoadingOtherSources;
+  const error = isPostsError ? getUserFriendlyError(postsQueryError) : otherSourcesError;
 
   async function handleTravelPostLike(postId: string) {
     // Optimistic update
@@ -131,8 +177,6 @@ export const FeedPage = (): JSX.Element => {
       }));
     }
   }
-  const [feedLimit, setFeedLimit] = useState(30);
-
   // Merged, chronologically sorted feed items
   const allFeedItems = useMemo<FeedItem[]>(() => {
     const taggedPosts = posts.map((p: any) => ({ ...p, _type: "post" as const, _sortDate: p.created_at }));
@@ -144,19 +188,26 @@ export const FeedPage = (): JSX.Element => {
   }, [posts, blogs, podcasts, travelPosts]);
 
   const feedItems = useMemo<FeedItem[]>(() => {
-    const filtered = feedFilter === "all" ? allFeedItems : allFeedItems.filter(i => i._type === feedFilter);
-    return filtered.slice(0, feedLimit);
-  }, [allFeedItems, feedFilter, feedLimit]);
+    return feedFilter === "all" ? allFeedItems : allFeedItems.filter(i => i._type === feedFilter);
+  }, [allFeedItems, feedFilter]);
 
-  const tabCounts = useMemo(() => ({
-    all: allFeedItems.length,
-    post: allFeedItems.filter(i => i._type === "post").length,
-    blog: allFeedItems.filter(i => i._type === "blog").length,
-    podcast: allFeedItems.filter(i => i._type === "podcast").length,
-    travel_post: allFeedItems.filter(i => i._type === "travel_post").length,
-  }), [allFeedItems]);
+  // Infinite-scroll sentinel: only drives further pagination for the "post"
+  // and "all" tabs since only posts are server-paginated in this phase.
+  const sentinelRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (feedFilter !== "all" && feedFilter !== "post") return;
+    const node = sentinelRef.current;
+    if (!node) return;
 
-  useEffect(() => { setFeedLimit(30); }, [feedFilter]);
+    const observer = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting && hasNextPage && !isFetchingNextPage) {
+        fetchNextPage();
+      }
+    }, { rootMargin: "200px" });
+
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [feedFilter, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Post creation states
   const [attachedFiles, setAttachedFiles] = useState<File[]>([]);
@@ -196,22 +247,10 @@ export const FeedPage = (): JSX.Element => {
   // Notification dropdown state
   const [showNotifications, setShowNotifications] = useState(false);
 
-  // Create post modal state
-  const [showPostModal, setShowPostModal] = useState(false);
-
   // Login greeting popup
   const [showLoginGreeting, setShowLoginGreeting] = useState(false);
   const [greetingVisible, setGreetingVisible] = useState(false);
-  const hasPostedRef = useRef(false);
   const contentRef = useRef<HTMLDivElement>(null);
-
-  // Auto-close modal after successful post
-  useEffect(() => {
-    if (hasPostedRef.current && !isPosting && postText === "" && attachedFiles.length === 0) {
-      setShowPostModal(false);
-      hasPostedRef.current = false;
-    }
-  }, [isPosting, postText, attachedFiles]);
 
   // Fetch all feed content on mount
   useEffect(() => {
@@ -259,6 +298,9 @@ export const FeedPage = (): JSX.Element => {
         }
         return prev;
       });
+    },
+    onPostDeleted: (data) => {
+      setPosts(prev => prev.filter(p => p.id !== data.postId));
     },
     onNewBlog: (data) => {
       setBlogs(prev => prev.some(b => b.id === data.blog.id) ? prev : [data.blog, ...prev]);
@@ -317,29 +359,19 @@ export const FeedPage = (): JSX.Element => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Fetches blogs/podcasts/travel-posts (posts are handled by usePostsInfinite).
   const fetchFeedContent = async (isRefresh = false) => {
     try {
-      if (!isRefresh) setIsLoadingPosts(true);
-      setError(null);
+      if (!isRefresh) setIsLoadingOtherSources(true);
+      setOtherSourcesError(null);
 
       const headers = getAuthHeaders();
 
-      const [postsRes, blogsRes, podcastsRes, travelRes] = await Promise.allSettled([
-        optimizedFetch('/api/posts?limit=20&offset=0', { method: 'GET', headers, ttl: 20000, dedupe: true }),
+      const [blogsRes, podcastsRes, travelRes] = await Promise.allSettled([
         optimizedFetch('/api/blogs?limit=20&page=1',   { method: 'GET', headers, ttl: 30000, dedupe: true }),
         optimizedFetch('/api/podcasts?limit=20&page=1', { method: 'GET', headers, ttl: 30000, dedupe: true }),
         optimizedFetch('/api/travel-posts?limit=20&page=1', { method: 'GET', headers, ttl: 20000, dedupe: true }),
       ]);
-
-      if (postsRes.status === 'fulfilled') {
-        setPosts(postsRes.value.posts || []);
-      } else {
-        // Posts fetch failed — surface error but still show other content
-        logError(postsRes.reason, 'FeedPage.fetchFeedContent.posts');
-        const errorMessage = getUserFriendlyError(postsRes.reason);
-        setError(errorMessage);
-        toast({ title: "Error", description: errorMessage, variant: "destructive" });
-      }
 
       if (blogsRes.status === 'fulfilled') {
         setBlogs(blogsRes.value.posts || []);
@@ -359,10 +391,10 @@ export const FeedPage = (): JSX.Element => {
     } catch (err) {
       logError(err, 'FeedPage.fetchFeedContent');
       const errorMessage = getUserFriendlyError(err);
-      setError(errorMessage);
+      setOtherSourcesError(errorMessage);
       toast({ title: "Error", description: errorMessage, variant: "destructive" });
     } finally {
-      setIsLoadingPosts(false);
+      setIsLoadingOtherSources(false);
     }
   };
 
@@ -378,12 +410,14 @@ export const FeedPage = (): JSX.Element => {
     fetchRecentJobs();
     fetchSuggestedConnections();
 
-    // Poll every 30 seconds to keep data fresh
+    // Background safety-net poll; visibilitychange/focus below handle the
+    // common "user comes back to the tab" refresh, so this only needs to be
+    // frequent enough to catch changes during a long-lived open tab.
     const pollInterval = setInterval(() => {
       fetchUpcomingEvents();
       fetchRecentJobs();
       fetchSuggestedConnections();
-    }, 30000); // 30 seconds
+    }, 3 * 60 * 1000); // 3 minutes
 
     // Refresh when page becomes visible (user returns to tab)
     const handleVisibilityChange = () => {
@@ -524,7 +558,6 @@ export const FeedPage = (): JSX.Element => {
       return;
     }
 
-    hasPostedRef.current = true;
     setIsPosting(true);
     try {
       const userId = localStorage.getItem('userId');
@@ -1027,7 +1060,7 @@ export const FeedPage = (): JSX.Element => {
     const commentText = commentTexts[postId];
     if (!commentText?.trim()) return;
 
-    const userId = localStorage.getItem('user');
+    const userId = user?.id || localStorage.getItem('userId') || '';
     if (!userId) {
       toast({
         title: "Authentication required",
@@ -1038,13 +1071,11 @@ export const FeedPage = (): JSX.Element => {
     }
 
     try {
-      const userIdParsed = JSON.parse(userId).id;
-
       const response = await fetch(`/api/posts/${postId}/comments`, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
-          'user-id': userIdParsed || '',
+          'user-id': userId,
         },
         body: JSON.stringify({
           content: commentText,
@@ -1076,6 +1107,8 @@ export const FeedPage = (): JSX.Element => {
         description: "Failed to post comment. Please try again.",
         variant: "destructive",
       });
+      // Rethrow so PostCard's optimistic comment can be rolled back
+      throw error;
     }
   };
 
@@ -1250,20 +1283,20 @@ export const FeedPage = (): JSX.Element => {
           <div className="min-h-full xl:pr-[316px] transition-all duration-300 overflow-x-hidden">
             <div className="w-full max-w-[680px] md:max-w-[760px] xl:max-w-none 2xl:max-w-[960px] mx-auto px-4 sm:px-6 md:px-8 pt-0 pb-6 sm:pb-8 md:pb-10">
 
-              <CreatePostModal
-                open={showPostModal}
-                onClose={() => setShowPostModal(false)}
-                postText={postText}
-                attachedFiles={attachedFiles}
-                isPosting={isPosting}
-                onPostTextChange={setPostText}
-                onFileAttachment={handleFileAttachment}
-                onPost={handlePost}
-                onRemoveFile={(index) => setAttachedFiles(prev => prev.filter((_, i) => i !== index))}
-              />
+              <div className="mb-5 sm:mb-6" data-post-creator>
+                <InlinePostComposer
+                  postText={postText}
+                  attachedFiles={attachedFiles}
+                  isPosting={isPosting}
+                  onPostTextChange={setPostText}
+                  onFileAttachment={handleFileAttachment}
+                  onPost={handlePost}
+                  onRemoveFile={(index) => setAttachedFiles(prev => prev.filter((_, i) => i !== index))}
+                />
+              </div>
 
               {/* Post loading/error states */}
-              <div className="mb-0" data-post-creator>
+              <div className="mb-0">
 
                 {/* Loading & Error States */}
                 {isLoadingPosts && (
@@ -1271,15 +1304,6 @@ export const FeedPage = (): JSX.Element => {
                     {[1, 2, 3].map((i) => (
                       <SkeletonPostCard key={i} />
                     ))}
-                    <div className="text-center py-8">
-                      <div className="relative inline-block">
-                        <div className="w-12 h-12 border-4 border-[#008060]/20 border-t-[#008060] rounded-full animate-spin" />
-                        <div className="absolute inset-0 flex items-center justify-center">
-                          <div className="w-2 h-2 bg-[#008060] rounded-full animate-pulse" />
-                        </div>
-                      </div>
-                      <p className="mt-4 text-gray-500 font-medium animate-pulse">Gathering updates...</p>
-                    </div>
                   </div>
                 )}
 
@@ -1292,20 +1316,10 @@ export const FeedPage = (): JSX.Element => {
                         <p className="text-red-600 text-sm">We couldn't load your feed. Please try again.</p>
                         <div className="flex gap-3 justify-center">
                           <Button
-                            onClick={() => fetchFeedContent()}
+                            onClick={() => { refetchPosts(); fetchFeedContent(); }}
                             className="bg-red-600 hover:bg-red-700 text-white"
                           >
                             Try Again
-                          </Button>
-                          <Button
-                            onClick={() => {
-                              setError(null);
-                              fetchFeedContent();
-                            }}
-                            variant="outline"
-                            className="border-red-300 text-red-600 hover:bg-red-50"
-                          >
-                            Dismiss
                           </Button>
                         </div>
                       </div>
@@ -1314,71 +1328,39 @@ export const FeedPage = (): JSX.Element => {
                 )}
 
                 {!isLoadingPosts && !error && feedItems.length === 0 && (
-                  <Card className="border-dashed border-2 border-gray-200 bg-gradient-to-br from-gray-50 to-gray-100/50">
-                    <CardContent className="p-12 text-center">
-                      <div className="max-w-md mx-auto space-y-6">
-                        <div className="text-6xl mb-4">📭</div>
-                        <div className="space-y-2">
-                          <h3 className="text-2xl font-bold text-gray-900">Your feed is waiting</h3>
-                          <p className="text-gray-600 text-base">Be the pioneer and share the first story with your fellow alumni!</p>
-                        </div>
-                        <div className="pt-4">
-                          <Button
-                            onClick={() => {
-                              // Scroll to post creator
-                              const postCreator = document.querySelector('[data-post-creator]');
-                              postCreator?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                            }}
-                            variant="brand"
-                            className="px-8 py-6 text-lg"
-                          >
-                            Create Your First Post
-                          </Button>
-                        </div>
-                        <div className="pt-4 border-t border-gray-200">
-                          <p className="text-sm text-gray-500">
-                            💡 <strong>Tip:</strong> Connect with more alumni to see their posts in your feed
-                          </p>
-                        </div>
+                  <div
+                    className="text-center p-10 sm:p-12"
+                    style={{ borderRadius: 'var(--radius-xl)', border: '1px dashed var(--border-default)', background: 'var(--surface-card)' }}
+                  >
+                    <div className="max-w-md mx-auto space-y-5">
+                      <div className="text-5xl mb-1">📭</div>
+                      <div className="space-y-1.5">
+                        <h3 className="text-xl font-bold text-gray-900">Your feed is waiting</h3>
+                        <p className="text-gray-500 text-sm">Be the pioneer and share the first story with your fellow alumni!</p>
                       </div>
-                    </CardContent>
-                  </Card>
-                )}
-
-                {/* Filter tabs + Create Post on same row */}
-                {!isLoadingPosts && !error && (
-                  <div className="flex items-center justify-between gap-3 flex-wrap py-2.5 mb-1">
-                    <div className="flex items-center gap-3 flex-wrap">
-                      {allFeedItems.length > 0 && (["all", "post", "blog", "podcast", "travel_post"] as const).map((type) => {
-                        const labels = { all: "All", post: "Posts", blog: "Blogs", podcast: "Podcasts", travel_post: "City Chapters" };
-                        const isActive = feedFilter === type;
-                        return (
-                          <button
-                            key={type}
-                            onClick={() => setFeedFilter(type)}
-                            className={`px-4 py-2 rounded-full text-sm font-medium border transition-colors ${
-                              isActive
-                                ? "bg-[#008060] text-white border-[#008060]"
-                                : "bg-white text-gray-600 border-gray-200 hover:border-[#008060]/40 hover:text-[#008060]"
-                            }`}
-                          >
-                            {labels[type]} ({tabCounts[type]})
-                          </button>
-                        );
-                      })}
+                      <div className="pt-2">
+                        <Button
+                          onClick={() => {
+                            const postCreator = document.querySelector('[data-post-creator]');
+                            postCreator?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                          }}
+                          variant="brand"
+                          className="px-6 py-5 text-sm rounded-full"
+                        >
+                          Create Your First Post
+                        </Button>
+                      </div>
+                      <div className="pt-3" style={{ borderTop: '1px solid var(--border-subtle)' }}>
+                        <p className="text-xs text-gray-400">
+                          💡 <strong className="text-gray-500">Tip:</strong> Connect with more alumni to see their posts in your feed
+                        </p>
+                      </div>
                     </div>
-                    <Button
-                      onClick={() => setShowPostModal(true)}
-                      className="bg-[#008060] hover:bg-[#006b51] text-white font-semibold px-5 py-2 rounded-full shadow-sm transition-all flex items-center gap-2 text-sm shrink-0"
-                    >
-                      <PenSquare className="w-4 h-4" />
-                      Create Post
-                    </Button>
                   </div>
                 )}
 
                 {/* Feed — posts, blogs, and podcasts interleaved by date */}
-                <div className="space-y-3 mt-1">
+                <div className="space-y-3 mt-4">
                   {feedItems.map((item) => {
                     if (item._type === "blog") {
                       return <FeedBlogCard key={`blog-${item.id}`} blog={item} onBookmark={handleBlogBookmark} />;
@@ -1432,14 +1414,13 @@ export const FeedPage = (): JSX.Element => {
                   })}
                 </div>
 
-                {/* Load more */}
-                {!isLoadingPosts && feedItems.length === feedLimit && (
-                  <button
-                    onClick={() => setFeedLimit(prev => prev + 20)}
-                    className="w-full py-2.5 rounded-lg border border-gray-200 text-sm text-gray-600 hover:border-[#008060]/40 hover:text-[#008060] transition-colors bg-white"
-                  >
-                    Load more
-                  </button>
+                {/* Infinite-scroll sentinel: triggers fetchNextPage when it enters the viewport */}
+                {!isLoadingPosts && (feedFilter === "all" || feedFilter === "post") && (
+                  <div ref={sentinelRef} className="py-4 text-center">
+                    {isFetchingNextPage && (
+                      <div className="inline-block w-5 h-5 border-2 border-[#008060]/30 border-t-[#008060] rounded-full animate-spin" />
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -1476,10 +1457,10 @@ export const FeedPage = (): JSX.Element => {
 
         {/* Desktop Sidebar */}
         <div
-          className="hidden xl:block w-[300px] fixed right-0 top-14 sm:top-16 bottom-0 overflow-y-auto z-10"
+          className="hidden xl:block w-[316px] fixed right-0 top-14 sm:top-16 bottom-0 overflow-y-auto z-10"
           style={{ borderLeft: '1px solid var(--border-subtle)', background: 'var(--surface-subtle)' }}
         >
-          <div className="p-4 space-y-4">
+          <div className="p-5 space-y-5">
             <GamificationLeaderboard />
             <SidebarEvents
               events={upcomingEvents}

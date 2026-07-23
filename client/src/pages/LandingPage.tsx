@@ -16,6 +16,7 @@ const CallToActionSection = React.lazy(() => import("./sections/CallToActionSect
 const CityChapterSection = React.lazy(() => import("./sections/TravelChapterSection").then(module => ({ default: module.TravelChapterSection })));
 import { AlumniPrideVideo } from "@/components/common/AlumniPrideVideo";
 import { LandingNavbar } from "@/components/common/LandingNavbar";
+import { IntroSplash } from "@/components/common/IntroSplash";
 
 // ─── Reusable scroll-reveal wrapper ──────────────────────────────────────────
 const RevealOnScroll = ({
@@ -169,6 +170,8 @@ export const LandingPage = (): JSX.Element => {
           })}
         </script>
       </Helmet>
+
+      <IntroSplash />
 
       <LandingNavbar />
 
