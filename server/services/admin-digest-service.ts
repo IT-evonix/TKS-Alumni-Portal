@@ -137,7 +137,9 @@ export async function aggregateDailyMetrics(coverageWindow?: AdminDigestCoverage
         if (newSignupErr) throw newSignupErr;
         const newSignupRequests = newSignupRequestsData || [];
 
-        // Calculate oldest pending request age
+        // Calculate oldest pending request age.
+        // Relies on pendingSignups being sorted descending by created_at (see query above) —
+        // the last element is therefore the oldest. If that ordering ever changes, this breaks silently.
         let oldestPendingRequestAge: number | null = null;
         if (pendingSignups && pendingSignups.length > 0) {
             const oldestRequest = pendingSignups[pendingSignups.length - 1];
@@ -168,7 +170,7 @@ export async function aggregateDailyMetrics(coverageWindow?: AdminDigestCoverage
 
         // Pending connections
         const { count: pendingConnectionsCount, error: connError } = await supabase
-            .from("connections")
+            .from("connection_requests")
             .select("*", { count: 'exact', head: true })
             .eq("status", "pending");
 
@@ -207,7 +209,7 @@ export async function aggregateDailyMetrics(coverageWindow?: AdminDigestCoverage
 
         // New connections accepted (filter by updated_at so connections accepted today are captured)
         const { count: newConnAcceptedCount, error: newConnErr } = await supabase
-            .from("connections")
+            .from("connection_requests")
             .select("*", { count: 'exact', head: true })
             .eq("status", "accepted")
             .gte("updated_at", window.startISO)

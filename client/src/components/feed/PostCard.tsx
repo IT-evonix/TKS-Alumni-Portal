@@ -55,6 +55,7 @@ interface PostCardProps {
     };
     content: string;
     image_url?: string | null;
+    image_urls?: string[] | null;
     likes_count: number;
     comments_count: number;
     created_at: string;
@@ -569,28 +570,59 @@ const PostCardComponent: React.FC<PostCardProps> = ({
             </>
           )}
 
-          {/* Attached file */}
-          {post.image_url && (
-            <div className="mt-3 rounded-xl overflow-hidden max-w-full" style={{ border: '1px solid var(--border-subtle)' }}>
-              {post.image_url.match(/\.(jpg|jpeg|png|gif|webp)$/i) ? (
-                <OptimizedImage
-                  src={post.image_url}
-                  alt="Post attachment"
-                  className="w-full h-auto object-cover max-h-[260px] sm:max-h-[300px] mx-auto"
-                  loading="lazy"
-                  responsive={true}
-                  quality={85}
-                />
-              ) : post.image_url.match(/\.(mp4|webm)$/i) ? (
-                <video src={withAuthenticatedMediaUrl(post.image_url)} controls className="w-full h-auto max-h-[260px] sm:max-h-[300px] mx-auto" style={{ maxWidth: '100%' }} />
-              ) : (
-                <a href={withAuthenticatedMediaUrl(post.image_url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 w-full min-h-[50px]">
+          {/* Attached files */}
+          {(() => {
+            const attachments = post.image_urls && post.image_urls.length > 0
+              ? post.image_urls
+              : (post.image_url ? [post.image_url] : []);
+
+            if (attachments.length === 0) return null;
+
+            const renderAttachment = (url: string, key: number) => {
+              if (url.match(/\.(jpg|jpeg|png|gif|webp)$/i)) {
+                return (
+                  <OptimizedImage
+                    key={key}
+                    src={url}
+                    alt="Post attachment"
+                    className="w-full h-auto object-cover max-h-[260px] sm:max-h-[300px] mx-auto"
+                    loading="lazy"
+                    responsive={true}
+                    quality={85}
+                  />
+                );
+              }
+              if (url.match(/\.(mp4|webm)$/i)) {
+                return (
+                  <video key={key} src={withAuthenticatedMediaUrl(url)} controls className="w-full h-auto max-h-[260px] sm:max-h-[300px] mx-auto" style={{ maxWidth: '100%' }} />
+                );
+              }
+              return (
+                <a key={key} href={withAuthenticatedMediaUrl(url)} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3 p-3 bg-white hover:bg-gray-50 w-full min-h-[50px]">
                   <span className="text-2xl">📄</span>
                   <span className="text-sm text-gray-700 truncate">View attached document</span>
                 </a>
-              )}
-            </div>
-          )}
+              );
+            };
+
+            if (attachments.length === 1) {
+              return (
+                <div className="mt-3 rounded-xl overflow-hidden max-w-full" style={{ border: '1px solid var(--border-subtle)' }}>
+                  {renderAttachment(attachments[0], 0)}
+                </div>
+              );
+            }
+
+            return (
+              <div className={`mt-3 grid gap-1 rounded-xl overflow-hidden max-w-full ${attachments.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
+                {attachments.map((url, i) => (
+                  <div key={i} className="overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+                    {renderAttachment(url, i)}
+                  </div>
+                ))}
+              </div>
+            );
+          })()}
         </div>
 
         {/* Engagement row */}

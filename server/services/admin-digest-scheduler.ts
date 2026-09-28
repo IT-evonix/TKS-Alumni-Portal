@@ -119,7 +119,7 @@ export async function sendDigestToAdmin(
 
         // Log failed delivery
         try {
-            const metrics = await aggregateDailyMetrics();
+            const metrics = await aggregateDailyMetrics(coverageWindow);
             await logDigestDelivery(
                 adminId,
                 "failed",

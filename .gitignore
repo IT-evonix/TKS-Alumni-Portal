@@ -15,3 +15,5 @@ vite.config.ts.*
 git_push_error*.txt
 tsc_errors.txt
 temp_git_push/
+scratchpad-stub-*.js
+scripts/out/

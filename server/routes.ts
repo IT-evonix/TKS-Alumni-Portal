@@ -4566,7 +4566,10 @@ export async function registerRoutes(app: Express): Promise<Server> {
         return res.status(401).json({ error: "Invalid user" });
       }
 
-      const { content, imageUrl, postType } = req.body;
+      const { content, imageUrl, imageUrls, postType } = req.body;
+      const allImageUrls: string[] = Array.isArray(imageUrls) && imageUrls.length > 0
+        ? imageUrls
+        : (imageUrl ? [imageUrl] : []);
 
       if (!content || content.trim().length === 0) {
         return res.status(400).json({ error: "Content is required" });
@@ -4586,7 +4589,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .insert({
           author_id: userId,
           content: content.trim(),
-          image_url: imageUrl,
+          image_url: allImageUrls[0] || null,
+          image_urls: allImageUrls.length > 0 ? allImageUrls : null,
           post_type: postType || "general",
           likes_count: 0,
           comments_count: 0,
@@ -8134,6 +8138,75 @@ export async function registerRoutes(app: Express): Promise<Server> {
   });
 
 
+
+  // Get this month's events for the monthly popup (shown once per calendar month)
+  app.get("/api/events/monthly-popup", async (req, res) => {
+    try {
+      const userId = req.headers["user-id"] as string;
+
+      if (!userId) {
+        return res.status(401).json({ error: "No user ID provided" });
+      }
+
+      const { data: user, error: userError } = await supabase
+        .from("users")
+        .select("id, user_role, last_monthly_popup_shown_at")
+        .eq("id", userId)
+        .single();
+
+      if (userError || !user || user.user_role !== "alumni") {
+        return res.json({ show: false });
+      }
+
+      const now = new Date();
+      const currentYearMonth = `${now.getFullYear()}-${now.getMonth()}`;
+
+      if (user.last_monthly_popup_shown_at) {
+        const lastShown = new Date(user.last_monthly_popup_shown_at);
+        const lastShownYearMonth = `${lastShown.getFullYear()}-${lastShown.getMonth()}`;
+        if (lastShownYearMonth === currentYearMonth) {
+          return res.json({ show: false });
+        }
+      }
+
+      const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+      const firstOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1).toISOString();
+
+      const { data: events, error: eventsError } = await supabase
+        .from("events")
+        .select("*")
+        .eq("is_active", true)
+        .gte("event_date", firstOfMonth)
+        .lt("event_date", firstOfNextMonth)
+        .order("event_date", { ascending: true });
+
+      if (eventsError) {
+        console.error("Monthly popup events error:", eventsError);
+        return res.status(500).json({ error: "Failed to fetch events" });
+      }
+
+      let rsvps: any[] = [];
+      if (events && events.length > 0) {
+        const eventIds = events.map((e) => e.id);
+        const { data: userRsvps } = await supabase
+          .from("event_rsvps")
+          .select("event_id, status")
+          .eq("user_id", userId)
+          .in("event_id", eventIds);
+        rsvps = userRsvps || [];
+      }
+
+      await supabase
+        .from("users")
+        .update({ last_monthly_popup_shown_at: now.toISOString() })
+        .eq("id", userId);
+
+      res.json({ show: (events || []).length > 0, events: events || [], rsvps });
+    } catch (error) {
+      console.error("Monthly popup error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
 
   // ==================== EVENT RSVP ROUTES ====================
 

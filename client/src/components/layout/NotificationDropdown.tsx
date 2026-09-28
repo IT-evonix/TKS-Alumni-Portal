@@ -811,9 +811,11 @@ export const NotificationDropdown: React.FC<NotificationDropdownProps> = ({ onCl
                             <p className="text-[10px] sm:text-xs text-gray-500 mt-1 sm:mt-1.5">
                               {notification.created_at ? (
                                 (() => {
-                                  // Normalize Supabase timestamps to include timezone info
                                   const rawTs = notification.created_at;
-                                  const dateStr = /[Z+\-]\d*$/.test(rawTs) ? rawTs : `${rawTs}Z`;
+                                  // Supabase timestamps include an explicit offset (e.g. +00:00);
+                                  // only bare "YYYY-MM-DDTHH:mm:ss(.sss)?" strings need a 'Z' appended.
+                                  const hasTimezone = /(Z|[+-]\d{2}:?\d{2})$/.test(rawTs);
+                                  const dateStr = hasTimezone ? rawTs : `${rawTs}Z`;
                                   const date = new Date(dateStr);
                                   return isNaN(date.getTime()) ? 'Just now' : formatDistanceToNow(date, { addSuffix: true });
                                 })()

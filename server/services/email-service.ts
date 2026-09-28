@@ -197,18 +197,31 @@ const EMAIL_LOGO_URL = process.env.EMAIL_LOGO_URL || process.env.LOGO_URL;
  */
 export function getEmailHeaderHtml(baseUrl: string, options?: { logoUrl?: string }): string {
   const logoUrl = options?.logoUrl || EMAIL_LOGO_URL || `${baseUrl.replace(/\/$/, "")}/tks_logo.png`;
+  // Table + bgcolor (not a <div>) so Outlook's Word engine, which ignores CSS `background`
+  // on <div> and never renders linear-gradient(), still shows a solid brand-green banner.
+  // The source logo file (client/public/tks_logo.png) is a tall 212x332 portrait mark with
+  // "The Kalyani School" text baked in. Forcing a mismatched wide box (e.g. width=160
+  // height=48) with `height: auto` let clients ignore the height attribute and render the
+  // image at its true (much taller) proportions, ballooning the header. Sizing by its real
+  // aspect ratio and laying it out in a two-cell row next to the "TKS Alumni Portal" text
+  // (instead of stacked) keeps everything on one compact line.
   return `
-  <div style="background: linear-gradient(135deg, #008060 0%, #006b51 100%); padding: 24px 30px; text-align: center; border-radius: 10px 10px 0 0;">
-    <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="max-width: 560px; margin: 0 auto;">
-      <tr>
-        <td style="text-align: center;">
-          <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="160" height="48" style="display: inline-block; max-width: 160px; height: auto; outline: none; border: 0;" />
-          <div style="font-size: 0; line-height: 0;">&nbsp;</div>
-          <span style="display: inline-block; color: white; font-size: 22px; font-weight: 700; letter-spacing: 0.02em;">TKS Alumni Portal</span>
-        </td>
-      </tr>
-    </table>
-  </div>`.trim();
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse;">
+    <tr>
+      <td bgcolor="#008060" style="background-color: #008060; background: linear-gradient(135deg, #008060 0%, #006b51 100%); padding: 20px 30px; text-align: center; border-radius: 10px 10px 0 0;">
+        <table role="presentation" cellpadding="0" cellspacing="0" border="0" align="center" style="margin: 0 auto;">
+          <tr>
+            <td valign="middle" style="padding-right: 12px;">
+              <img src="${sanitizeForEmail(logoUrl)}" alt="The Kalyani School" width="30" height="47" style="display: block; width: 30px; height: 47px; outline: none; border: 0;" />
+            </td>
+            <td valign="middle">
+              <span style="display: inline-block; color: white; font-size: 22px; font-weight: 700; letter-spacing: 0.02em; white-space: nowrap;">TKS Alumni Portal</span>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>`.trim();
 }
 
 /**
@@ -229,12 +242,16 @@ export function getEmailFooterHtml(
     links += `<a href="${sanitizeForEmail(contactUrl)}" style="color: #008060; text-decoration: none;">Contact us</a>`;
   }
   return `
-  <div style="background: #f8f9fa; padding: 20px 30px; text-align: center; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
-    <p style="color: #666; font-size: 13px; margin: 0 0 8px 0;">
-      <strong>TKS Alumni Portal</strong>
-    </p>
-    ${links ? `<p style="color: #666; font-size: 12px; margin: 0;">${links}</p>` : ""}
-  </div>`.trim();
+  <table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="border-collapse: collapse;">
+    <tr>
+      <td bgcolor="#f8f9fa" style="background-color: #f8f9fa; padding: 20px 30px; text-align: center; border-radius: 0 0 10px 10px; border: 1px solid #e0e0e0; border-top: none;">
+        <p style="color: #666; font-size: 13px; margin: 0 0 8px 0;">
+          <strong>TKS Alumni Portal</strong>
+        </p>
+        ${links ? `<p style="color: #666; font-size: 12px; margin: 0;">${links}</p>` : ""}
+      </td>
+    </tr>
+  </table>`.trim();
 }
 
 /**

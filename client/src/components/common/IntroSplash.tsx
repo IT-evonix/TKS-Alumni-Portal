@@ -1,47 +1,41 @@
-import React from "react";
-import { AnimatePresence, motion } from "framer-motion";
+"use client";
 
-const SESSION_KEY = "tks-intro-splash-played";
+import React, { useEffect, useState } from "react";
 
-export const IntroSplash = (): JSX.Element | null => {
-  const [show, setShow] = React.useState(false);
+const IntroSplash = () => {
+  const [animate, setAnimate] = useState(false);
+  const [visible, setVisible] = useState(true);
 
-  React.useEffect(() => {
-    if (sessionStorage.getItem(SESSION_KEY)) return;
-    sessionStorage.setItem(SESSION_KEY, "1");
-    setShow(true);
-    const timer = setTimeout(() => setShow(false), 1400);
-    return () => clearTimeout(timer);
+  useEffect(() => {
+    // Start opening after 2 seconds
+    const openTimer = setTimeout(() => {
+      setAnimate(true);
+    }, 2000);
+
+    // Remove component after animation
+    const hideTimer = setTimeout(() => {
+      setVisible(false);
+    }, 4200);
+
+    return () => {
+      clearTimeout(openTimer);
+      clearTimeout(hideTimer);
+    };
   }, []);
 
+  if (!visible) return null;
+
   return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          className="fixed inset-0 z-[9999] flex items-center justify-center bg-slate-50"
-          initial={{ opacity: 1 }}
-          exit={{ opacity: 0, transition: { duration: 0.4, delay: 0.5 } }}
-        >
-          <motion.span
-            className="text-[7rem] sm:text-[9rem]"
-            style={{ willChange: "transform, opacity" }}
-            initial={{ scale: 1, y: 0, opacity: 1, filter: "blur(0px)" }}
-            animate={{
-              scale: 0.05,
-              y: -60,
-              opacity: 0,
-              filter: "blur(6px)",
-            }}
-            transition={{
-              duration: 1.1,
-              delay: 0.35,
-              ease: [0.6, 0, 0.85, 1],
-            }}
-          >
-            🙏
-          </motion.span>
-        </motion.div>
-      )}
-    </AnimatePresence>
+    <div className="hand_opens">
+      <div className={`left-div ${animate ? "open-left" : ""}`}>
+        <img src="/images/hand1.webp" alt="Left Hand" />
+      </div>
+
+      <div className={`right-div ${animate ? "open-right" : ""}`}>
+        <img src="/images/hand2.webp" alt="Right Hand" />
+      </div>
+    </div>
   );
 };
+
+export {IntroSplash};

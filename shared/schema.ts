@@ -14,6 +14,7 @@ export const users = pgTable("users", {
   accountBlocked: boolean("account_blocked").default(false),
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
+  lastMonthlyPopupShownAt: timestamp("last_monthly_popup_shown_at", { withTimezone: true }),
 });
 
 export const passwordResetTokens = pgTable("password_reset_tokens", {
@@ -372,6 +373,7 @@ export const feedPosts = pgTable("feed_posts", {
   authorId: varchar("author_id").references(() => users.id).notNull(),
   content: text("content").notNull(),
   imageUrl: text("image_url"),
+  imageUrls: text("image_urls").array(),
   postType: text("post_type").default("general"), // general, achievement, job_update, etc.
   likesCount: integer("likes_count").default(0),
   commentsCount: integer("comments_count").default(0),

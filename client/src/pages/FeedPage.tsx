@@ -13,7 +13,8 @@ import { useAuth } from "@/contexts/AuthContext";
 import { useGamification } from "@/contexts/GamificationContext";
 import { AppLayout } from "@/components/layout/AppLayout";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Flame, Trophy, X } from "lucide-react";
+import { Flame, Trophy, X, RefreshCw } from "lucide-react";
+import confetti from "canvas-confetti";
 import { useRealtimeUpdates } from "@/hooks/useRealtimeUpdates";
 import { getUserFriendlyError, logError, handleAPIError } from "@/utils/errorHandler";
 import { validateTextLength } from "@/utils/validation";
@@ -126,6 +127,28 @@ export const FeedPage = (): JSX.Element => {
   const [podcasts, setPodcasts] = useState<any[]>([]);
   const [travelPosts, setTravelPosts] = useState<any[]>([]);
   const [feedFilter, setFeedFilter] = useState<"all" | "post" | "blog" | "podcast" | "travel_post">("all");
+  const [isRefreshingFeed, setIsRefreshingFeed] = useState(false);
+
+  const fireConfetti = () => {
+    confetti({
+      particleCount: 100,
+      spread: 70,
+      startVelocity: 45,
+      origin: { y: 0.2 },
+      colors: ['#008060', '#a6ce39', '#fdbb13', '#ffffff'],
+    });
+  };
+
+  const handleRefreshFeed = async () => {
+    if (isRefreshingFeed) return;
+    setIsRefreshingFeed(true);
+    try {
+      await Promise.all([refetchPosts(), fetchFeedContent(true)]);
+      fireConfetti();
+    } finally {
+      setIsRefreshingFeed(false);
+    }
+  };
 
   // Loading and error states (posts loading/error now derives from the query;
   // isLoadingPosts covers the initial combined fetch of all 4 sources)
@@ -526,6 +549,9 @@ export const FeedPage = (): JSX.Element => {
     input.type = 'file';
     input.accept = type === 'document' ? '.pdf,.doc,.docx' :
       type === 'photo' ? 'image/*' : 'video/*';
+    if (type === 'photo') {
+      input.multiple = true;
+    }
     input.onchange = (e) => {
       const files = (e.target as HTMLInputElement).files;
       if (files) {
@@ -561,60 +587,59 @@ export const FeedPage = (): JSX.Element => {
     setIsPosting(true);
     try {
       const userId = localStorage.getItem('userId');
-      let uploadedFileUrl = null;
+      const uploadedFileUrls: string[] = [];
 
-      // Upload file if there's an attachment
+      // Upload all attachments
       if (attachedFiles.length > 0) {
-        const file = attachedFiles[0];
-
-        // Validate file
         const maxSizeMB = 10;
         const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'application/pdf'];
 
-        if (file.size > maxSizeMB * 1024 * 1024) {
-          toast({
-            title: "File Too Large",
-            description: `File size must be less than ${maxSizeMB}MB`,
-            variant: "destructive",
+        for (const file of attachedFiles) {
+          if (file.size > maxSizeMB * 1024 * 1024) {
+            toast({
+              title: "File Too Large",
+              description: `"${file.name}" exceeds ${maxSizeMB}MB`,
+              variant: "destructive",
+            });
+            setIsPosting(false);
+            return;
+          }
+
+          if (!allowedTypes.includes(file.type)) {
+            toast({
+              title: "Invalid File Type",
+              description: `"${file.name}" must be an image (JPEG, PNG, GIF, WebP) or PDF`,
+              variant: "destructive",
+            });
+            setIsPosting(false);
+            return;
+          }
+
+          const formData = new FormData();
+          formData.append('file', file);
+
+          const uploadResponse = await fetch('/api/upload/post-attachment', {
+            method: 'POST',
+            headers: {
+              'user-id': userId || '',
+            },
+            body: formData,
           });
-          setIsPosting(false);
-          return;
-        }
 
-        if (!allowedTypes.includes(file.type)) {
-          toast({
-            title: "Invalid File Type",
-            description: "Please upload an image (JPEG, PNG, GIF, WebP) or PDF",
-            variant: "destructive",
-          });
-          setIsPosting(false);
-          return;
-        }
-
-        const formData = new FormData();
-        formData.append('file', file);
-
-        const uploadResponse = await fetch('/api/upload/post-attachment', {
-          method: 'POST',
-          headers: {
-            'user-id': userId || '',
-          },
-          body: formData,
-        });
-
-        if (uploadResponse.ok) {
-          const uploadData = await uploadResponse.json();
-          uploadedFileUrl = uploadData.url;
-        } else {
-          const errorInfo = await handleAPIError(uploadResponse);
-          logError(errorInfo, 'FeedPage.handlePost.upload');
-          toast({
-            title: "Upload Failed",
-            description: getUserFriendlyError(errorInfo),
-            variant: "destructive",
-          });
-          setIsPosting(false);
-          return;
+          if (uploadResponse.ok) {
+            const uploadData = await uploadResponse.json();
+            uploadedFileUrls.push(uploadData.url);
+          } else {
+            const errorInfo = await handleAPIError(uploadResponse);
+            logError(errorInfo, 'FeedPage.handlePost.upload');
+            toast({
+              title: "Upload Failed",
+              description: getUserFriendlyError(errorInfo),
+              variant: "destructive",
+            });
+            setIsPosting(false);
+            return;
+          }
         }
       }
 
@@ -626,7 +651,8 @@ export const FeedPage = (): JSX.Element => {
         },
         body: JSON.stringify({
           content: postText.trim(),
-          imageUrl: uploadedFileUrl,
+          imageUrl: uploadedFileUrls[0] || null,
+          imageUrls: uploadedFileUrls,
           postType: 'general',
         }),
       });
@@ -651,7 +677,7 @@ export const FeedPage = (): JSX.Element => {
         title: "Success",
         description: data.post.status === 'pending'
           ? "Post submitted! It will be visible after admin approval."
-          : (uploadedFileUrl ? "Post created with attachment!" : "Post created successfully!"),
+          : (uploadedFileUrls.length > 0 ? "Post created with attachment!" : "Post created successfully!"),
       });
     } catch (error) {
       logError(error, 'FeedPage.handlePost');
@@ -1297,6 +1323,19 @@ export const FeedPage = (): JSX.Element => {
 
               {/* Post loading/error states */}
               <div className="mb-0">
+
+                <div className="flex justify-end mb-3">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleRefreshFeed}
+                    disabled={isRefreshingFeed}
+                    className="rounded-full text-xs gap-1.5"
+                  >
+                    <RefreshCw className={`w-3.5 h-3.5 ${isRefreshingFeed ? 'animate-spin' : ''}`} />
+                    Refresh
+                  </Button>
+                </div>
 
                 {/* Loading & Error States */}
                 {isLoadingPosts && (

@@ -13,6 +13,7 @@ import { GamificationProvider } from "@/contexts/GamificationContext";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { GlobalSearchModal } from "@/components/search/GlobalSearchModal";
 import { EventAnnouncementPopup } from "@/components/events/EventAnnouncementPopup";
+import { MonthlyEventsPopup } from "@/components/events/MonthlyEventsPopup";
 import { ProtectedRoute, PublicRoute } from "@/components/ProtectedRoute";
 import { clientConfig } from "@/lib/config";
 import { registerServiceWorker } from "@/utils/serviceWorker";
@@ -262,6 +263,7 @@ function App() {
                       <Router />
                       <GlobalSearchModal />
                       <EventAnnouncementPopup />
+                      <MonthlyEventsPopup />
                       <Toaster />
                     </TooltipProvider>
                   </GamificationProvider>
