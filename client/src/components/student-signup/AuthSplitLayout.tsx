@@ -14,18 +14,21 @@ interface AuthSplitLayoutProps {
 }
 
 const BENEFITS = [
-  { icon: BookOpen, title: "Your school record, ready for life after TKS" },
-  { icon: Globe, title: "Direct access to alumni in top universities" },
-  { icon: ShieldCheck, title: "Verified, school-authorised student account" },
+  { icon: BookOpen, tone: "bg-[#A6CE39]/20 ring-[#A6CE39]/40 text-[#A6CE39]", title: "Your school record, ready for life after TKS" },
+  { icon: Globe, tone: "bg-[#FDB913]/20 ring-[#FDB913]/40 text-[#FDB913]", title: "Direct access to alumni in top universities" },
+  { icon: ShieldCheck, tone: "bg-emerald-400/20 ring-emerald-300/40 text-emerald-300", title: "Verified, school-authorised student account" },
 ];
 
 export const AuthSplitLayout = ({ caption, scrollRef, children }: AuthSplitLayoutProps) => (
-  <div className="flex min-h-dvh w-full bg-white lg:h-dvh lg:overflow-hidden">
+  <div className="flex min-h-dvh w-full bg-[#f6faf8] lg:h-dvh lg:overflow-hidden">
     {/* Hero (≥lg) */}
     <aside className="relative hidden w-[44%] max-w-[640px] shrink-0 flex-col justify-between gap-8 overflow-hidden bg-[#001a14] p-10 xl:p-14 lg:flex">
       <img src="/auth_hero_students.png" alt="" aria-hidden="true" className="absolute inset-0 h-full w-full object-cover" />
-      <div className="absolute inset-0 bg-gradient-to-b from-[#001a14]/85 via-[#001a14]/55 to-[#001a14]/90" />
-      <div className="absolute inset-0 bg-[radial-gradient(circle_at_15%_10%,rgba(16,185,129,0.25),transparent_45%),radial-gradient(circle_at_85%_35%,rgba(166,206,57,0.18),transparent_40%)]" />
+      {/* Scrim: dark enough behind every text block for AA contrast, photo still visible in the gaps */}
+      <div className="absolute inset-0 bg-[#002a20]/55" />
+      <div className="absolute inset-0 bg-gradient-to-b from-[#001a14]/90 via-[#002a20]/35 to-[#001a14]/95" />
+      <div className="absolute inset-0 bg-gradient-to-r from-[#001a14]/70 via-[#001a14]/25 to-transparent" />
+      <div className="absolute inset-0 bg-[radial-gradient(circle_at_10%_0%,rgba(52,211,153,0.22),transparent_40%),radial-gradient(circle_at_100%_100%,rgba(166,206,57,0.16),transparent_40%)]" />
 
       <Link href="/" className="relative z-10 flex items-center gap-3 self-start">
         <span className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white p-1.5 shadow-lg">
@@ -33,24 +36,24 @@ export const AuthSplitLayout = ({ caption, scrollRef, children }: AuthSplitLayou
         </span>
         <span className="leading-tight text-white">
           <span className="block text-lg font-extrabold tracking-tight">The Kalyani School</span>
-          <span className="block text-xs font-bold uppercase tracking-[0.2em] text-emerald-200">Student Portal</span>
+          <span className="block text-xs font-bold uppercase tracking-[0.2em] text-[#B9E04A]">Student Portal</span>
         </span>
       </Link>
 
       <div className="relative z-10 space-y-6">
         <div className="space-y-4">
-          <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-white drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] xl:text-5xl">
+          <h1 className="text-4xl font-extrabold leading-[1.1] tracking-tight text-white drop-shadow-[0_2px_12px_rgba(0,0,0,0.7)] xl:text-5xl">
             Your TKS journey <span className="text-[#A6CE39]">starts here.</span>
           </h1>
-          <p className="max-w-md text-base leading-relaxed text-white [text-shadow:0_1px_6px_rgba(0,0,0,0.6)]">
+          <p className="max-w-md text-base font-medium leading-relaxed text-white [text-shadow:0_1px_8px_rgba(0,0,0,0.85)]">
             Create your student account in under two minutes and join the school's network.
           </p>
         </div>
-        <ul className="space-y-3 [text-shadow:0_1px_6px_rgba(0,0,0,0.6)] [@media(max-height:720px)]:hidden">
-          {BENEFITS.map(({ icon: Icon, title }) => (
+        <ul className="space-y-3 [text-shadow:0_1px_8px_rgba(0,0,0,0.85)] [@media(max-height:720px)]:hidden">
+          {BENEFITS.map(({ icon: Icon, tone, title }) => (
             <li key={title} className="flex items-center gap-3 text-sm font-medium text-white">
-              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-white/10 ring-1 ring-white/20 backdrop-blur">
-                <Icon className="h-4 w-4 text-[#A6CE39]" aria-hidden="true" />
+              <span className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl ring-1 backdrop-blur ${tone}`}>
+                <Icon className="h-4 w-4" aria-hidden="true" />
               </span>
               {title}
             </li>
@@ -58,14 +61,15 @@ export const AuthSplitLayout = ({ caption, scrollRef, children }: AuthSplitLayou
         </ul>
       </div>
 
-      <div className="relative z-10 rounded-2xl border border-white/20 bg-[#00110c]/80 p-5 backdrop-blur-xl" aria-live="polite">
-        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-emerald-200">{caption.eyebrow}</p>
+      <div className="relative z-10 rounded-2xl border border-white/15 border-l-4 border-l-[#A6CE39] bg-[#00110c]/85 p-5 shadow-xl backdrop-blur-xl" aria-live="polite">
+        <p className="text-[11px] font-bold uppercase tracking-[0.2em] text-[#A6CE39]">{caption.eyebrow}</p>
         <p className="mt-1.5 text-sm leading-relaxed text-white">{caption.text}</p>
       </div>
     </aside>
 
     {/* Form column */}
-    <div ref={scrollRef} className="flex min-w-0 flex-1 flex-col lg:overflow-y-auto">
+    <div ref={scrollRef} className="relative flex min-w-0 flex-1 flex-col bg-[radial-gradient(ellipse_at_top_right,rgba(166,206,57,0.14),transparent_50%),radial-gradient(ellipse_at_bottom_left,rgba(0,128,96,0.10),transparent_55%)] lg:overflow-y-auto">
+      <div className="pointer-events-none absolute inset-x-0 top-0 z-10 hidden h-1 bg-gradient-to-r from-[#008060] via-[#A6CE39] to-[#FDB913] lg:block" aria-hidden="true" />
       {/* Mobile / tablet brand strip */}
       <header className="relative overflow-hidden bg-gradient-to-br from-[#006b51] via-[#008060] to-[#3f9b56] px-4 pb-6 pt-4 text-white sm:px-8 lg:hidden">
         <div className="absolute -right-10 -top-10 h-40 w-40 rounded-full bg-white/10 blur-2xl" aria-hidden="true" />

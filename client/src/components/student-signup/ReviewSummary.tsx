@@ -1,5 +1,5 @@
 import React from "react";
-import { Pencil } from "lucide-react";
+import { GraduationCap, Lock, Pencil, UserRound } from "lucide-react";
 import type { StudentSignupForm } from "@/utils/studentSignupFields";
 import { isPhoneEmpty } from "@/utils/studentSignupFields";
 
@@ -20,15 +20,24 @@ const Section = ({
   step,
   onEdit,
   rows,
+  icon: Icon,
+  chip,
 }: {
+  icon: React.ElementType;
+  chip: string;
   title: string;
   step: number;
   onEdit: (step: number) => void;
   rows: [string, string][];
 }) => (
-  <section className="rounded-2xl border border-gray-200 bg-white">
-    <header className="flex items-center justify-between border-b border-gray-100 px-4 py-3">
-      <h3 className="text-sm font-bold text-gray-900">{title}</h3>
+  <section className="overflow-hidden rounded-2xl border border-gray-200 bg-white shadow-sm">
+    <header className="flex items-center justify-between border-b border-gray-100 bg-gradient-to-r from-[#f1f8f5] to-white px-4 py-3">
+      <h3 className="flex items-center gap-2.5 text-sm font-bold text-gray-900">
+        <span className={`flex h-7 w-7 items-center justify-center rounded-lg ${chip}`}>
+          <Icon className="h-3.5 w-3.5" aria-hidden="true" />
+        </span>
+        {title}
+      </h3>
       <button
         type="button"
         onClick={() => onEdit(step)}
@@ -54,6 +63,8 @@ export const ReviewSummary = ({ form, onEdit }: ReviewSummaryProps) => (
   <div className="space-y-3">
     <Section
       title="Personal"
+      icon={UserRound}
+      chip="bg-emerald-100 text-emerald-700"
       step={0}
       onEdit={onEdit}
       rows={[
@@ -63,6 +74,8 @@ export const ReviewSummary = ({ form, onEdit }: ReviewSummaryProps) => (
     />
     <Section
       title="School"
+      icon={GraduationCap}
+      chip="bg-amber-100 text-amber-700"
       step={1}
       onEdit={onEdit}
       rows={[
@@ -73,6 +86,8 @@ export const ReviewSummary = ({ form, onEdit }: ReviewSummaryProps) => (
     />
     <Section
       title="Account"
+      icon={Lock}
+      chip="bg-lime-100 text-lime-700"
       step={2}
       onEdit={onEdit}
       rows={[

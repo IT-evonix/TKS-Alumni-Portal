@@ -53,8 +53,8 @@ export const StepIndicator = ({ steps, current, onSelect }: StepIndicatorProps) 
                 <span
                   className={cn(
                     "flex h-8 w-8 shrink-0 items-center justify-center rounded-full border-2 text-sm font-bold transition-colors",
-                    done && "border-[#008060] bg-[#008060] text-white",
-                    active && "border-[#008060] bg-[#e6f5f0] text-[#008060]",
+                    done && "border-[#008060] bg-gradient-to-br from-[#008060] to-[#3f9b56] text-white shadow-sm",
+                    active && "border-[#008060] bg-white text-[#008060] ring-4 ring-[#A6CE39]/30",
                     !done && !active && "border-gray-300 bg-white text-gray-500"
                   )}
                 >
@@ -67,7 +67,7 @@ export const StepIndicator = ({ steps, current, onSelect }: StepIndicatorProps) 
               {i < steps.length && (
                 <span
                   aria-hidden="true"
-                  className={cn("mx-2 h-0.5 min-w-3 flex-1 rounded-full transition-colors", done ? "bg-[#008060]" : "bg-gray-200")}
+                  className={cn("mx-2 h-0.5 min-w-3 flex-1 rounded-full transition-colors", done ? "bg-gradient-to-r from-[#008060] to-[#A6CE39]" : "bg-gray-200")}
                 />
               )}
             </li>

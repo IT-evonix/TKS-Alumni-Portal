@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useLocation } from "wouter";
 import { AnimatePresence, motion, useReducedMotion } from "framer-motion";
-import { AlertCircle, ArrowLeft, ArrowRight, Check, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowLeft, ArrowRight, Check, ClipboardCheck, GraduationCap, Loader2, Lock, UserRound } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -34,6 +34,13 @@ import { cn } from "@/lib/utils";
 const STEPS = ["About you", "School", "Account"] as const;
 const REVIEW_STEP = STEPS.length;
 const DRAFT_KEY = "tks-student-signup-draft";
+
+const STEP_ACCENTS = [
+  { icon: UserRound, chip: "bg-emerald-100 text-emerald-700 ring-emerald-200", bar: "from-[#008060] to-[#A6CE39]" },
+  { icon: GraduationCap, chip: "bg-amber-100 text-amber-700 ring-amber-200", bar: "from-[#FDB913] to-[#A6CE39]" },
+  { icon: Lock, chip: "bg-lime-100 text-lime-700 ring-lime-200", bar: "from-[#A6CE39] to-[#008060]" },
+  { icon: ClipboardCheck, chip: "bg-teal-100 text-teal-700 ring-teal-200", bar: "from-[#008060] to-[#FDB913]" },
+] as const;
 
 const STEP_COPY: { title: string; subtitle: string }[] = [
   { title: "Tell us about you", subtitle: "Use your name as it appears in school records." },
@@ -299,12 +306,23 @@ export const StudentSignupPage = (): JSX.Element | null => {
         className="flex flex-1 flex-col"
       >
         <div className="flex-1">
-          <div className="mb-5 space-y-1">
-            <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-extrabold tracking-tight text-gray-900 outline-none sm:text-3xl">
-              {copy.title}
-            </h1>
-            <p className="text-sm text-gray-600 sm:text-base">{copy.subtitle}</p>
-          </div>
+          {(() => {
+            const { icon: StepIcon, chip, bar } = STEP_ACCENTS[step];
+            return (
+              <div className="mb-6 flex items-start gap-3.5">
+                <span className={cn("flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl ring-1", chip)}>
+                  <StepIcon className="h-5 w-5" aria-hidden="true" />
+                </span>
+                <div className="space-y-1">
+                  <h1 ref={headingRef} tabIndex={-1} className="text-2xl font-extrabold tracking-tight text-gray-900 outline-none sm:text-3xl">
+                    {copy.title}
+                  </h1>
+                  <span className={cn("block h-1 w-12 rounded-full bg-gradient-to-r", bar)} aria-hidden="true" />
+                  <p className="pt-1 text-sm text-gray-600 sm:text-base">{copy.subtitle}</p>
+                </div>
+              </div>
+            );
+          })()}
 
           <div className="sr-only" role="status" aria-live="assertive">
             {announce}
@@ -569,7 +587,7 @@ export const StudentSignupPage = (): JSX.Element | null => {
             variant="brand"
             disabled={isSubmitting}
             aria-busy={isSubmitting}
-            className="h-12 flex-1 rounded-xl text-base font-bold shadow-lg shadow-[#008060]/20 active:scale-[0.99]"
+            className="h-12 flex-1 rounded-xl border-0 bg-gradient-to-r from-[#006b51] via-[#008060] to-[#3f9b56] text-base font-bold text-white shadow-lg shadow-[#008060]/30 transition hover:brightness-110 active:scale-[0.99]"
           >
             {isSubmitting ? (
               <>
