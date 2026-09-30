@@ -32,6 +32,7 @@ import { getGraduationYearOptions, MIN_GRADUATION_YEAR } from "@/constants/gradu
 import { getUserFriendlyError } from "@/utils/errorHandler";
 import { useToast } from "@/hooks/use-toast";
 import { parsePhoneNumber, validatePhoneNumber } from "@/utils/phoneValidation";
+import { validateConfirmPassword } from "@/utils/signupValidation";
 
 export const StudentSignupPage = (): JSX.Element => {
   const allowedGenders = new Set(["male", "female", "other", "prefer_not_to_say"]);
@@ -74,7 +75,7 @@ export const StudentSignupPage = (): JSX.Element => {
   const [fieldErrors, setFieldErrors] = useState<{ [key: string]: string }>({});
   const [touched, setTouched] = useState<{ [key: string]: boolean }>({});
 
-  const validateField = (name: string, value: string): string => {
+  const validateField = (name: string, value: string, passwordValue: string = formData.password): string => {
     const sValue = value ? String(value).trim() : '';
     switch (name) {
       case 'firstName': {
@@ -94,9 +95,7 @@ export const StudentSignupPage = (): JSX.Element => {
         if (sValue.length < 6) return 'Password must be at least 6 characters';
         return '';
       case 'confirmPassword':
-        if (!sValue) return 'Please confirm your password';
-        if (sValue !== formData.password) return 'Passwords do not match';
-        return '';
+        return validateConfirmPassword(passwordValue, value);
       case 'phone': {
         if (!sValue) return ''; // Phone is optional
         const parsed = parsePhoneNumber(sValue);
@@ -131,15 +130,17 @@ export const StudentSignupPage = (): JSX.Element => {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
-    setFormData({ ...formData, [name]: value });
+    const next = { ...formData, [name]: value };
+    setFormData(next);
     setTouched(prev => ({ ...prev, [name]: true }));
-    const error = validateField(name, value);
+    const error = validateField(name, value, next.password);
     setFieldErrors(prev => ({ ...prev, [name]: error }));
 
-    if (name === "password" && touched.confirmPassword) {
+    // Re-check confirm against the NEW password (formData in this closure is stale)
+    if (name === "password" && (touched.confirmPassword || next.confirmPassword)) {
       setFieldErrors(prev => ({
         ...prev,
-        confirmPassword: validateField("confirmPassword", formData.confirmPassword),
+        confirmPassword: validateField("confirmPassword", next.confirmPassword, next.password),
       }));
     }
   };
@@ -389,6 +390,7 @@ export const StudentSignupPage = (): JSX.Element => {
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#008060] transition-colors" />
                       <Input
                         name="firstName"
+                        maxLength={50}
                         placeholder="John"
                         value={formData.firstName}
                         onChange={handleChange}
@@ -412,6 +414,7 @@ export const StudentSignupPage = (): JSX.Element => {
                       <User className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#008060] transition-colors" />
                       <Input
                         name="lastName"
+                        maxLength={50}
                         placeholder="Doe"
                         value={formData.lastName}
                         onChange={handleChange}
@@ -437,6 +440,7 @@ export const StudentSignupPage = (): JSX.Element => {
                     <Mail className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#008060] transition-colors" />
                     <Input
                       name="email"
+                      maxLength={254}
                       type="email"
                       placeholder="john.doe@example.com"
                       value={formData.email}
@@ -463,7 +467,7 @@ export const StudentSignupPage = (): JSX.Element => {
                       <PhoneInput
                         value={formData.phone}
                         onChange={(val) => {
-                           setFormData({ ...formData, phone: val });
+                           setFormData(prev => ({ ...prev, phone: val }));
                            setTouched(prev => ({ ...prev, phone: true }));
                            setFieldErrors(prev => ({ ...prev, phone: validateField('phone', val) }));
                         }}
@@ -518,6 +522,7 @@ export const StudentSignupPage = (): JSX.Element => {
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#008060] transition-colors" />
                       <Input
                         name="password"
+                        maxLength={128}
                         type={showPassword ? "text" : "password"}
                         placeholder="••••••••"
                         value={formData.password}
@@ -549,6 +554,7 @@ export const StudentSignupPage = (): JSX.Element => {
                       <Lock className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#008060] transition-colors" />
                       <Input
                         name="confirmPassword"
+                        maxLength={128}
                         type={showConfirmPassword ? "text" : "password"}
                         placeholder="••••••••"
                         value={formData.confirmPassword}
@@ -583,6 +589,7 @@ export const StudentSignupPage = (): JSX.Element => {
                       <School className="absolute left-4 top-1/2 -translate-y-1/2 w-4 h-4 text-neutral-400 group-focus-within:text-[#008060] transition-colors" />
                       <Input
                         name="rollNumber"
+                        maxLength={30}
                         placeholder="e.g. 10234"
                         value={formData.rollNumber}
                         onChange={handleChange}
@@ -609,7 +616,10 @@ export const StudentSignupPage = (): JSX.Element => {
                         value={formData.graduationYear}
                         onChange={handleChange}
                         onBlur={() => handleBlur('graduationYear')}
-                        className="w-full pl-11 h-12 sm:h-14 bg-white/50 border-neutral-200 border rounded-[0.8rem] sm:rounded-[1rem] outline-none focus:border-[#008060] focus:ring-4 focus:ring-[#008060]/5 text-sm transition-all appearance-none font-medium text-neutral-800"
+                        className={cn(
+                          "w-full pl-11 h-12 sm:h-14 bg-white/50 border-neutral-200 border rounded-[0.8rem] sm:rounded-[1rem] outline-none focus:border-[#008060] focus:ring-4 focus:ring-[#008060]/5 text-sm transition-all appearance-none font-medium text-neutral-800",
+                          touched.graduationYear && fieldErrors.graduationYear && "border-red-400 focus:border-red-400"
+                        )}
                       >
                         {getGraduationYearOptions().map(year => (
                           <option key={year} value={year}>{year}</option>
