@@ -52,6 +52,7 @@ import {
   isValidName,
 } from "./utils/input-sanitization";
 import { determineUserRole } from "./utils/role-logic";
+import { validateStudentSignup } from "./utils/student-signup-validation";
 import { requireAuth, requireAdmin, requireAuthForMedia } from "./middleware/auth";
 import { config } from "./config";
 import crypto from "crypto";
@@ -2110,51 +2111,31 @@ export async function registerRoutes(app: Express): Promise<Server> {
         });
       }
 
+      // Record every attempt (successful or not) so failed/abusive requests also count toward the throttle
+      const { error: attemptLogError } = await supabase.from("signup_rate_limits").insert({ ip_address: clientIp });
+      if (attemptLogError) {
+        console.error("[StudentSignup] Failed to record signup attempt:", attemptLogError);
+      }
+
+      // Validate everything BEFORE touching existing records, so invalid input can never
+      // trigger cleanup/deletion of a blocked or orphaned account.
+      const validation = validateStudentSignup(req.body);
+      if (!validation.ok) {
+        return res.status(400).json({ error: validation.error });
+      }
       const {
-        firstName,
-        lastName,
-        email,
+        firstName: sFirstName,
+        lastName: sLastName,
+        email: sEmail,
         password,
-        phone,
-        gender,
-        rollNumber,
-        graduationYear,
-        course,
-        branch,
-        batch,
-      } = req.body;
-
-      if (!firstName || !lastName || !email || !password || !graduationYear || !rollNumber) {
-        return res.status(400).json({ error: "Required fields (including Roll Number) are missing" });
-      }
-
-      // Sanitize inputs
-      const sFirstName = sanitizeName(firstName);
-      const sLastName = sanitizeName(lastName);
-      const sEmail = sanitizeEmail(email);
-      const sRollNumber = sanitizeString(rollNumber).toUpperCase(); // Consistent Roll Number format
-
-      if (!sFirstName || sFirstName.length < 2) {
-        return res.status(400).json({ error: "Invalid First Name" });
-      }
-
-      if (!sLastName || sLastName.length < 2) {
-        return res.status(400).json({ error: "Invalid Last Name" });
-      }
-
-      if (sRollNumber.length < 3) {
-        return res.status(400).json({ error: "Roll Number is too short. Please enter your valid school roll number." });
-      }
-
-      if (!isValidEmail(sEmail)) {
-        return res.status(400).json({ error: "Invalid email address" });
-      }
-
-      // Validate Graduation Year (Must be 2018 or later to match client dropdown options)
-      const gradYearNum = parseInt(String(graduationYear));
-      if (isNaN(gradYearNum) || gradYearNum < 2018) {
-        return res.status(400).json({ error: "Graduation year must be 2018 or later" });
-      }
+        phone: sPhone,
+        gender: sGender,
+        rollNumber: sRollNumber,
+        graduationYear: gradYearNum,
+        batch: sBatch,
+        course: sCourse,
+        branch: sBranch,
+      } = validation.data;
 
       // Check if user already exists
       const { data: existingUser } = await supabase
@@ -2231,10 +2212,6 @@ export async function registerRoutes(app: Express): Promise<Server> {
         }
       }
 
-      if (password.length < 6) {
-        return res.status(400).json({ error: "Password must be at least 6 characters" });
-      }
-
       const hashedPassword = await hashPassword(password, 10);
 
       // Generate unique username with collision handling
@@ -2277,6 +2254,9 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       if (userError || !newUser) {
         console.error("Student create user error:", userError);
+        if (userError?.code === "23505") {
+          return res.status(409).json({ error: "A user with this email already exists" });
+        }
         return res.status(500).json({ error: "Failed to create user account" });
       }
 
@@ -2286,13 +2266,13 @@ export async function registerRoutes(app: Express): Promise<Server> {
         first_name: sFirstName,
         last_name: sLastName,
         email: sEmail,
-        phone: sanitizeString(phone) || null,
-        gender: sanitizeString(gender) || null,
+        phone: sPhone,
+        gender: sGender,
         graduation_year: gradYearNum,
-        batch: (batch && sanitizeString(batch)) || String(gradYearNum),
-        course: (course && sanitizeString(course)) || null,
-        branch: (branch && sanitizeString(branch)) || null,
-        roll_number: sRollNumber || null,
+        batch: sBatch,
+        course: sCourse,
+        branch: sBranch,
+        roll_number: sRollNumber,
         is_profile_public: true,
         is_verified: true, // Lab signup is verified by presence
         is_active: true,
@@ -2302,11 +2282,11 @@ export async function registerRoutes(app: Express): Promise<Server> {
         console.error("Student create profile error:", alumniError);
         // Rollback user creation
         await supabase.from("users").delete().eq("id", newUser.id);
+        if (alumniError.code === "23505") {
+          return res.status(409).json({ error: "A profile with this roll number already exists" });
+        }
         return res.status(500).json({ error: "Failed to create student profile" });
       }
-
-      // Record this successful signup in Supabase
-      await supabase.from("signup_rate_limits").insert({ ip_address: clientIp });
 
       // Notify user via in-app notification
       await createAndEmitNotification({
@@ -2340,7 +2320,12 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
       res.status(201).json({
         message: "Student registration successful",
-        user: newUser,
+        user: {
+          id: newUser.id,
+          email: newUser.email,
+          username: newUser.username,
+          user_role: newUser.user_role,
+        },
       });
     } catch (error) {
       console.error("Student signup error:", error);
