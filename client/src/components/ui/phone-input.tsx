@@ -22,6 +22,15 @@ interface PhoneInputProps {
   placeholder?: string;
   name?: string;
   error?: string;
+  /** DOM id for the number input (label association). */
+  id?: string;
+  /** "lg" renders 48px controls to match the signup wizard; default keeps the legacy 44px. */
+  size?: 'md' | 'lg';
+  /** Parent owns error/format messaging; suppress the built-in lines. */
+  hideMessages?: boolean;
+  invalid?: boolean;
+  describedBy?: string;
+  onBlur?: () => void;
 }
 
 const indiaCode = COUNTRY_CODES.find(c => c.code === 'IN');
@@ -33,8 +42,15 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   className,
   placeholder = 'Enter phone number',
   name,
-  error
+  error,
+  id,
+  size = 'md',
+  hideMessages = false,
+  invalid = false,
+  describedBy,
+  onBlur
 }) => {
+  const h = size === 'lg' ? 'h-12' : 'h-11';
   const sortedCountryCodes = React.useMemo(() => {
     const india = COUNTRY_CODES.find(c => c.code === 'IN');
     const others = COUNTRY_CODES.filter(c => c.code !== 'IN').sort((a, b) => a.name.localeCompare(b.name));
@@ -117,18 +133,20 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
   };
 
   const displayValue = phoneNumber ? formatPhoneNumber(phoneNumber, selectedCountry) : '';
-  const showError = error || validationError;
+  const showError = error || validationError || invalid;
+  const messageText = error || validationError;
 
   return (
     <div className={cn('flex flex-col gap-1', className)}>
-      <div className="flex gap-0 relative h-11">
+      <div className={cn("flex gap-0 relative", h)}>
         <Popover open={open} onOpenChange={setOpen}>
           <PopoverTrigger asChild>
             <Button
               variant="outline"
               role="combobox"
               aria-expanded={open}
-              className="h-11 w-[110px] justify-between border-gray-200 border-r-0 rounded-r-none bg-gray-50 hover:bg-gray-100 px-2 sm:px-3 text-black text-xs shrink-0 focus:z-10"
+              className={cn(h, "w-[110px] justify-between border-gray-200 border-r-0 rounded-r-none bg-gray-50 hover:bg-gray-100 px-2 sm:px-3 text-black text-xs shrink-0 focus:z-10", size === 'lg' && "rounded-l-xl")}
+              aria-label={`Country code ${selectedCountry.name} ${selectedCountry.dialCode}`}
               disabled={disabled}
             >
               <div className="flex items-center gap-1 truncate">
@@ -179,10 +197,16 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
           </PopoverContent>
         </Popover>
 
-        <div className="flex-1 relative h-11 group/phone">
+        <div className={cn("flex-1 relative group/phone", h)}>
           <input
             type="tel"
+            id={id}
             name={name}
+            inputMode="tel"
+            enterKeyHint="next"
+            aria-invalid={showError ? true : undefined}
+            aria-describedby={describedBy}
+            onBlur={onBlur}
             value={displayValue}
             onChange={handlePhoneChange}
             onKeyDown={handleKeyDown}
@@ -191,7 +215,8 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
             autoComplete="tel"
             className={cn(
               // Base styles
-              'h-11 w-full pl-4 pr-16 rounded-md rounded-l-none border border-l-0 text-sm outline-none transition-all',
+              h, 'w-full pl-4 pr-16 rounded-md rounded-l-none border border-l-0 outline-none transition-all',
+              size === 'lg' ? 'text-base rounded-r-xl' : 'text-sm',
               // Colors
               'border-gray-200 bg-white text-black placeholder:text-gray-400',
               // Focus state
@@ -223,14 +248,14 @@ export const PhoneInput: React.FC<PhoneInputProps> = ({
       </div>
 
       {/* Errors & Help Text below the input row */}
-      {showError && (
+      {!hideMessages && messageText && (
         <p className="text-[10px] text-red-500 flex items-center gap-1 mt-1 px-1">
           <span>⚠️</span>
-          {showError}
+          {messageText}
         </p>
       )}
 
-      {!showError && selectedCountry.format && phoneNumber && (
+      {!hideMessages && !showError && selectedCountry.format && phoneNumber && (
         <p className="text-[9px] text-gray-400 flex items-center gap-1 px-1 mt-0.5">
           <span className="opacity-50 uppercase font-black">Format:</span>
           <span className="font-mono bg-gray-50 px-1 rounded border border-gray-100">
