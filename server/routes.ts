@@ -2377,7 +2377,19 @@ export async function registerRoutes(app: Express): Promise<Server> {
   // Get current user route
   app.get("/api/auth/me", async (req, res) => {
     try {
-      const userId = req.headers["user-id"] as string;
+      // Token-first (mirrors requireAuth): a valid JWT's userId wins over the legacy user-id header,
+      // which is still accepted as a fallback. Token-only callers (e.g. LinkedIn sign-in) need this.
+      let userId = req.headers["user-id"] as string;
+      const authHeader = req.headers["authorization"];
+      const bearer = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : "";
+      if (bearer) {
+        try {
+          const decoded = jwt.verify(bearer, JWT_SECRET) as any;
+          if (decoded?.userId) userId = decoded.userId;
+        } catch {
+          // Invalid/expired token: fall back to the user-id header
+        }
+      }
 
       if (!userId) {
         return res.status(401).json({ error: "No user ID provided" });
