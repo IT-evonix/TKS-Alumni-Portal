@@ -772,7 +772,7 @@ export const AdminFeedPage = (): JSX.Element => {
                                     <img
                                       src={post.image_url}
                                       alt="Post attachment"
-                                      className="w-full max-h-64 object-cover"
+                                      className="block w-auto max-w-full max-h-64 object-contain mx-auto"
                                     />
                                   ) : post.image_url.match(/\.(mp4|webm|mov|avi)($|\?)/i) ? (
                                     <video

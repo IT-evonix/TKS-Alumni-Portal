@@ -58,6 +58,18 @@ import { config } from "./config";
 import crypto from "crypto";
 
 const JWT_SECRET = config.jwtSecret;
+
+function issueAuthToken(
+  user: { id: string; email?: string | null; user_role?: string | null; is_admin?: boolean | null },
+  defaultRole = "alumni",
+): string {
+  return jwt.sign(
+    { userId: user.id, email: user.email, role: user.user_role || defaultRole, isAdmin: user.is_admin || false },
+    JWT_SECRET,
+    { expiresIn: "24h" },
+  );
+}
+
 const hashPassword = promisify(bcrypt.hash);
 const comparePassword = promisify(bcrypt.compare);
 const ADMIN_LOGIN_OTP_TOKEN_TYPE = "admin_login_otp";
@@ -1068,11 +1080,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .eq("user_id", user.id)
         .maybeSingle();
 
-      const token = jwt.sign(
-        { userId: user.id, email: user.email, role: user.user_role || "administrator", isAdmin: user.is_admin },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
+      const token = issueAuthToken(user, "administrator");
 
       res.json({
         token,
@@ -1169,11 +1177,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
         .single();
 
       // SIGNOFF: Generate JWT Token
-      const token = jwt.sign(
-        { userId: user.id, email: user.email, role: user.user_role || "alumni", isAdmin: user.is_admin },
-        JWT_SECRET,
-        { expiresIn: "24h" }
-      );
+      const token = issueAuthToken(user);
 
       const { password: _, ...userWithoutPassword } = user;
       res.json({
@@ -2333,10 +2337,59 @@ export async function registerRoutes(app: Express): Promise<Server> {
     }
   });
 
+  // Sliding session: exchange a still-valid JWT for a fresh one.
+  // Deliberately JWT-only (no user-id header fallback) so tokens can't be minted from a bare user id.
+  app.post("/api/auth/refresh", async (req, res) => {
+    const authHeader = req.headers["authorization"];
+    const token = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : "";
+    if (!token) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    let decoded: any;
+    try {
+      decoded = jwt.verify(token, JWT_SECRET);
+    } catch {
+      return res.status(401).json({ error: "Invalid or expired session" });
+    }
+    if (!decoded?.userId) {
+      return res.status(401).json({ error: "Invalid token" });
+    }
+
+    try {
+      const { data: user, error } = await supabase
+        .from("users")
+        .select("id, email, user_role, is_admin")
+        .eq("id", decoded.userId)
+        .maybeSingle();
+
+      if (error || !user) {
+        return res.status(401).json({ error: "User not found" });
+      }
+
+      res.json({ token: issueAuthToken(user, decoded.role || "alumni") });
+    } catch (error) {
+      console.error("Token refresh error:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Get current user route
   app.get("/api/auth/me", async (req, res) => {
     try {
-      const userId = req.headers["user-id"] as string;
+      // Token-first (mirrors requireAuth): a valid JWT's userId wins over the legacy user-id header,
+      // which is still accepted as a fallback. Token-only callers (e.g. LinkedIn sign-in) need this.
+      let userId = req.headers["user-id"] as string;
+      const authHeader = req.headers["authorization"];
+      const bearer = authHeader?.startsWith("Bearer ") ? authHeader.split(" ")[1] : "";
+      if (bearer) {
+        try {
+          const decoded = jwt.verify(bearer, JWT_SECRET) as any;
+          if (decoded?.userId) userId = decoded.userId;
+        } catch {
+          // Invalid/expired token: fall back to the user-id header
+        }
+      }
 
       if (!userId) {
         return res.status(401).json({ error: "No user ID provided" });
@@ -9243,11 +9296,7 @@ export async function registerRoutes(app: Express): Promise<Server> {
 
   // Internal helper: issue JWT and redirect to /feed
   async function issueJwtAndRedirect(res: any, user: any) {
-    const token = jwt.sign(
-      { userId: user.id, email: user.email, role: user.user_role || "alumni", isAdmin: user.is_admin || false },
-      JWT_SECRET,
-      { expiresIn: "24h" }
-    );
+    const token = issueAuthToken(user);
     await supabase.from("users").update({ updated_at: new Date().toISOString() }).eq("id", user.id);
     return res.redirect(`/feed?linkedin_signin=success&token=${encodeURIComponent(token)}`);
   }

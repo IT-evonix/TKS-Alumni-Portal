@@ -10,6 +10,7 @@ vite.config.ts.*
 .env
 .env.local
 .env.production
+.env.prod-db
 
 # Debug & temp files
 git_push_error*.txt
