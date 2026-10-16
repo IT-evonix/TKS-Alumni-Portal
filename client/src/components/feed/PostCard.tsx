@@ -585,7 +585,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
                     key={key}
                     src={url}
                     alt="Post attachment"
-                    className="w-full h-auto object-cover max-h-[260px] sm:max-h-[300px] mx-auto"
+                    className="block w-auto max-w-full h-auto max-h-[420px] sm:max-h-[560px] object-contain mx-auto"
                     loading="lazy"
                     responsive={true}
                     quality={85}
@@ -607,7 +607,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
 
             if (attachments.length === 1) {
               return (
-                <div className="mt-3 rounded-xl overflow-hidden max-w-full" style={{ border: '1px solid var(--border-subtle)' }}>
+                <div className="mt-3 rounded-xl overflow-hidden max-w-full bg-gray-50" style={{ border: '1px solid var(--border-subtle)' }}>
                   {renderAttachment(attachments[0], 0)}
                 </div>
               );
@@ -616,7 +616,7 @@ const PostCardComponent: React.FC<PostCardProps> = ({
             return (
               <div className={`mt-3 grid gap-1 rounded-xl overflow-hidden max-w-full ${attachments.length === 2 ? 'grid-cols-2' : 'grid-cols-2'}`}>
                 {attachments.map((url, i) => (
-                  <div key={i} className="overflow-hidden" style={{ border: '1px solid var(--border-subtle)' }}>
+                  <div key={i} className="overflow-hidden bg-gray-50 flex items-center justify-center" style={{ border: '1px solid var(--border-subtle)' }}>
                     {renderAttachment(url, i)}
                   </div>
                 ))}

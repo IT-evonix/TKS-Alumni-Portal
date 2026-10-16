@@ -2,6 +2,11 @@
 import React, { createContext, useContext, useState, useEffect, ReactNode } from 'react';
 import { User, Alumni } from '../../../shared/supabase';
 import { buildClientUrl } from '@/lib/base-url';
+import { getTokenExpiry, isTokenExpired, refreshAuthToken } from '@/lib/authToken';
+
+// Refresh the 24h JWT once less than this much lifetime remains.
+const TOKEN_REFRESH_THRESHOLD_MS = 12 * 60 * 60 * 1000;
+const TOKEN_CHECK_INTERVAL_MS = 30 * 60 * 1000;
 
 interface AuthContextType {
   user: User | null;
@@ -131,6 +136,14 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
       }
     }
 
+    // An expired JWT leaves the app half-working (APIs fall back to the user-id header,
+    // but media URLs need the token), so end the session instead of carrying on with it.
+    if ((storedUser || storedAdminUser) && isTokenExpired(localStorage.getItem('auth_token'))) {
+      expireSession();
+      setIsLoading(false);
+      return;
+    }
+
     // Verify sessions against DB on mount
     if (storedUser) {
       try {
@@ -256,6 +269,51 @@ export function AuthProvider({ children }: AuthProviderProps): JSX.Element {
   }, []);
 
   // ... (keeping the storage listener separate or merged is fine, I'll merge minimal changes)
+
+  // Keep the JWT alive while the app is in use (sliding 24h session).
+  React.useEffect(() => {
+    if (!user && !adminUser) return;
+
+    const checkToken = async () => {
+      const token = localStorage.getItem('auth_token');
+      if (isTokenExpired(token)) {
+        expireSession();
+        return;
+      }
+      const expiry = getTokenExpiry(token!)!;
+      if (expiry - Date.now() > TOKEN_REFRESH_THRESHOLD_MS) return;
+
+      const result = await refreshAuthToken(token!);
+      if (result === 'unauthorized') {
+        expireSession();
+      } else if (result) {
+        localStorage.setItem('auth_token', result);
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') checkToken();
+    };
+
+    checkToken();
+    const interval = window.setInterval(checkToken, TOKEN_CHECK_INTERVAL_MS);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      window.clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, [user, adminUser]);
+
+  const expireSession = () => {
+    console.warn('Auth token expired, logging out');
+    const isAdminContext = window.location.pathname.startsWith('/admin');
+    const hasUserSession = !!localStorage.getItem('user');
+    if (localStorage.getItem('adminUser') && (isAdminContext || !hasUserSession)) {
+      logoutAdmin(false);
+    } else {
+      logoutUser(false);
+    }
+  };
 
   const fetchCurrentUser = async (userId: string, isAdmin: boolean) => {
     try {
